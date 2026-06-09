@@ -4,16 +4,20 @@ project(aether VERSION 0.1.0 LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-include(Platform)
+# Include by absolute path: when Aether is pulled in via FetchContent, a parent
+# project may have its own cmake/Platform.cmake earlier on CMAKE_MODULE_PATH,
+# which would otherwise shadow this one and leave aether_configure_target undefined.
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Platform.cmake")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-if(MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
+# Use the default dynamic CRT (MD) to match the vcpkg ecosystem and any parent
+# project (Harmonia, GoogleTest with shared CRT). Do NOT force MultiThreaded
+# (MT/static): it causes RuntimeLibrary mismatches when Aether is linked as a
+# FetchContent subproject alongside vcpkg/gtest libraries.
 
 # GLM is the only dependency (provided via vcpkg). Aether has no Vulkan / GPU deps.
 find_package(glm CONFIG REQUIRED)
