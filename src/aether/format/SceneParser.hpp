@@ -7,24 +7,41 @@
 
 namespace aether {
 
-/// Parses a `.scene` scene-definition file into an `aether::SceneDesc`.
+/// Parses a `<name>.scene.toml` scene-definition file into an `aether::SceneDesc`.
 ///
 /// FORMAT OVERVIEW
 /// ───────────────
-/// Line-based text format inspired by — but distinct from — Wavefront OBJ/MTL.
-/// Lines starting with '#' are comments. Asset paths (mtllib, instance, env_map)
-/// are recorded **relative**, exactly as written; the consumer resolves them
-/// against its asset directory.
+/// TOML document with full-word keys (chosen for human + agent clarity). Asset
+/// paths (material_libraries, mesh, environment_map) are recorded **relative**,
+/// exactly as written; the consumer resolves them against its asset directory.
 ///
-/// Global keywords:  mtllib, spp, max_depth, env_map, env_unit_nits, ev100,
-///                   tonemapper
-/// Block keywords:   camera, instance <obj>, sphere <r>, box <hx> <hy> <hz>
-/// Block modifiers:  translate, rotate (qx qy qz qw), rotate_y <deg>,
-///                   usemtl, material <group> <name>, scale,
-///                   look_at, up, vfov
+///   material_libraries = ["name.materials.toml", ...]  # single string also ok
+///
+///   [render]   samples_per_pixel, max_depth, environment_map,
+///              environment_unit_nits
+///   [camera]   translate, look_at, up, rotate ([qx,qy,qz,qw]), rotate_y,
+///              vertical_field_of_view, ev100   (look_at wins over rotate)
+///   [tonemap]  tonemapper   (raw keyword token, e.g. "agx")
+///
+/// REFERENCE + OVERRIDE
+/// ────────────────────
+/// The [render], [camera] and [tonemap] sections may each carry a
+///   reference = "presets/<name>.<group>.toml"
+/// key pointing at a standalone preset file (top-level keys, same shape as the
+/// inline section). The referenced file is applied first as a base, then any
+/// inline keys override it ("local wins"). Identical settings shared across
+/// scenes therefore live in a single deduplicated preset file. References are
+/// resolved relative to the scene file's directory; a missing/malformed
+/// reference falls back to the inline keys only.
+///
+///   [[geometry]]   ordered array; type = "instance" | "box" | "sphere"
+///     instance:  mesh = "...", materials = { Group = "Mat", ... }
+///     box:       half_extents = [hx,hy,hz]
+///     sphere:    radius = r
+///     shared:    material, translate, rotate, rotate_y, scale (number or [x,y,z])
 ///
 /// Transform composition follows the glTF convention: T × R × S.
-/// Unrecognised keywords are silently ignored, matching OBJ/MTL behaviour.
+/// Unknown keys / geometry types are silently ignored.
 ///
 /// SceneParser is renderer-agnostic: it neither loads referenced material
 /// libraries / OBJ files nor uploads anything to the GPU. It only records what

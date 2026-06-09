@@ -1,79 +1,29 @@
 #include "aether/format/MaterialLibrary.hpp"
 
+#include <toml++/toml.hpp>
+
 #include <algorithm>
-#include <fstream>
-#include <sstream>
+#include <optional>
 #include <string>
 #include <string_view>
 
 namespace aether {
 namespace {
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-[[nodiscard]] std::string_view trimSv(std::string_view sv) noexcept {
-    const auto first = sv.find_first_not_of(" \t\r\n");
-    if (first == std::string_view::npos) {
-        return {};
-    }
-    const auto last = sv.find_last_not_of(" \t\r\n");
-    return sv.substr(first, last - first + 1);
-}
-
-[[nodiscard]] std::string_view stripComment(std::string_view line) noexcept {
-    const auto pos = line.find('#');
-    return trimSv(pos == std::string_view::npos ? line : line.substr(0, pos));
-}
-
-/// Map UsdPreviewSurface / MaterialX aliases → OpenPBR keyword names.
-/// Classic OBJ/MTL keywords (Kd, Ks, Ni, Tr, Ke, map_Kd, map_Ns, …) are
-/// intentionally NOT listed here — they must be silently ignored.
+/// Map OpenPBR Surface parameter names to this library's internal storage field
+/// names (which abbreviate a few of the longer spec names). This is **not**
+/// alias resolution — every accepted keyword is a verbatim OpenPBR Surface
+/// keyword; we only translate the canonical spec name to the struct field that
+/// holds it. Foreign-format names (UsdPreviewSurface / MaterialX / Wavefront
+/// MTL) are intentionally NOT accepted — material files are authored in OpenPBR.
 [[nodiscard]] std::string_view normalise(std::string_view kw) noexcept {
-    if (kw == "diffuseColor") {
-        return "base_color";
-    }
-    if (kw == "metallic") {
-        return "base_metalness";
-    }
-    if (kw == "roughness") {
-        return "specular_roughness";
-    }
-    if (kw == "base_roughness") {
-        return "base_diffuse_roughness";
-    }
-    if (kw == "ior") {
-        return "specular_ior";
-    }
-    if (kw == "emissiveColor") {
-        return "emission_color";
-    }
-    if (kw == "emissiveLuminance") {
-        return "emission_luminance";
-    }
-    if (kw == "clearcoat") {
-        return "coat_weight";
-    }
-    if (kw == "clearcoatRoughness") {
-        return "coat_roughness";
-    }
-    if (kw == "transmissionAmount") {
-        return "transmission_weight";
-    }
-    if (kw == "specularColor") {
-        return "specular_color";
-    }
-    // OpenPBR canonical geometry opacity name (stored as `opacity`).
+    // OpenPBR `geometry_*` parameters → internal fields.
     if (kw == "geometry_opacity") {
         return "opacity";
     }
     if (kw == "geometry_thin_walled") {
         return "thin_walled";
     }
-    // OpenPBR canonical subsurface radius-scale name (stored as `subsurface_scale`).
-    if (kw == "subsurface_radius_scale") {
-        return "subsurface_scale";
-    }
-    // OpenPBR canonical geometry normal/tangent map names.
     if (kw == "geometry_normal") {
         return "map_normal";
     }
@@ -86,139 +36,166 @@ namespace {
     if (kw == "geometry_coat_tangent") {
         return "map_coat_tangent";
     }
+    // OpenPBR `subsurface_radius_scale` → internal `subsurface_scale` field.
+    if (kw == "subsurface_radius_scale") {
+        return "subsurface_scale";
+    }
     return kw;
 }
 
-[[nodiscard]] bool parseVec3(std::string_view text, Vec3& out) {
-    std::istringstream ss{std::string(text)};
-    return static_cast<bool>(ss >> out.x >> out.y >> out.z);
+// ── TOML value readers ─────────────────────────────────────────────────────
+
+[[nodiscard]] std::optional<float> asFloat(const toml::node& n) {
+    if (const auto v = n.value<double>()) {
+        return static_cast<float>(*v);
+    }
+    return std::nullopt;
 }
 
-[[nodiscard]] bool parseFloat(std::string_view text, float& out) {
-    std::istringstream ss{std::string(text)};
-    return static_cast<bool>(ss >> out);
+[[nodiscard]] std::optional<Vec3> asVec3(const toml::node& n) {
+    const toml::array* arr = n.as_array();
+    if (arr == nullptr || arr->size() != 3) {
+        return std::nullopt;
+    }
+    const auto x = (*arr)[0].value<double>();
+    const auto y = (*arr)[1].value<double>();
+    const auto z = (*arr)[2].value<double>();
+    if (!x || !y || !z) {
+        return std::nullopt;
+    }
+    return Vec3{static_cast<float>(*x), static_cast<float>(*y), static_cast<float>(*z)};
 }
 
 // ── Parameter dispatch ────────────────────────────────────────────────────
 
-void applyKw(MaterialDesc& p, std::string_view rawKw, std::string_view rest) {
+void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
     const std::string_view kw = normalise(rawKw);
 
     // ── Texture map paths (string values) ────────────────────────────────
     if (kw == "map_base_color") {
-        p.map_base_color.path = std::string(rest);
+        p.map_base_color.path = value.value_or<std::string>("");
         return;
     }
     if (kw == "map_normal") {
-        p.map_normal.path = std::string(rest);
+        p.map_normal.path = value.value_or<std::string>("");
         return;
     }
     if (kw == "map_orm") {
-        p.map_orm.path = std::string(rest);
+        p.map_orm.path = value.value_or<std::string>("");
         return;
     }
     if (kw == "map_roughness") {
-        p.map_roughness.path = std::string(rest);
+        p.map_roughness.path = value.value_or<std::string>("");
         return;
     }
     if (kw == "map_metalness") {
-        p.map_metalness.path = std::string(rest);
+        p.map_metalness.path = value.value_or<std::string>("");
         return;
     }
     if (kw == "map_emission_color") {
-        p.map_emission_color.path = std::string(rest);
+        p.map_emission_color.path = value.value_or<std::string>("");
         return;
     }
     if (kw == "map_coat_normal") {
-        p.map_coat_normal.path = std::string(rest);
+        p.map_coat_normal.path = value.value_or<std::string>("");
         return;
     }
     if (kw == "map_tangent") {
-        p.map_tangent.path = std::string(rest);
+        p.map_tangent.path = value.value_or<std::string>("");
         return;
     }
     if (kw == "map_coat_tangent") {
-        p.map_coat_tangent.path = std::string(rest);
+        p.map_coat_tangent.path = value.value_or<std::string>("");
         return;
     }
 
     // ── Texture map color spaces (OCIO / OpenEXR IIF names) ──────────────
     if (kw == "map_base_color_colorspace") {
-        p.map_base_color.colorSpace = parseTextureColorSpace(rest);
+        p.map_base_color.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
         return;
     }
     if (kw == "map_normal_colorspace") {
-        p.map_normal.colorSpace = parseTextureColorSpace(rest);
+        p.map_normal.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
         return;
     }
     if (kw == "map_orm_colorspace") {
-        p.map_orm.colorSpace = parseTextureColorSpace(rest);
+        p.map_orm.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
         return;
     }
     if (kw == "map_roughness_colorspace") {
-        p.map_roughness.colorSpace = parseTextureColorSpace(rest);
+        p.map_roughness.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
         return;
     }
     if (kw == "map_metalness_colorspace") {
-        p.map_metalness.colorSpace = parseTextureColorSpace(rest);
+        p.map_metalness.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
         return;
     }
     if (kw == "map_emission_color_colorspace") {
-        p.map_emission_color.colorSpace = parseTextureColorSpace(rest);
+        p.map_emission_color.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
         return;
     }
     if (kw == "map_coat_normal_colorspace") {
-        p.map_coat_normal.colorSpace = parseTextureColorSpace(rest);
+        p.map_coat_normal.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
         return;
     }
     if (kw == "map_tangent_colorspace") {
-        p.map_tangent.colorSpace = parseTextureColorSpace(rest);
+        p.map_tangent.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
         return;
     }
     if (kw == "map_coat_tangent_colorspace") {
-        p.map_coat_tangent.colorSpace = parseTextureColorSpace(rest);
+        p.map_coat_tangent.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
         return;
     }
 
-    // ── Colour keywords ───────────────────────────────────────────────────
+    // ── Colour keywords (3-element arrays) ────────────────────────────────
     // NOTE: Aether records colors verbatim in the declared input color space
-    // (p.inputColorSpace); the consumer performs any conversion to its working
-    // color space. Non-color data (subsurface_radius, transmission_scatter) is
-    // never color-converted.
-    Vec3 c{};
+    // (p.inputColorSpace); the consumer performs any conversion. Non-color data
+    // (subsurface_radius, transmission_scatter) is never color-converted.
     if (kw == "base_color" || kw == "specular_color" || kw == "transmission_color" || kw == "coat_color" ||
         kw == "fuzz_color" || kw == "emission_color" || kw == "subsurface_color" || kw == "subsurface_radius" ||
         kw == "transmission_scatter") {
-        if (!parseVec3(rest, c)) {
+        const auto c = asVec3(value);
+        if (!c) {
             return;
         }
         if (kw == "base_color") {
-            p.base_color = c;
+            p.base_color = *c;
         } else if (kw == "specular_color") {
-            p.specular_color = c;
+            p.specular_color = *c;
         } else if (kw == "transmission_color") {
-            p.transmission_color = c;
+            p.transmission_color = *c;
         } else if (kw == "transmission_scatter") {
-            p.transmission_scatter = c;
+            p.transmission_scatter = *c;
         } else if (kw == "coat_color") {
-            p.coat_color = c;
+            p.coat_color = *c;
         } else if (kw == "fuzz_color") {
-            p.fuzz_color = c;
+            p.fuzz_color = *c;
         } else if (kw == "emission_color") {
-            p.emission_color = c;
+            p.emission_color = *c;
         } else if (kw == "subsurface_color") {
-            p.subsurface_color = c;
+            p.subsurface_color = *c;
         } else if (kw == "subsurface_radius") {
-            p.subsurface_radius = c;
+            p.subsurface_radius = *c;
+        }
+        return;
+    }
+
+    // ── Boolean keyword ───────────────────────────────────────────────────
+    if (kw == "thin_walled") {
+        if (const auto b = value.value<bool>()) {
+            p.thin_walled = *b;
+        } else if (const auto f = asFloat(value)) {
+            p.thin_walled = (*f != 0.0F);
         }
         return;
     }
 
     // ── Scalar keywords ───────────────────────────────────────────────────
-    float f = 0.0F;
-    if (!parseFloat(rest, f)) {
+    const auto opt = asFloat(value);
+    if (!opt) {
         return;
     }
+    const float f = *opt;
     if (kw == "base_weight") {
         p.base_weight = f;
     } else if (kw == "base_metalness") {
@@ -273,8 +250,6 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, std::string_view rest) {
         p.subsurface_scatter_anisotropy = std::clamp(f, -1.0F, 1.0F);
     } else if (kw == "opacity") {
         p.opacity = f;
-    } else if (kw == "thin_walled") {
-        p.thin_walled = (f != 0.0F);
     }
 }
 
@@ -283,56 +258,34 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, std::string_view rest) {
 // ── MaterialLibrary ───────────────────────────────────────────────────────
 
 bool MaterialLibrary::load(const std::filesystem::path& path) {
-    std::ifstream file(path);
-    if (!file) {
+    toml::table root;
+    try {
+        root = toml::parse_file(path.string());
+    } catch (const toml::parse_error&) {
         return false;
     }
 
-    std::string currentName;
-    MaterialDesc currentParams;
-    bool hasCurrent = false;
+    // File-level input color space (top-level `colorspace` key); default Rec.709.
     MaterialColorSpace inputColorSpace = MaterialColorSpace::LinRec709;
-
-    auto flush = [&] {
-        if (hasCurrent && !currentName.empty()) {
-            currentParams.inputColorSpace = inputColorSpace;
-            m_materials.insert_or_assign(currentName, currentParams);
-        }
-    };
-
-    std::string line;
-    while (std::getline(file, line)) {
-        const std::string_view trimmed = stripComment(line);
-        if (trimmed.empty()) {
-            continue;
-        }
-
-        std::istringstream ss{std::string(trimmed)};
-        std::string kw;
-        ss >> kw;
-
-        if (kw == "colorspace") {
-            // File-level color space declaration.
-            std::string cs;
-            std::getline(ss, cs);
-            const std::string_view csv = trimSv(cs);
-            inputColorSpace = (csv == "lin_rec2020" || csv == "rec2020") ? MaterialColorSpace::LinRec2020
-                                                                         : MaterialColorSpace::LinRec709;
-        } else if (kw == "newmtl") {
-            flush();
-            currentName = {};
-            currentParams = {};
-            hasCurrent = true;
-            std::getline(ss, currentName);
-            currentName = std::string(trimSv(currentName));
-        } else if (hasCurrent) {
-            // Rest of line after the keyword.
-            std::string rest;
-            std::getline(ss, rest);
-            applyKw(currentParams, kw, trimSv(rest));
-        }
+    if (const auto cs = root["colorspace"].value<std::string>()) {
+        inputColorSpace = (*cs == "lin_rec2020" || *cs == "rec2020") ? MaterialColorSpace::LinRec2020
+                                                                     : MaterialColorSpace::LinRec709;
     }
-    flush();
+
+    // Every top-level table is a material named by its key.
+    for (auto&& [key, node] : root) {
+        const toml::table* matTbl = node.as_table();
+        if (matTbl == nullptr) {
+            continue; // skip scalar top-level keys (e.g. `colorspace`)
+        }
+
+        MaterialDesc params;
+        params.inputColorSpace = inputColorSpace;
+        for (auto&& [pKey, pNode] : *matTbl) {
+            applyKw(params, std::string_view{pKey.str()}, pNode);
+        }
+        m_materials.insert_or_assign(std::string{key.str()}, params);
+    }
 
     return true;
 }

@@ -1,0 +1,5 @@
+# Material-reference sphere camera.
+translate = [0.0, 0.8, 6.5]
+look_at = [0.0, 0.0, 0.0]
+vertical_field_of_view = 38.0
+ev100 = 7.0

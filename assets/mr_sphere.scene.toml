@@ -1,0 +1,42 @@
+# mr_sphere.scene — Step 1: simplest full-pipeline scene.
+# 
+# One brushed-metal sphere (subject) + one bright emissive green sphere
+# (light source).  The green sphere is directly visible to the camera so
+# it shows up regardless of whether indirect illumination is working.
+# A small amount of env_luminance provides ambient fill.
+# 
+# Start here, then layer complexity:
+# Step 2 — add a ground plane
+# Step 3 — add more spheres with varying roughness (0.0 → 1.0)
+# Step 4 — add a second white rect light for fill
+# Step 5 — add transmission / coat / subsurface lobes
+
+material_libraries = ["mr_sphere.materials.toml", "floor.materials.toml"]
+
+[render]
+reference = "presets/preview.render.toml"
+
+[camera]
+reference = "presets/mr_sphere.camera.toml"
+
+# ── Subject — brushed-metal sphere ───────────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 1.0
+material = "BrushedMetal"
+translate = [0.0, 0.0, 0.0]
+
+# ── Ground plane ───────────────────────────────────────────────────────────────
+[[geometry]]
+type = "box"
+half_extents = [14.0, 0.1, 14.0]
+material = "NeutralFloor"
+translate = [0.0, -1.05, 0.0]
+
+# ── Light — emissive green sphere, upper-left, camera-facing ─────────────────
+# Positioned so it is always in the camera frustum.
+[[geometry]]
+type = "sphere"
+radius = 0.45
+material = "GreenLight"
+translate = [-2.2, 2.4, 1.2]

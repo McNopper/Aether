@@ -1,0 +1,112 @@
+# OpenPBR Coat Layer Showcase — Hyperion demo
+# 15 spheres in 3 rows × 5, lit by IBL panorama.
+# Tests coat_weight (row 0), coat_roughness (row 1), coat_darkening + real materials (row 2).
+# Materials from openpbr_coat.materials.toml.
+
+material_libraries = ["openpbr_coat.materials.toml", "floor.materials.toml"]
+
+[render]
+reference = "presets/meadow_64spp_8bounce.render.toml"
+
+[camera]
+reference = "presets/openpbr_studio_wide.camera.toml"
+
+# Ground plane
+[[geometry]]
+type = "box"
+half_extents = [12.0, 0.1, 10.0]
+material = "NeutralFloor"
+translate = [0.0, -0.05, 1.0]
+
+# ── Row 0  z = -2.0  coat_weight sweep ───────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "CoatWeight_0"
+translate = [-5.0, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "CoatWeight_25"
+translate = [-2.5, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "CoatWeight_50"
+translate = [0.0, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "CoatWeight_75"
+translate = [2.5, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "CoatWeight_100"
+translate = [5.0, 0.70, -2.0]
+
+# ── Row 1  z = +0.5  coat_roughness sweep ───────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "CoatRough_0"
+translate = [-5.0, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "CoatRough_15"
+translate = [-2.5, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "CoatRough_30"
+translate = [0.0, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "CoatRough_50"
+translate = [2.5, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "CoatRough_80"
+translate = [5.0, 0.70, 0.5]
+
+# ── Row 2  z = +3.0  coat_darkening + real lacquered materials ───────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "CarLacquer"
+translate = [-5.0, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Lacquer_DarkNone"
+translate = [-2.5, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Lacquer_DarkHalf"
+translate = [0.0, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "CoatOnGold"
+translate = [2.5, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "VarnishedWood"
+translate = [5.0, 0.70, 3.0]

@@ -1,0 +1,5 @@
+# Meadow IBL, 128 samples/pixel, 12 bounces.
+samples_per_pixel = 128
+max_depth = 12
+environment_map = "meadow_2_4k.exr"
+environment_unit_nits = 10000

@@ -3,7 +3,7 @@
 /// Aether — renderer-agnostic scene & material file-format library.
 ///
 /// Single convenience header that exposes the full public API: the parsed CPU
-/// data types and the three parsers (.scene, .mtlx, OBJ). Aether depends only
+/// data types and the three parsers (.scene.toml, .materials.toml, OBJ). Aether depends only
 /// on GLM and never touches Vulkan, the GPU, or a renderer.
 
 #include "aether/format/MaterialLibrary.hpp"

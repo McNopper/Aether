@@ -1,291 +1,229 @@
 #include "aether/format/SceneParser.hpp"
 
+#include <toml++/toml.hpp>
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-#include <fstream>
+#include <filesystem>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <string_view>
 
 namespace aether {
 namespace {
 
-// ── String helpers ────────────────────────────────────────────────────────
+// ── TOML value readers ─────────────────────────────────────────────────────
 
-[[nodiscard]] std::string_view trimSv(std::string_view sv) noexcept {
-    const auto first = sv.find_first_not_of(" \t\r\n");
-    if (first == std::string_view::npos) {
-        return {};
+[[nodiscard]] std::optional<Vec3> asVec3(const toml::node& n) {
+    const toml::array* arr = n.as_array();
+    if (arr == nullptr || arr->size() != 3) {
+        return std::nullopt;
     }
-    return sv.substr(first, sv.find_last_not_of(" \t\r\n") - first + 1);
+    const auto x = (*arr)[0].value<double>();
+    const auto y = (*arr)[1].value<double>();
+    const auto z = (*arr)[2].value<double>();
+    if (!x || !y || !z) {
+        return std::nullopt;
+    }
+    return Vec3{static_cast<float>(*x), static_cast<float>(*y), static_cast<float>(*z)};
 }
 
-[[nodiscard]] std::string_view stripComment(std::string_view line) noexcept {
-    const auto pos = line.find('#');
-    return trimSv(pos == std::string_view::npos ? line : line.substr(0, pos));
+/// Read a quaternion stored on disk as [qx, qy, qz, qw] into a GLM (w,x,y,z) quat.
+[[nodiscard]] std::optional<Quat> asQuat(const toml::node& n) {
+    const toml::array* arr = n.as_array();
+    if (arr == nullptr || arr->size() != 4) {
+        return std::nullopt;
+    }
+    const auto qx = (*arr)[0].value<double>();
+    const auto qy = (*arr)[1].value<double>();
+    const auto qz = (*arr)[2].value<double>();
+    const auto qw = (*arr)[3].value<double>();
+    if (!qx || !qy || !qz || !qw) {
+        return std::nullopt;
+    }
+    return Quat{static_cast<float>(*qw), static_cast<float>(*qx), static_cast<float>(*qy), static_cast<float>(*qz)};
 }
 
-// ── Value parsers ─────────────────────────────────────────────────────────
-
-bool parseVec3(std::string_view text, Vec3& out) {
-    std::istringstream ss{std::string(text)};
-    return static_cast<bool>(ss >> out.x >> out.y >> out.z);
+/// Resolve a `scale` value: a single number (uniform) or a 3-element array.
+[[nodiscard]] std::optional<Vec3> asScale(const toml::node& n) {
+    if (const auto s = n.value<double>()) {
+        return Vec3{static_cast<float>(*s)};
+    }
+    return asVec3(n);
 }
 
-bool parseFloat(std::string_view text, float& out) {
-    std::istringstream ss{std::string(text)};
-    return static_cast<bool>(ss >> out);
+// ── Section appliers ────────────────────────────────────────────────────────
+// Each applies only the keys present in @p tbl, so a referenced base file can be
+// applied first and an inline table applied on top to override individual keys.
+
+void applyCamera(const toml::table& cam, SceneDesc& desc) {
+    if (const auto* t = cam.get("translate")) {
+        if (const auto p = asVec3(*t)) {
+            desc.camera.position = *p;
+        }
+    }
+
+    // Orientation: `look_at` takes precedence; otherwise derive from `rotate` /
+    // `rotate_y` (camera default forward is -Z).
+    std::optional<Quat> rotation;
+    if (const auto* r = cam.get("rotate")) {
+        rotation = asQuat(*r);
+    }
+    if (const auto deg = cam["rotate_y"].value<double>()) {
+        rotation = glm::angleAxis(glm::radians(static_cast<float>(*deg)), Vec3(0.0F, 1.0F, 0.0F));
+    }
+
+    if (const auto* l = cam.get("look_at")) {
+        if (const auto lookAt = asVec3(*l)) {
+            desc.camera.lookAt = *lookAt;
+            if (const auto* upNode = cam.get("up")) {
+                desc.camera.up = asVec3(*upNode).value_or(Vec3(0.0F, 1.0F, 0.0F));
+            } else if (!desc.camera.up) {
+                desc.camera.up = Vec3(0.0F, 1.0F, 0.0F);
+            }
+        }
+    } else if (rotation) {
+        const Vec3 pos = desc.camera.position.value_or(Vec3(0.0F));
+        desc.camera.lookAt = pos + (*rotation * Vec3(0.0F, 0.0F, -1.0F));
+        desc.camera.up = *rotation * Vec3(0.0F, 1.0F, 0.0F);
+    }
+
+    if (const auto vfov = cam["vertical_field_of_view"].value<double>()) {
+        desc.camera.vfov = static_cast<float>(*vfov);
+    }
+    if (const auto ev = cam["ev100"].value<double>()) {
+        desc.camera.ev100 = static_cast<float>(*ev);
+    }
 }
 
-bool parseUint(std::string_view text, uint32_t& out) {
-    std::istringstream ss{std::string(text)};
-    return static_cast<bool>(ss >> out);
+void applyRender(const toml::table& render, SceneDesc& desc) {
+    if (const auto v = render["samples_per_pixel"].value<int64_t>()) {
+        desc.spp = static_cast<uint32_t>(*v);
+    }
+    if (const auto v = render["max_depth"].value<int64_t>()) {
+        desc.maxDepth = static_cast<uint32_t>(*v);
+    }
+    if (const auto v = render["environment_unit_nits"].value<double>()) {
+        desc.envUnitNits = static_cast<float>(*v);
+    }
+    if (const auto v = render["environment_map"].value<std::string>()) {
+        desc.envMapFile = *v;
+    }
 }
 
-// ── Pending camera block ──────────────────────────────────────────────────
+void applyTonemap(const toml::table& tonemap, SceneDesc& desc) {
+    if (const auto v = tonemap["tonemapper"].value<std::string>()) {
+        desc.tonemapper = *v;
+    }
+}
 
-struct CameraBlock {
-    Vec3 m_position{0.0F};
-    bool m_hasTranslate = false;
+using SectionFn = void (*)(const toml::table&, SceneDesc&);
 
-    // Orientation: rotate and look_at are mutually exclusive; last one wins.
-    std::optional<Quat> m_rotation; // from rotate / rotate_y
-    std::optional<Vec3> m_lookAt;   // from look_at
+/// Resolve a `[section]` that may carry an external `reference` (a base preset
+/// file, applied first) plus inline keys that override it. References are
+/// resolved relative to the scene file's directory.
+void resolveSection(const toml::table& root, std::string_view key, const std::filesystem::path& baseDir,
+                    SceneDesc& desc, SectionFn apply) {
+    const toml::table* tbl = root[key].as_table();
+    if (tbl == nullptr) {
+        return;
+    }
+    if (const auto ref = (*tbl)["reference"].value<std::string>()) {
+        try {
+            const toml::table ext = toml::parse_file((baseDir / *ref).string());
+            apply(ext, desc);
+        } catch (const toml::parse_error&) {
+            // Missing / malformed reference: fall back to inline keys only.
+        }
+    }
+    apply(*tbl, desc);
+}
 
-    Vec3 m_up{0.0F, 1.0F, 0.0F};
-    std::optional<float> m_vfov;
-};
+void parseGeometry(const toml::table& g, SceneDesc& desc) {
+    const std::string type = g["type"].value_or<std::string>("");
+
+    GeometryBlock blk{};
+    if (type == "instance") {
+        blk.kind = GeometryBlock::Kind::Object;
+        blk.objPath = g["mesh"].value_or<std::string>("");
+        if (const toml::table* mats = g["materials"].as_table()) {
+            for (auto&& [name, mat] : *mats) {
+                blk.groupMaterials.insert_or_assign(std::string{name.str()}, mat.value_or<std::string>(""));
+            }
+        }
+    } else if (type == "sphere") {
+        blk.kind = GeometryBlock::Kind::Sphere;
+        blk.sphereRadius = static_cast<float>(g["radius"].value_or<double>(0.0));
+    } else if (type == "box") {
+        blk.kind = GeometryBlock::Kind::Box;
+        if (const auto* h = g.get("half_extents")) {
+            blk.boxHalf = asVec3(*h).value_or(Vec3(0.0F));
+        }
+    } else {
+        return; // unknown geometry type — skip
+    }
+
+    // Shared transform + whole-object material.
+    if (const auto* t = g.get("translate")) {
+        blk.translation = asVec3(*t).value_or(Vec3(0.0F));
+    }
+    if (const auto* r = g.get("rotate")) {
+        if (const auto q = asQuat(*r)) {
+            blk.rotation = *q;
+        }
+    }
+    if (const auto deg = g["rotate_y"].value<double>()) {
+        blk.rotation = glm::angleAxis(glm::radians(static_cast<float>(*deg)), Vec3(0.0F, 1.0F, 0.0F));
+    }
+    if (const auto* s = g.get("scale")) {
+        blk.scale = asScale(*s).value_or(Vec3(1.0F));
+    }
+    blk.materialName = g["material"].value_or<std::string>("");
+
+    desc.geometry.push_back(std::move(blk));
+}
 
 } // namespace
 
 std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFile) {
-    std::ifstream file(sceneFile);
-    if (!file) {
+    toml::table root;
+    try {
+        root = toml::parse_file(sceneFile.string());
+    } catch (const toml::parse_error&) {
         return std::nullopt;
     }
 
     SceneDesc desc{};
+    const std::filesystem::path baseDir = sceneFile.parent_path();
 
-    // Active block state.
-    enum class ActiveBlock { eNone, eGeometry, eCamera };
-    ActiveBlock activeBlock = ActiveBlock::eNone;
-    GeometryBlock blk{};
-    bool hasGeometry = false;
-    CameraBlock camBlk{};
-
-    // Commit the pending geometry block into the SceneDesc.
-    auto flushGeometry = [&] {
-        if (hasGeometry) {
-            desc.geometry.push_back(blk);
-        }
-        hasGeometry = false;
-    };
-
-    // Resolve the pending camera block into desc.camera.
-    auto flushCamera = [&] {
-        if (camBlk.m_hasTranslate) {
-            desc.camera.position = camBlk.m_position;
-        }
-
-        if (camBlk.m_rotation) {
-            // Derive look-at target and up from the quaternion.
-            // Camera default forward is -Z; target = position + forward.
-            const Vec3 pos = camBlk.m_hasTranslate ? camBlk.m_position : Vec3(278.0F, 273.0F, -800.0F);
-            const Vec3 forward = *camBlk.m_rotation * Vec3(0.0F, 0.0F, -1.0F);
-            desc.camera.lookAt = pos + forward;
-            desc.camera.up = *camBlk.m_rotation * Vec3(0.0F, 1.0F, 0.0F);
-        } else if (camBlk.m_lookAt) {
-            desc.camera.lookAt = *camBlk.m_lookAt;
-            desc.camera.up = camBlk.m_up;
-        }
-
-        if (camBlk.m_vfov) {
-            desc.camera.vfov = *camBlk.m_vfov;
-        }
-    };
-
-    auto flushActive = [&] {
-        if (activeBlock == ActiveBlock::eCamera) {
-            flushCamera();
-        } else {
-            flushGeometry();
-        }
-    };
-
-    std::string line;
-    while (std::getline(file, line)) {
-        const std::string_view sv = stripComment(line);
-        if (sv.empty()) {
-            continue;
-        }
-
-        std::istringstream ss{std::string(sv)};
-        std::string kw;
-        ss >> kw;
-        std::string rest;
-        std::getline(ss, rest);
-        const std::string_view rv = trimSv(rest);
-
-        // ── Block starters ────────────────────────────────────────────────
-        if (kw == "camera") {
-            flushActive();
-            camBlk = {};
-            activeBlock = ActiveBlock::eCamera;
-
-        } else if (kw == "instance") {
-            flushActive();
-            blk = {};
-            blk.kind = GeometryBlock::Kind::Object;
-            blk.objPath = std::string(rv);
-            hasGeometry = true;
-            activeBlock = ActiveBlock::eGeometry;
-
-        } else if (kw == "sphere") {
-            flushActive();
-            blk = {};
-            blk.kind = GeometryBlock::Kind::Sphere;
-            parseFloat(rv, blk.sphereRadius);
-            hasGeometry = true;
-            activeBlock = ActiveBlock::eGeometry;
-
-        } else if (kw == "box") {
-            flushActive();
-            blk = {};
-            blk.kind = GeometryBlock::Kind::Box;
-            std::istringstream vs{std::string(rv)};
-            vs >> blk.boxHalf.x >> blk.boxHalf.y >> blk.boxHalf.z;
-            hasGeometry = true;
-            activeBlock = ActiveBlock::eGeometry;
-
-        }
-        // ── Shared modifiers: translate / rotate / rotate_y ───────────────
-        else if (kw == "translate") {
-            if (activeBlock == ActiveBlock::eCamera) {
-                parseVec3(rv, camBlk.m_position);
-                camBlk.m_hasTranslate = true;
-            } else if (hasGeometry) {
-                parseVec3(rv, blk.translation);
-            }
-
-        } else if (kw == "rotate") {
-            // glTF convention on disk: qx qy qz qw; GLM quat is (w, x, y, z).
-            float qx = 0.0F;
-            float qy = 0.0F;
-            float qz = 0.0F;
-            float qw = 1.0F;
-            std::istringstream vs{std::string(rv)};
-            vs >> qx >> qy >> qz >> qw;
-            const Quat q(qw, qx, qy, qz);
-            if (activeBlock == ActiveBlock::eCamera) {
-                camBlk.m_rotation = q;
-                camBlk.m_lookAt = std::nullopt; // rotate wins over look_at
-            } else if (hasGeometry) {
-                blk.rotation = q;
-            }
-
-        } else if (kw == "rotate_y") {
-            float deg = 0.0F;
-            parseFloat(rv, deg);
-            const Quat q = glm::angleAxis(glm::radians(deg), Vec3(0.0F, 1.0F, 0.0F));
-            if (activeBlock == ActiveBlock::eCamera) {
-                camBlk.m_rotation = q;
-                camBlk.m_lookAt = std::nullopt;
-            } else if (hasGeometry) {
-                blk.rotation = q;
-            }
-
-        }
-        // ── Geometry-only modifiers ───────────────────────────────────────
-        else if (kw == "usemtl") {
-            if (hasGeometry) {
-                blk.materialName = std::string(rv);
-            }
-
-        } else if (kw == "material" && activeBlock == ActiveBlock::eGeometry) {
-            // "material GroupName MatName" — per-group assignment for Object blocks.
-            std::istringstream ms{std::string(rv)};
-            std::string groupName;
-            std::string matName;
-            if (ms >> groupName >> matName) {
-                blk.groupMaterials[groupName] = matName;
-            }
-
-        } else if (kw == "scale") {
-            if (hasGeometry) {
-                std::istringstream vs{std::string(rv)};
-                float sx = 1.0F;
-                float sy = 1.0F;
-                float sz = 1.0F;
-                vs >> sx;
-                if (!(vs >> sy >> sz)) {
-                    sy = sx;
-                    sz = sx; // single value → uniform scale
+    // ── Material libraries: `material_libraries` (string or array of strings) ──
+    if (const auto* node = root.get("material_libraries")) {
+        if (const auto single = node->value<std::string>()) {
+            desc.mtllibs.emplace_back(*single);
+        } else if (const toml::array* arr = node->as_array()) {
+            for (const auto& elem : *arr) {
+                if (const auto s = elem.value<std::string>()) {
+                    desc.mtllibs.emplace_back(*s);
                 }
-                blk.scale = {sx, sy, sz};
-            }
-
-        }
-        // ── Camera-only modifiers ─────────────────────────────────────────
-        else if (kw == "look_at") {
-            Vec3 v;
-            if (parseVec3(rv, v)) {
-                camBlk.m_lookAt = v;
-                camBlk.m_rotation = std::nullopt; // look_at wins over rotate
-            }
-
-        } else if (kw == "up") {
-            parseVec3(rv, camBlk.m_up);
-
-        } else if (kw == "vfov") {
-            float v = 0.0F;
-            if (parseFloat(rv, v)) {
-                camBlk.m_vfov = v;
-            }
-
-        }
-        // ── Material libraries ────────────────────────────────────────────
-        else if (kw == "mtllib") {
-            if (!rv.empty()) {
-                desc.mtllibs.emplace_back(rv);
-            }
-
-        }
-        // ── Render settings ───────────────────────────────────────────────
-        else if (kw == "spp") {
-            uint32_t v = 0;
-            if (parseUint(rv, v)) {
-                desc.spp = v;
-            }
-        } else if (kw == "max_depth") {
-            uint32_t v = 0;
-            if (parseUint(rv, v)) {
-                desc.maxDepth = v;
-            }
-        } else if (kw == "env_unit_nits") {
-            float v = 0.0F;
-            if (parseFloat(rv, v)) {
-                desc.envUnitNits = v;
-            }
-        } else if (kw == "ev100") {
-            float v = 0.0F;
-            if (parseFloat(rv, v)) {
-                desc.camera.ev100 = v;
-            }
-        } else if (kw == "env_map") {
-            if (!rv.empty()) {
-                desc.envMapFile = std::string(rv);
-            }
-        } else if (kw == "tonemapper") {
-            if (!rv.empty()) {
-                desc.tonemapper = std::string(rv);
             }
         }
-        // Unknown keywords are silently ignored, consistent with OBJ/MTL.
     }
 
-    flushActive();
+    // ── Settings sections (each supports `reference` + inline override) ──
+    resolveSection(root, "render", baseDir, desc, applyRender);
+    resolveSection(root, "camera", baseDir, desc, applyCamera);
+    resolveSection(root, "tonemap", baseDir, desc, applyTonemap);
+
+    // ── Geometry (ordered) ──
+    if (const toml::array* geo = root["geometry"].as_array()) {
+        for (const auto& elem : *geo) {
+            if (const toml::table* g = elem.as_table()) {
+                parseGeometry(*g, desc);
+            }
+        }
+    }
+
     return desc;
 }
 

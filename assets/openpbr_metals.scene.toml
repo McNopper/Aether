@@ -1,0 +1,143 @@
+# OpenPBR Metals Showcase — Hyperion demo
+# 20 metal spheres in 4 rows × 5, lit by IBL panorama.
+# Spacing 2.5 (radius 0.70, gap 1.10) ensures inter-sphere reflections are visible.
+# Materials from openpbr_metals.materials.toml (F0/F82 conductor model).
+
+material_libraries = ["openpbr_metals.materials.toml", "floor.materials.toml"]
+
+[render]
+reference = "presets/meadow_64spp_6bounce.render.toml"
+
+[camera]
+reference = "presets/openpbr_studio_far.camera.toml"
+
+# Ground plane
+[[geometry]]
+type = "box"
+half_extents = [12.0, 0.1, 12.0]
+material = "NeutralFloor"
+translate = [0.0, -0.05, 0.0]
+
+# ── Row 0  z = -3.75 ──────────────────────────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Copper"
+translate = [-5.0, 0.70, -3.75]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Gold"
+translate = [-2.5, 0.70, -3.75]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Silver"
+translate = [0.0, 0.70, -3.75]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Platinum"
+translate = [2.5, 0.70, -3.75]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Iridium"
+translate = [5.0, 0.70, -3.75]
+
+# ── Row 1  z = -1.25 ──────────────────────────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "AluminumBrushed"
+translate = [-5.0, 0.70, -1.25]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Iron"
+translate = [-2.5, 0.70, -1.25]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Titanium"
+translate = [0.0, 0.70, -1.25]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "StainlessSteel"
+translate = [2.5, 0.70, -1.25]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Brass"
+translate = [5.0, 0.70, -1.25]
+
+# ── Row 2  z = +1.25 ──────────────────────────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Chromium"
+translate = [-5.0, 0.70, 1.25]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Cobalt"
+translate = [-2.5, 0.70, 1.25]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Nickel"
+translate = [0.0, 0.70, 1.25]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Zinc"
+translate = [2.5, 0.70, 1.25]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Palladium"
+translate = [5.0, 0.70, 1.25]
+
+# ── Row 3  z = +3.75 ──────────────────────────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Tungsten"
+translate = [-5.0, 0.70, 3.75]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Lead"
+translate = [-2.5, 0.70, 3.75]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Molybdenum"
+translate = [0.0, 0.70, 3.75]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Vanadium"
+translate = [2.5, 0.70, 3.75]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Silicon"
+translate = [5.0, 0.70, 3.75]

@@ -23,7 +23,7 @@ struct CameraDesc {
     std::optional<float> ev100; ///< physical camera EV100 override
 };
 
-/// A single geometry block from a `.scene` file.
+/// A single geometry block from a `.scene.toml` file.
 ///
 /// Geometry is described in object/local space; world placement is the TRS
 /// (glTF T × R × S convention). Material assignment is by *name* only —
@@ -50,7 +50,7 @@ struct GeometryBlock {
     std::unordered_map<std::string, std::string> groupMaterials;
 };
 
-/// Fully parsed `.scene` file — pure CPU data, no GPU/renderer types.
+/// Fully parsed `.scene.toml` file — pure CPU data, no GPU/renderer types.
 ///
 /// References (mtllibs, OBJ paths, env map) are recorded as relative paths; the
 /// consumer resolves and loads them. The tonemapper is carried as the raw
@@ -65,7 +65,7 @@ struct SceneDesc {
     std::optional<std::string> envMapFile; ///< equirect EXR IBL path (relative)
     std::optional<std::string> tonemapper; ///< raw `tonemapper` token (e.g. "agx")
 
-    std::vector<std::string> mtllibs;    ///< referenced .mtlx libraries (relative paths)
+    std::vector<std::string> mtllibs;    ///< referenced .materials.toml libraries (relative paths)
     std::vector<GeometryBlock> geometry; ///< geometry blocks in declaration order
 };
 

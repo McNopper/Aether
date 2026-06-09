@@ -1,0 +1,5 @@
+# Close chess-set camera.
+translate = [0.45, 0.4, 0.55]
+look_at = [0.0, 0.04, 0.0]
+vertical_field_of_view = 42
+ev100 = 11

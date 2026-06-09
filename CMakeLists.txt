@@ -19,8 +19,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # (MT/static): it causes RuntimeLibrary mismatches when Aether is linked as a
 # FetchContent subproject alongside vcpkg/gtest libraries.
 
-# GLM is the only dependency (provided via vcpkg). Aether has no Vulkan / GPU deps.
+# Dependencies (provided via vcpkg). Aether has no Vulkan / GPU deps.
+#   GLM           — vector / quaternion math
+#   tomlplusplus  — header-only TOML parser for the .scene.toml / .materials.toml formats
 find_package(glm CONFIG REQUIRED)
+find_package(tomlplusplus CONFIG REQUIRED)
 
 set(AETHER_SOURCES
     src/aether/format/MaterialLibrary.cpp
@@ -40,7 +43,7 @@ target_include_directories(aether
 
 target_link_libraries(aether
     PUBLIC glm::glm
-    PRIVATE aether_project_options
+    PRIVATE aether_project_options tomlplusplus::tomlplusplus
 )
 
 # Path to the canonical asset collection that Aether owns (scene/material

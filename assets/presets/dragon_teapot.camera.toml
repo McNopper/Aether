@@ -1,0 +1,5 @@
+# Dragon & teapot hero camera.
+translate = [0.5, 3.2, -9.5]
+look_at = [0.0, 0.7, 0.0]
+vertical_field_of_view = 50
+ev100 = 12

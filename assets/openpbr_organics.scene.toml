@@ -1,0 +1,93 @@
+# OpenPBR Organics Showcase — Hyperion demo
+# Skin I-VI, pearl, velvet, egg shell, milk, honey, snow — 12 spheres.
+# Materials from openpbr_organics.materials.toml.
+
+material_libraries = ["openpbr_organics.materials.toml", "floor.materials.toml"]
+
+[render]
+reference = "presets/meadow_64spp_8bounce.render.toml"
+
+[camera]
+reference = "presets/openpbr_studio_wide.camera.toml"
+
+# Ground plane
+[[geometry]]
+type = "box"
+half_extents = [10.0, 0.1, 10.0]
+material = "NeutralFloor"
+translate = [0.0, -0.05, 1.0]
+
+# ── Row 0  Skin I–IV  z = -2.0 ───────────────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SkinI"
+translate = [-3.75, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SkinII"
+translate = [-1.25, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SkinIII"
+translate = [1.25, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SkinIV"
+translate = [3.75, 0.70, -2.0]
+
+# ── Row 1  Skin V–VI + Pearl + Velvet  z = +0.5 ──────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SkinV"
+translate = [-3.75, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SkinVI"
+translate = [-1.25, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Pearl"
+translate = [1.25, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Velvet"
+translate = [3.75, 0.70, 0.5]
+
+# ── Row 2  Subsurface liquids  z = +3.0 ──────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Milk"
+translate = [-3.75, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "HoneyCrystallized"
+translate = [-1.25, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Snow"
+translate = [1.25, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "EggShell"
+translate = [3.75, 0.70, 3.0]

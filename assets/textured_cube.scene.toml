@@ -1,0 +1,22 @@
+# textured_cube.scene — Cornell box with a decorated cube in the center.
+
+material_libraries = ["cornell.materials.toml", "textured_cube.materials.toml"]
+
+[render]
+reference = "presets/preview.render.toml"
+
+[camera]
+reference = "presets/cornell.camera.toml"
+
+[[geometry]]
+type = "instance"
+mesh = "cornell.obj"
+materials = { Floor = "WhiteWall", Ceiling = "WhiteWall", AreaLight = "AreaLight", BackWall = "WhiteWall", LeftWall = "RedWall", RightWall = "GreenWall" }
+
+# Cube centered in the box, scaled to 100 units per side
+[[geometry]]
+type = "instance"
+mesh = "textured_cube.obj"
+material = "cube_textured"
+translate = [278, 100, 279]
+scale = [100, 100, 100]

@@ -1,0 +1,56 @@
+# OpenPBR Advanced Transmission / Subsurface Showcase — Hyperion demo
+# Demonstrates transmission_scatter, dispersion, thin-walled, and subsurface
+# scatter-anisotropy — 6 spheres. Materials from openpbr_advanced.materials.toml.
+
+material_libraries = ["openpbr_advanced.materials.toml", "floor.materials.toml"]
+
+[render]
+reference = "presets/relax_256spp_16bounce.render.toml"
+
+[camera]
+reference = "presets/openpbr_studio_near.camera.toml"
+
+# Ground plane
+[[geometry]]
+type = "box"
+half_extents = [10.0, 0.1, 8.0]
+material = "NeutralFloor"
+translate = [0.0, -0.05, 0.0]
+
+# ── Row 0  z = -1.0 ───────────────────────────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "MilkyScatter"
+translate = [-2.5, 0.70, -1.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "DispersiveDiamond"
+translate = [0.0, 0.70, -1.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "HoneyScatter"
+translate = [2.5, 0.70, -1.0]
+
+# ── Row 1  z = +1.5 ───────────────────────────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "ThinGlassSheet"
+translate = [-2.5, 0.70, 1.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "TranslucentLeaf"
+translate = [0.0, 0.70, 1.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "WaxySubsurface"
+translate = [2.5, 0.70, 1.5]

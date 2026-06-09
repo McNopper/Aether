@@ -1,0 +1,113 @@
+# OpenPBR Thin-Film Iridescence Showcase — Hyperion demo
+# 15 spheres in 3 rows × 5, lit by IBL panorama.
+# Tests thin_film_thickness on glass (row 0), on silver metal (row 1),
+# and named iridescent materials (row 2).
+# Materials from openpbr_thinfilm.materials.toml.
+
+material_libraries = ["openpbr_thinfilm.materials.toml", "floor.materials.toml"]
+
+[render]
+reference = "presets/meadow_128spp_16bounce.render.toml"
+
+[camera]
+reference = "presets/openpbr_studio_wide.camera.toml"
+
+# Ground plane
+[[geometry]]
+type = "box"
+half_extents = [12.0, 0.1, 10.0]
+material = "NeutralFloor"
+translate = [0.0, -0.05, 1.0]
+
+# ── Row 0  z = -2.0  thickness sweep on glass ────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "TF_Glass_300nm"
+translate = [-5.0, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "TF_Glass_500nm"
+translate = [-2.5, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "TF_Glass_700nm"
+translate = [0.0, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "TF_Glass_900nm"
+translate = [2.5, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "TF_Glass_1100nm"
+translate = [5.0, 0.70, -2.0]
+
+# ── Row 1  z = +0.5  thickness sweep on silver metal ─────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "TF_Metal_300nm"
+translate = [-5.0, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "TF_Metal_500nm"
+translate = [-2.5, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "TF_Metal_700nm"
+translate = [0.0, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "TF_Metal_900nm"
+translate = [2.5, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "TF_Metal_1100nm"
+translate = [5.0, 0.70, 0.5]
+
+# ── Row 2  z = +3.0  named iridescent materials ───────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "OilSlick"
+translate = [-5.0, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "PeacockFeather"
+translate = [-2.5, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "AbaloneShell"
+translate = [0.0, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "JewelBeetle"
+translate = [2.5, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SoapBubbleIrid"
+translate = [5.0, 0.70, 3.0]

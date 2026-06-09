@@ -1,0 +1,5 @@
+# Cornell box camera (looks into the box from -Z).
+translate = [278.0, 273.0, -800.0]
+look_at = [278.0, 273.0, 279.5]
+vertical_field_of_view = 39.1
+ev100 = 7.0

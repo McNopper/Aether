@@ -15,7 +15,7 @@ enum class MaterialColorSpace : uint8_t {
     LinRec2020,    ///< colors already in the render working space — no conversion
 };
 
-/// A texture map reference: file path (relative to the .mtlx directory) plus the
+/// A texture map reference: file path (relative to the material-library directory) plus the
 /// source color space the consumer must decode from.
 struct TextureRef {
     std::string path;

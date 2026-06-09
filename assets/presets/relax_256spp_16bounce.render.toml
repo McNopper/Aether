@@ -1,0 +1,5 @@
+# Seaview suite IBL, 256 samples/pixel, 16 bounces.
+samples_per_pixel = 256
+max_depth = 16
+environment_map = "relax_inn_seaview_suite_4k.exr"
+environment_unit_nits = 10000

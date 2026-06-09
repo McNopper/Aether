@@ -1,0 +1,65 @@
+# Suzanne material library — Hyperion demo
+#
+# FORMAT NOTE
+# -----------
+# TOML OpenPBR material library: one table per material, keyed by name. All
+# parameters use OpenPBR Surface v1.1 keyword names verbatim
+# (https://academysoftwarefoundation.github.io/OpenPBR/). Texture bindings use
+# Aether's `map_*` keys. Any unrecognised keyword is silently ignored.
+#
+# Color values are linear Rec.709 by default; the consumer converts them to its
+# working color space. The exception is "subsurface_radius", a physical distance
+# (not a colour), stored as-is. Declare the input color space explicitly with:
+#   colorspace = "lin_rec709"   (default — consumer converts to lin_rec2020)
+#   colorspace = "lin_rec2020"  (no conversion — values already in lin_rec2020)
+
+colorspace = "lin_rec709"
+
+# Default: warm terracotta / skin-like diffuse
+
+[SuzanneDefault]
+base_color = [0.720, 0.420, 0.180]
+specular_roughness = 0.55
+specular_ior = 1.45
+
+# Brushed gold
+
+[SuzanneMetal]
+base_color = [1.000, 0.782, 0.344]
+base_metalness = 1.0
+specular_roughness = 0.25
+
+# Clear glass
+
+[SuzanneGlass]
+base_color = [1.000, 1.000, 1.000]
+transmission_weight = 1.0
+specular_ior = 1.52
+specular_roughness = 0.0
+
+# Frosted glass
+
+[SuzanneFrostedGlass]
+base_color = [0.900, 0.950, 1.000]
+transmission_weight = 1.0
+specular_ior = 1.52
+specular_roughness = 0.15
+
+# Red clearcoat lacquer
+
+[SuzanneCoat]
+base_color = [0.720, 0.040, 0.020]
+specular_roughness = 0.70
+coat_weight = 1.0
+coat_roughness = 0.04
+coat_ior = 1.5
+
+# Subsurface wax
+
+[SuzanneWax]
+base_color = [1.000, 0.900, 0.700]
+specular_roughness = 0.4
+subsurface_weight = 0.6
+subsurface_color = [1.000, 0.800, 0.600]
+subsurface_radius = [4.0, 2.0, 1.5]
+subsurface_radius_scale = 5.0

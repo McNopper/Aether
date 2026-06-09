@@ -1,8 +1,8 @@
 # Aether
 
 The scene & material file format for the [Hyperion](https://github.com/McNopper/Hyperion)
-and [Theia](https://github.com/McNopper/Theia) renderers — a dependency-free C++23
-library that parses `.scene` / `.mtlx` / OBJ into plain CPU data structures.
+and [Theia](https://github.com/McNopper/Theia) renderers — a small C++23
+library that parses TOML scene/material files and OBJ geometry into plain CPU data structures.
 
 > *[Aether](https://en.wikipedia.org/wiki/Aether_(mythology)) — primordial deity of the
 > bright upper air and pure light the gods breathe; the medium through which light
@@ -16,24 +16,50 @@ library that parses `.scene` / `.mtlx` / OBJ into plain CPU data structures.
 ## What Aether is (and isn't)
 
 Aether is **fully independent**: it has **no Vulkan, no GPU, and no renderer
-dependencies** (only GLM for vector/quaternion math). It turns text files into plain
+dependencies** (only GLM for math and toml++ for parsing). It turns text files into plain
 CPU structs; consumers (Harmonia and the renderers) own all GPU upload.
 
 | Parses | Into |
 |--------|------|
-| `.scene` (line-based scene description) | `aether::SceneDesc` (camera, render settings, env, tonemapper, geometry blocks with TRS + material refs, material-library references) |
-| `.mtlx` (OpenPBR material library — **not** Wavefront MTL, **not** MaterialX XML) | `aether::MaterialDesc` (OpenPBR Surface v1.1 parameters + texture references) |
-| Wavefront OBJ (geometry only) | `aether::MeshData` / `aether::MeshGroup` (deduplicated vertices + indices, local space) |
+| `<name>.scene.toml` (TOML scene description) | `aether::SceneDesc` (camera, render settings, env, tonemapper, geometry blocks with TRS + material refs, material-library references) |
+| `<name>.materials.toml` (TOML OpenPBR material library) | `aether::MaterialDesc` (OpenPBR Surface v1.1 parameters + texture references) |
+| Wavefront OBJ (geometry only — **triangles only**; OBJ material directives ignored) | `aether::MeshData` / `aether::MeshGroup` (deduplicated vertices + indices, local space) |
 
-Geometry is returned in **object/local space**; world placement lives on the scene's
-geometry blocks (TRS). Colors are kept in their declared input color space, tagged with
-`MaterialColorSpace`, so the consumer performs any color-space conversion.
+Geometry stays in OBJ (bulk vertex/index data); every other element — scene, camera,
+render settings, tonemapping, materials — is **TOML**, so files are small, single-purpose,
+and easy to edit (by hand or by an agent). Geometry is returned in **object/local space**;
+world placement lives on the scene's geometry blocks (TRS). Colors are kept in their declared
+input color space, tagged with `MaterialColorSpace`, so the consumer performs any color-space
+conversion.
+
+### File-format notes
+
+* **Scene** (`<name>.scene.toml`): top-level `material_libraries` array; `[render]`,
+  `[camera]` and `[tonemap]` tables; an ordered `[[geometry]]` array whose entries have
+  `type = "instance" | "box" | "sphere"`. Keys are spelled in full words for clarity
+  (`samples_per_pixel`, `environment_map`, `vertical_field_of_view`, `mesh`,
+  `half_extents`, `material`, …).
+* **Setting presets** (`presets/<name>.<group>.toml`): the `[render]`, `[camera]` and
+  `[tonemap]` sections may carry a `reference = "presets/…"` key pointing at a standalone
+  preset file (top-level keys, same shape as the inline section). The referenced file is
+  applied first as a base, then any inline keys override it (*local wins*). Settings shared
+  across scenes therefore live in a single deduplicated preset file (e.g. all Cornell scenes
+  share `presets/cornell.camera.toml` and `presets/preview.render.toml`). References resolve
+  relative to the scene directory.
+* **Materials** (`<name>.materials.toml`): one TOML table per material (keyed by name), using
+  [OpenPBR Surface v1.1](https://academysoftwarefoundation.github.io/OpenPBR/) parameter names
+  verbatim; optional top-level `colorspace`. Texture bindings use Aether's `map_*` keys.
+* **OBJ**: geometry only. Non-triangle faces are skipped and all `usemtl` / `mtllib`
+  directives are ignored — materials are assigned exclusively from the scene file.
+
+> **Tip:** in VS Code, install the *Even Better TOML* extension for syntax highlighting,
+> formatting, and (with a JSON Schema) live validation of the `.toml` files.
 
 ---
 
 ## Building
 
-**Requirements:** CMake 3.28+, a C++23 compiler, vcpkg (provides GLM).
+**Requirements:** CMake 3.28+, a C++23 compiler, vcpkg (provides GLM and toml++).
 
 ```bash
 cmake -S . -B build -G Ninja \
@@ -62,5 +88,6 @@ Hyperion, Theia and Harmonia pull Aether via CMake `FetchContent` and link the
 
 | Library | Purpose |
 |---------|---------|
-| [GLM](https://github.com/g-truc/glm) | Vector / quaternion math (the only dependency) |
+| [GLM](https://github.com/g-truc/glm) | Vector / quaternion math |
+| [toml++](https://github.com/marzer/tomlplusplus) | TOML parsing for the `.scene.toml` / `.materials.toml` formats |
 | [GoogleTest](https://github.com/google/googletest) | Unit testing (tests only) |

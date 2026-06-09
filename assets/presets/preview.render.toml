@@ -1,0 +1,3 @@
+# Fast preview: 64 samples/pixel, 8 bounces, no image-based lighting.
+samples_per_pixel = 64
+max_depth = 8

@@ -1,0 +1,20 @@
+# ABeautifulGame — chess set (Academy Software Foundation, MaterialX sample asset)
+# converted to Hyperion OBJ + OpenPBR materials (.materials.toml).  Validates the full bindless texture path:
+# base_color (sRGB), ORM (occlusion/roughness/metalness) and tangent-space normal
+# maps on 15 materials, lit purely by an HDR environment (IBL).
+
+material_libraries = ["ABeautifulGame/ABeautifulGame.materials.toml"]
+
+[render]
+reference = "presets/meadow_256spp_12bounce.render.toml"
+
+[camera]
+reference = "presets/abeautifulgame.camera.toml"
+
+[tonemap]
+reference = "presets/agx.tonemap.toml"
+
+[[geometry]]
+type = "instance"
+mesh = "ABeautifulGame/ABeautifulGame.obj"
+materials = { King_Black = "King_Black", King_White = "King_White", Queen_Black = "Queen_Black", Queen_White = "Queen_White", Chessboard = "Chessboard", Pawn_Top_White = "Pawn_Top_White", Pawn_Body_White = "Pawn_Body_White", Pawn_Top_Black = "Pawn_Top_Black", Pawn_Body_Black = "Pawn_Body_Black", Castle_Black = "Castle_Black", Castle_White = "Castle_White", Knight_Black = "Knight_Black", Knight_White = "Knight_White", Bishop_Black = "Bishop_Black", Bishop_White = "Bishop_White" }

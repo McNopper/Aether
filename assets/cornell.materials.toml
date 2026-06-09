@@ -1,0 +1,66 @@
+# Cornell Box material library — Hyperion demo
+#
+# FORMAT NOTE
+# -----------
+# TOML OpenPBR material library: one table per material, keyed by name. All
+# parameters use OpenPBR Surface v1.1 keyword names verbatim
+# (https://academysoftwarefoundation.github.io/OpenPBR/). Texture bindings use
+# Aether's `map_*` keys. Any unrecognised keyword is silently ignored.
+#
+# Color values are linear Rec.709 by default; the consumer converts them to its
+# working color space. The exception is "subsurface_radius", a physical distance
+# (not a colour), stored as-is. Declare the input color space explicitly with:
+#   colorspace = "lin_rec709"   (default — consumer converts to lin_rec2020)
+#   colorspace = "lin_rec2020"  (no conversion — values already in lin_rec2020)
+
+colorspace = "lin_rec709"
+
+# ── Walls ────────────────────────────────────────────────────────────────────
+
+[WhiteWall]
+base_color = [0.725, 0.710, 0.680]
+specular_roughness = 1.0
+
+[RedWall]
+base_color = [0.630, 0.065, 0.050]
+specular_roughness = 1.0
+
+[GreenWall]
+base_color = [0.140, 0.450, 0.091]
+specular_roughness = 1.0
+
+# ── Area light ───────────────────────────────────────────────────────────────
+
+[AreaLight]
+emission_color = [1.000, 1.000, 1.000]
+emission_luminance = 10000.0
+
+# ── Sphere materials ─────────────────────────────────────────────────────────
+
+[Mirror]
+base_color = [0.980, 0.980, 0.980]
+base_metalness = 1.0
+specular_roughness = 0.0
+
+[Glass]
+base_color = [1.000, 1.000, 1.000]
+transmission_weight = 1.0
+specular_ior = 1.52
+specular_roughness = 0.0
+
+[RoughGold]
+base_color = [1.000, 0.782, 0.344]
+base_metalness = 1.0
+specular_roughness = 0.30
+
+[Copper]
+base_color = [0.955, 0.638, 0.538]
+base_metalness = 1.0
+specular_roughness = 0.15
+
+[ClearcoatRed]
+base_color = [0.720, 0.040, 0.020]
+specular_roughness = 0.70
+coat_weight = 1.0
+coat_roughness = 0.04
+coat_ior = 1.5

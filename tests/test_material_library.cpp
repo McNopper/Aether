@@ -11,14 +11,14 @@ std::filesystem::path assetsDir() {
 
 TEST(MaterialLibrary, LoadsCornellLibrary) {
     aether::MaterialLibrary lib;
-    ASSERT_TRUE(lib.load(assetsDir() / "cornell.mtlx"));
+    ASSERT_TRUE(lib.load(assetsDir() / "cornell.materials.toml"));
     EXPECT_FALSE(lib.empty());
     EXPECT_EQ(lib.size(), 9U);
 }
 
 TEST(MaterialLibrary, ResolvesNamedMaterials) {
     aether::MaterialLibrary lib;
-    ASSERT_TRUE(lib.load(assetsDir() / "cornell.mtlx"));
+    ASSERT_TRUE(lib.load(assetsDir() / "cornell.materials.toml"));
 
     EXPECT_TRUE(lib.get("WhiteWall").has_value());
     EXPECT_TRUE(lib.get("RedWall").has_value());
@@ -28,7 +28,7 @@ TEST(MaterialLibrary, ResolvesNamedMaterials) {
 
 TEST(MaterialLibrary, GlassIsTransmissive) {
     aether::MaterialLibrary lib;
-    ASSERT_TRUE(lib.load(assetsDir() / "cornell.mtlx"));
+    ASSERT_TRUE(lib.load(assetsDir() / "cornell.materials.toml"));
 
     const auto glass = lib.get("Glass");
     ASSERT_TRUE(glass.has_value());
@@ -37,7 +37,7 @@ TEST(MaterialLibrary, GlassIsTransmissive) {
 
 TEST(MaterialLibrary, MetalsAreMetallic) {
     aether::MaterialLibrary lib;
-    ASSERT_TRUE(lib.load(assetsDir() / "cornell.mtlx"));
+    ASSERT_TRUE(lib.load(assetsDir() / "cornell.materials.toml"));
 
     const auto gold = lib.get("RoughGold");
     ASSERT_TRUE(gold.has_value());
@@ -46,7 +46,7 @@ TEST(MaterialLibrary, MetalsAreMetallic) {
 
 TEST(MaterialLibrary, AreaLightEmits) {
     aether::MaterialLibrary lib;
-    ASSERT_TRUE(lib.load(assetsDir() / "cornell.mtlx"));
+    ASSERT_TRUE(lib.load(assetsDir() / "cornell.materials.toml"));
 
     const auto light = lib.get("AreaLight");
     ASSERT_TRUE(light.has_value());
@@ -55,16 +55,33 @@ TEST(MaterialLibrary, AreaLightEmits) {
 
 TEST(MaterialLibrary, MissingFileFailsToLoad) {
     aether::MaterialLibrary lib;
-    EXPECT_FALSE(lib.load(assetsDir() / "this_file_does_not_exist.mtlx"));
+    EXPECT_FALSE(lib.load(assetsDir() / "this_file_does_not_exist.materials.toml"));
     EXPECT_TRUE(lib.empty());
 }
 
 TEST(MaterialLibrary, GetOrDefaultReturnsDefaultForUnknown) {
     aether::MaterialLibrary lib;
-    ASSERT_TRUE(lib.load(assetsDir() / "cornell.mtlx"));
+    ASSERT_TRUE(lib.load(assetsDir() / "cornell.materials.toml"));
 
     const aether::MaterialDesc def = lib.getOrDefault("UnknownMaterialName");
     EXPECT_FLOAT_EQ(def.base_weight, 1.0F);
+}
+
+// Smoke test: every shipped .materials.toml must load and contain materials.
+TEST(MaterialLibrary, AllShippedLibrariesLoad) {
+    namespace fs = std::filesystem;
+    std::size_t count = 0;
+    for (const auto& entry : fs::recursive_directory_iterator(assetsDir())) {
+        const auto& p = entry.path();
+        if (p.extension() != ".toml" || !p.stem().string().ends_with(".materials")) {
+            continue;
+        }
+        ++count;
+        aether::MaterialLibrary lib;
+        EXPECT_TRUE(lib.load(p)) << "failed to load " << p.string();
+        EXPECT_FALSE(lib.empty()) << "no materials in " << p.string();
+    }
+    EXPECT_GT(count, 0U);
 }
 
 } // namespace

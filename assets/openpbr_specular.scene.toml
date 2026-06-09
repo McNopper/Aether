@@ -1,0 +1,113 @@
+# OpenPBR Specular Lobe Showcase — Hyperion demo
+# 15 spheres in 3 rows × 5, lit by IBL panorama.
+# Tests specular_roughness (row 0), specular_ior (row 1),
+# specular_roughness_anisotropy on brushed metal (row 2).
+# Materials from openpbr_specular.materials.toml.
+
+material_libraries = ["openpbr_specular.materials.toml", "floor.materials.toml"]
+
+[render]
+reference = "presets/meadow_128spp_8bounce.render.toml"
+
+[camera]
+reference = "presets/openpbr_studio_wide.camera.toml"
+
+# Ground plane
+[[geometry]]
+type = "box"
+half_extents = [12.0, 0.1, 10.0]
+material = "NeutralFloor"
+translate = [0.0, -0.05, 1.0]
+
+# ── Row 0  z = -2.0  specular_roughness sweep ───────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SpecRough_0"
+translate = [-5.0, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SpecRough_10"
+translate = [-2.5, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SpecRough_25"
+translate = [0.0, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SpecRough_50"
+translate = [2.5, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SpecRough_100"
+translate = [5.0, 0.70, -2.0]
+
+# ── Row 1  z = +0.5  specular_ior sweep ────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SpecIOR_1_2"
+translate = [-5.0, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SpecIOR_1_4"
+translate = [-2.5, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SpecIOR_1_6"
+translate = [0.0, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SpecIOR_2_0"
+translate = [2.5, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "SpecIOR_2_5"
+translate = [5.0, 0.70, 0.5]
+
+# ── Row 2  z = +3.0  specular_roughness_anisotropy sweep ────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Aniso_0"
+translate = [-5.0, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Aniso_25"
+translate = [-2.5, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Aniso_50"
+translate = [0.0, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Aniso_75"
+translate = [2.5, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Aniso_95"
+translate = [5.0, 0.70, 3.0]

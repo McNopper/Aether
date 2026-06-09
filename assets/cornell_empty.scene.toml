@@ -1,0 +1,17 @@
+# Cornell Box — Empty
+# Walls and area light only.
+# 
+# Syntax reference: see SceneLoader.hpp
+
+material_libraries = ["cornell.materials.toml"]
+
+[render]
+reference = "presets/preview.render.toml"
+
+[camera]
+reference = "presets/cornell.camera.toml"
+
+[[geometry]]
+type = "instance"
+mesh = "cornell.obj"
+materials = { Floor = "WhiteWall", Ceiling = "WhiteWall", AreaLight = "AreaLight", BackWall = "WhiteWall", LeftWall = "RedWall", RightWall = "GreenWall" }

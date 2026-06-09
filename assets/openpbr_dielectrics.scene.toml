@@ -1,0 +1,105 @@
+# OpenPBR Dielectrics Showcase — Hyperion demo
+# 14 transparent/refractive spheres in 3 rows, lit by IBL panorama.
+# Materials from openpbr_dielectrics.materials.toml.
+
+material_libraries = ["openpbr_dielectrics.materials.toml", "floor.materials.toml"]
+
+[render]
+reference = "presets/meadow_128spp_16bounce.render.toml"
+
+[camera]
+reference = "presets/openpbr_studio_wide.camera.toml"
+
+# Ground plane
+[[geometry]]
+type = "box"
+half_extents = [12.0, 0.1, 10.0]
+material = "NeutralFloor"
+translate = [0.0, -0.05, 1.0]
+
+# ── Row 0  z = -2.0 ───────────────────────────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Glass"
+translate = [-5.0, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Diamond"
+translate = [-2.5, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Water"
+translate = [0.0, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Ice"
+translate = [2.5, 0.70, -2.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Sapphire"
+translate = [5.0, 0.70, -2.0]
+
+# ── Row 1  z = +0.5 ───────────────────────────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Quartz"
+translate = [-5.0, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "HoneyLiquid"
+translate = [-2.5, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "Salt"
+translate = [0.0, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "PlasticAcrylic"
+translate = [2.5, 0.70, 0.5]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "PlasticPC"
+translate = [5.0, 0.70, 0.5]
+
+# ── Row 2  z = +3.0 ───────────────────────────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "PlasticPET"
+translate = [-3.75, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "PlasticPVC"
+translate = [-1.25, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "PlasticPolyurethane"
+translate = [1.25, 0.70, 3.0]
+
+[[geometry]]
+type = "sphere"
+radius = 0.70
+material = "PlasticPP"
+translate = [3.75, 0.70, 3.0]
