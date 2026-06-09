@@ -5,7 +5,7 @@
 *.slo
 *.lo
 *.o
-*.obj
+# (Wavefront *.obj are assets, tracked via Git LFS — not ignored)
 
 # Precompiled Headers
 *.gch
@@ -67,3 +67,11 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# IDE / editor
+.vs/
+.idea/
+*.vcxproj*
+*.sln
+*.user
+*~

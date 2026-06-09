@@ -1,0 +1,14 @@
+# Aether owns the canonical asset collection (scene/material format files plus
+# the geometry, environment and texture assets they reference). Large binary
+# assets are stored via Git LFS, matching the renderers' previous setup.
+* text=auto
+
+# Text format files (line-ending normalisation)
+*.hpp   text
+*.cpp   text
+*.scene text
+*.mtlx  text
+
+# Large binary assets via Git LFS
+*.obj filter=lfs diff=lfs merge=lfs -text
+assets/*.exr filter=lfs diff=lfs merge=lfs -text
