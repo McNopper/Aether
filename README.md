@@ -43,7 +43,10 @@ conversion.
   `[camera]` and `[tonemap]` tables; an ordered `[[geometry]]` array whose entries have
   `type = "instance" | "box" | "sphere"`. Keys are spelled in full words for clarity
   (`samples_per_pixel`, `environment_map`, `vertical_field_of_view`, `mesh`,
-  `half_extents`, `material`, …).
+  `half_extents`, `material`, …). The `[render]` table may select the scene-referred
+  **working color space** via `working_color_space = "lin_rec2020_scene" |
+  "lin_rec709_scene"` (absent → consumer default, Rec.2020); consumers convert all
+  assets to it on load.
 * **Setting presets** (`presets/<name>.<group>.toml`): the `[render]`, `[camera]` and
   `[tonemap]` sections may carry a `reference = "presets/…"` key pointing at a standalone
   preset file (top-level keys, same shape as the inline section). The referenced file is
@@ -53,7 +56,9 @@ conversion.
   relative to the scene directory.
 * **Materials** (`<name>.materials.toml`): one TOML table per material (keyed by name), using
   [OpenPBR Surface v1.1](https://academysoftwarefoundation.github.io/OpenPBR/) parameter names
-  verbatim; optional top-level `colorspace`. Texture bindings use Aether's `map_*` keys.
+  verbatim; optional top-level `colorspace` and `model` (default `"openpbr"` — the material
+  model tag, anticipating additional material models in the future). Texture bindings use
+  Aether's `map_*` keys.
 * **OBJ**: geometry only. Non-triangle faces are skipped and all `usemtl` / `mtllib`
   directives are ignored — materials are assigned exclusively from the scene file.
 
