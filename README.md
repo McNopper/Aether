@@ -27,10 +27,12 @@ CPU structs; consumers (Harmonia and the renderers) own all GPU upload.
 
 Geometry stays in OBJ (bulk vertex/index data); every other element — scene, camera,
 render settings, tonemapping, materials — is **TOML**, so files are small, single-purpose,
-and easy to edit (by hand or by an agent). Compared to equivalent pretty-printed JSON, the
-TOML files save up to one third of the token usage when foreign files are read by an
-LLM/agent — less syntactic noise (no braces, fewer quotes), more content per token.
-Geometry is returned in **object/local space**;
+and easy to edit (by hand or by an agent). TOML is the best compromise between human
+readability and token efficiency: compared to equivalent pretty-printed JSON, the TOML files
+save up to one third of the token usage when foreign files are read by an LLM/agent — less
+syntactic noise (no braces, fewer quotes), more content per token. Minified JSON would be
+denser still, but is no longer readable or editable by humans — and unlike JSON, TOML
+supports comments. Geometry is returned in **object/local space**;
 world placement lives on the scene's geometry blocks (TRS). Colors are kept in their declared
 input color space, tagged with `MaterialColorSpace`, so the consumer performs any color-space
 conversion.
