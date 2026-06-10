@@ -10,7 +10,8 @@
 # Color values are linear Rec.709 by default; the consumer converts them to its
 # working color space.
 
-colorspace = "lin_rec709"
+model = "openpbr"
+colorspace = "lin_rec709_scene"
 
 # ── Ground ────────────────────────────────────────────────────────────────────
 

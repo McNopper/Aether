@@ -12,7 +12,8 @@
 # 
 # Standard MTL keywords (Kd, Ks, Ka, …) are SILENTLY IGNORED.
 
-colorspace = "lin_rec709"
+model = "openpbr"
+colorspace = "lin_rec709_scene"
 
 # ── Row 0: thickness sweep on smooth glass base ───────────────────────────────
 # Transmission base so the interference colours dominate over base reflectance.

@@ -186,6 +186,19 @@ TEST(SceneParser, RenderGroupResolvedFromReferencePreset) {
     EXPECT_FLOAT_EQ(*f.scene->envUnitNits, 5000.0F);
 }
 
+TEST(SceneParser, WorkingColorSpaceAbsentByDefault) {
+    const auto scene = aether::SceneParser::parse(assetsDir() / "cornell_classic.scene.toml");
+    ASSERT_TRUE(scene.has_value());
+    EXPECT_FALSE(scene->workingColorSpace.has_value());
+}
+
+TEST(SceneParser, WorkingColorSpaceResolvedFromReferencePreset) {
+    PresetFixture f{"render", "working_color_space = \"lin_rec709_scene\"\n"};
+    ASSERT_TRUE(f.scene.has_value());
+    ASSERT_TRUE(f.scene->workingColorSpace.has_value());
+    EXPECT_EQ(*f.scene->workingColorSpace, "lin_rec709_scene");
+}
+
 TEST(SceneParser, TonemapGroupResolvedFromReferencePreset) {
     PresetFixture f{"tonemap", "tonemapper = \"agx\"\n"};
     ASSERT_TRUE(f.scene.has_value());

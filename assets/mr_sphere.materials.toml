@@ -2,7 +2,8 @@
 # 
 # Color values are linear Rec.709; Hyperion converts to linear Rec.2020 on load.
 
-colorspace = "lin_rec709"
+model = "openpbr"
+colorspace = "lin_rec709_scene"
 
 # ── Main subject ──────────────────────────────────────────────────────────────
 

@@ -110,6 +110,9 @@ void applyRender(const toml::table& render, SceneDesc& desc) {
     if (const auto v = render["environment_map"].value<std::string>()) {
         desc.envMapFile = *v;
     }
+    if (const auto v = render["working_color_space"].value<std::string>()) {
+        desc.workingColorSpace = *v;
+    }
 }
 
 void applyTonemap(const toml::table& tonemap, SceneDesc& desc) {

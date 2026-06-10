@@ -19,21 +19,37 @@ namespace aether {
 /// arrays, scalars are numbers, texture maps are string paths, `thin_walled` is
 /// a bool. Any unrecognised key is silently ignored.
 ///
-///   colorspace = "lin_rec709"      # file-level input color space (optional)
+///   model = "openpbr"               # file-level material model (optional)
+///   colorspace = "lin_rec709_scene" # file-level input color space (optional)
 ///
 ///   [WhiteWall]
 ///   base_color = [0.725, 0.710, 0.680]
 ///   specular_roughness = 1.0
 ///
-/// Color values default to linear Rec.709 input; the top-level `colorspace`
-/// key may declare a different input space:
+/// COLOR MANAGEMENT
+/// ────────────────
+/// Color space tokens are ASWF ColorInterop interop IDs; only the
+/// Rec.709/Rec.2020 related scene-referred spaces are supported. Material
+/// color values are always linear:
 ///
-///   colorspace = "lin_rec709"    (default — flagged for conversion by the consumer)
-///   colorspace = "lin_rec2020"   (already in the render working space)
+///   colorspace = "lin_rec709_scene"   (default — converted by the consumer)
+///   colorspace = "lin_rec2020_scene"
+///
+/// Texture maps may additionally be sRGB-encoded ("srgb_rec709_scene") or
+/// non-color ("data"), declared per map via `map_*_colorspace` keys. One
+/// material uses one set of primaries: a color texture whose primaries differ
+/// from the material's `colorspace` is an error (the material is skipped).
+/// Both `model` and `colorspace` may be overridden per material.
 ///
 /// Aether records the declared input color space on each MaterialDesc
 /// (`inputColorSpace`) but performs **no** color conversion itself — that is the
 /// consumer's responsibility.
+///
+/// MATERIAL MODEL
+/// ──────────────
+/// `model` tags the material model of the parameters; only "openpbr" is
+/// understood today (default). Materials with an unknown model are skipped
+/// with a warning so future models can coexist in one file.
 ///
 /// Keywords are OpenPBR Surface v1.1 parameter names, used verbatim
 /// (https://academysoftwarefoundation.github.io/OpenPBR/). A few longer spec

@@ -3,10 +3,13 @@
 # the scalar base_color below is the fallback tint when no map is bound.
 # Additional map slots are available: map_normal, map_orm, map_emission_color.
 
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
 [cube_textured]
 base_color = [0.800, 0.600, 0.200]
 map_base_color = "color_grid.png"
-map_base_color_colorspace = "srgb_texture"
+map_base_color_colorspace = "srgb_rec709_scene"
 specular_roughness = 0.4
 specular_ior = 1.5
 base_weight = 1.0

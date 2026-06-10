@@ -7,7 +7,8 @@
 # 
 # Standard MTL keywords (Kd, Ks, Ka, …) are SILENTLY IGNORED.
 
-colorspace = "lin_rec709"
+model = "openpbr"
+colorspace = "lin_rec709_scene"
 
 # ── Row 0: coat_weight sweep — diffuse blue base, coat_ior 1.5, coat_roughness 0.05 ──────────
 # Shows how adding a coat layer progressively introduces a dielectric specular highlight

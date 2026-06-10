@@ -6,7 +6,8 @@
 # 
 # Standard MTL keywords (Kd, Ks, Ka, …) are SILENTLY IGNORED.
 
-colorspace = "lin_rec709"
+model = "openpbr"
+colorspace = "lin_rec709_scene"
 
 # ── Common optical glass ──────────────────────────────────────────────────────
 

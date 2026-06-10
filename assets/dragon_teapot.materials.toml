@@ -1,7 +1,8 @@
 # dragon_teapot.materials.toml — OpenPBR materials for the combined ceramic + gem IBL scene.
 # Colours are linear Rec.709; Hyperion converts them to linear Rec.2020 on load.
 
-colorspace = "lin_rec709"
+model = "openpbr"
+colorspace = "lin_rec709_scene"
 
 # Glazed porcelain teapot: dielectric base with a smooth clear-coat glaze.
 

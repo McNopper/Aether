@@ -7,7 +7,8 @@
 # 
 # Standard MTL keywords (Kd, Ks, Ka, …) are SILENTLY IGNORED.
 
-colorspace = "lin_rec709"
+model = "openpbr"
+colorspace = "lin_rec709_scene"
 
 # ── Row 0: fuzz_weight sweep — dark purple base, off-white fuzz ──────────────
 # At weight 0 the sphere is a plain diffuse; at 1.0 the sheen lobe dominates the

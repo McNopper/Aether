@@ -1,0 +1,36 @@
+# Cornell Box — Classic, rendered in a linear Rec.709 working color space.
+# Identical to cornell_classic.scene.toml except for working_color_space; the
+# gamut-limited Cornell content must render ≈ identical to the Rec.2020 version
+# (color management validation scene).
+#
+# Syntax reference: see SceneLoader.hpp
+
+material_libraries = ["cornell.materials.toml"]
+
+[render]
+reference = "presets/preview.render.toml"
+working_color_space = "lin_rec709_scene"
+
+[camera]
+reference = "presets/cornell.camera.toml"
+
+[[geometry]]
+type = "instance"
+mesh = "cornell.obj"
+materials = { Floor = "WhiteWall", Ceiling = "WhiteWall", AreaLight = "AreaLight", BackWall = "WhiteWall", LeftWall = "RedWall", RightWall = "GreenWall" }
+
+# Short box  (82.5 × 82.5 × 82.5,  rotated −18° around Y)
+[[geometry]]
+type = "box"
+half_extents = [82.5, 82.5, 82.5]
+material = "WhiteWall"
+translate = [185.0, 82.5, 169.0]
+rotate = [0.0, -0.1564, 0.0, 0.9877]
+
+# Tall box  (82.5 × 165.0 × 82.5,  rotated +15° around Y)
+[[geometry]]
+type = "box"
+half_extents = [82.5, 165.0, 82.5]
+material = "WhiteWall"
+translate = [368.0, 165.0, 351.0]
+rotate = [0.0, 0.1305, 0.0, 0.9914]

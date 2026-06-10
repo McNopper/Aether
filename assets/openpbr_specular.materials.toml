@@ -9,7 +9,8 @@
 # 
 # Standard MTL keywords (Kd, Ks, Ka, …) are SILENTLY IGNORED.
 
-colorspace = "lin_rec709"
+model = "openpbr"
+colorspace = "lin_rec709_scene"
 
 # ── Row 0: specular_roughness sweep — warm terracotta dielectric ──────────────
 # roughness 0 → mirror-perfect specular; 1 → fully Lambertian (diffuse dominates).

@@ -1,4 +1,6 @@
 #include <filesystem>
+#include <fstream>
+#include <string_view>
 #include <gtest/gtest.h>
 
 #include "aether/format/MaterialLibrary.hpp"
@@ -82,6 +84,87 @@ TEST(MaterialLibrary, AllShippedLibrariesLoad) {
         EXPECT_FALSE(lib.empty()) << "no materials in " << p.string();
     }
     EXPECT_GT(count, 0U);
+}
+
+// ── Material model tag & per-material color space ───────────────────────────
+
+// Writes a throwaway .materials.toml and loads it.
+struct MaterialFixture {
+    std::filesystem::path file;
+    aether::MaterialLibrary lib;
+    bool loaded = false;
+
+    explicit MaterialFixture(std::string_view body) {
+        namespace fs = std::filesystem;
+        file = fs::temp_directory_path() / "aether_test.materials.toml";
+        {
+            std::ofstream out(file);
+            out << body;
+        }
+        loaded = lib.load(file);
+    }
+    ~MaterialFixture() { std::filesystem::remove(file); }
+};
+
+TEST(MaterialLibrary, ModelDefaultsToOpenPbr) {
+    MaterialFixture f{"[Mat]\nbase_color = [0.5, 0.5, 0.5]\n"};
+    ASSERT_TRUE(f.loaded);
+    const auto mat = f.lib.get("Mat");
+    ASSERT_TRUE(mat.has_value());
+    EXPECT_EQ(mat->model, "openpbr");
+}
+
+TEST(MaterialLibrary, ModelFileLevelAndPerMaterialOverride) {
+    MaterialFixture f{"model = \"openpbr\"\n"
+                      "[A]\nbase_color = [0.5, 0.5, 0.5]\n"
+                      "[B]\nmodel = \"openpbr\"\nbase_color = [0.5, 0.5, 0.5]\n"};
+    ASSERT_TRUE(f.loaded);
+    EXPECT_EQ(f.lib.size(), 2U);
+    EXPECT_EQ(f.lib.get("A")->model, "openpbr");
+    EXPECT_EQ(f.lib.get("B")->model, "openpbr");
+}
+
+TEST(MaterialLibrary, UnknownModelSkipsMaterial) {
+    MaterialFixture f{"[Future]\nmodel = \"disney_v6\"\nbase_color = [0.5, 0.5, 0.5]\n"
+                      "[Ok]\nbase_color = [0.5, 0.5, 0.5]\n"};
+    ASSERT_TRUE(f.loaded);
+    EXPECT_FALSE(f.lib.get("Future").has_value());
+    EXPECT_TRUE(f.lib.get("Ok").has_value());
+}
+
+TEST(MaterialLibrary, PerMaterialColorSpaceOverride) {
+    MaterialFixture f{"colorspace = \"lin_rec709_scene\"\n"
+                      "[Wide]\ncolorspace = \"lin_rec2020_scene\"\nbase_color = [0.5, 0.5, 0.5]\n"
+                      "[Narrow]\nbase_color = [0.5, 0.5, 0.5]\n"};
+    ASSERT_TRUE(f.loaded);
+    EXPECT_EQ(f.lib.get("Wide")->inputColorSpace, aether::MaterialColorSpace::LinRec2020);
+    EXPECT_EQ(f.lib.get("Narrow")->inputColorSpace, aether::MaterialColorSpace::LinRec709);
+}
+
+TEST(MaterialLibrary, MixedPrimariesPerMaterialIsRejected) {
+    // Rec.2020 material with a Rec.709-encoded color texture → gamut mixing.
+    MaterialFixture f{"[Mixed]\n"
+                      "colorspace = \"lin_rec2020_scene\"\n"
+                      "map_base_color = \"t.png\"\n"
+                      "map_base_color_colorspace = \"srgb_rec709_scene\"\n"};
+    ASSERT_TRUE(f.loaded);
+    EXPECT_FALSE(f.lib.get("Mixed").has_value());
+}
+
+TEST(MaterialLibrary, MatchingPrimariesWithEncodedTextureIsAccepted) {
+    // sRGB-encoded Rec.709 texture in a lin_rec709_scene material: same
+    // primaries, different encoding — allowed. Data maps are always exempt.
+    MaterialFixture f{"[Ok]\n"
+                      "colorspace = \"lin_rec709_scene\"\n"
+                      "map_base_color = \"t.png\"\n"
+                      "map_base_color_colorspace = \"srgb_rec709_scene\"\n"
+                      "map_normal = \"n.png\"\n"
+                      "map_normal_colorspace = \"data\"\n"};
+    ASSERT_TRUE(f.loaded);
+    const auto mat = f.lib.get("Ok");
+    ASSERT_TRUE(mat.has_value());
+    EXPECT_EQ(mat->map_base_color.colorSpace, aether::TextureColorSpace::SrgbRec709Scene);
+    EXPECT_EQ(mat->map_normal.colorSpace, aether::TextureColorSpace::Data);
 }
 
 } // namespace

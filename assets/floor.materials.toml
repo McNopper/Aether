@@ -6,7 +6,8 @@
 # 
 # Color values are linear Rec.709; Hyperion converts to Rec.2020 on load.
 
-colorspace = "lin_rec709"
+model = "openpbr"
+colorspace = "lin_rec709_scene"
 
 [NeutralFloor]
 base_color = [0.700, 0.700, 0.700]

@@ -64,6 +64,11 @@ struct SceneDesc {
     std::optional<float> envUnitNits;      ///< cd/m² per unit EXR value
     std::optional<std::string> envMapFile; ///< equirect EXR IBL path (relative)
     std::optional<std::string> tonemapper; ///< raw `tonemapper` token (e.g. "agx")
+    /// Raw `working_color_space` token from [render]
+    /// ("lin_rec2020_scene" | "lin_rec709_scene" — always linear).
+    /// The scene-referred working color space all assets are converted into;
+    /// absent means the consumer's default (rec2020).
+    std::optional<std::string> workingColorSpace;
 
     std::vector<std::string> mtllibs;    ///< referenced .materials.toml libraries (relative paths)
     std::vector<GeometryBlock> geometry; ///< geometry blocks in declaration order

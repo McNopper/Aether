@@ -3,6 +3,7 @@
 #include <toml++/toml.hpp>
 
 #include <algorithm>
+#include <iostream>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -109,41 +110,88 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
         return;
     }
 
-    // ── Texture map color spaces (OCIO / OpenEXR IIF names) ──────────────
+    // ── Texture map color spaces (ColorInterop interop IDs) ──────────────
+    // Unknown tokens keep the slot's default and warn — silently treating a
+    // wrong color space as data would render wrong colors.
     if (kw == "map_base_color_colorspace") {
-        p.map_base_color.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
+        const std::string token = value.value_or<std::string>("");
+        if (const auto cs = parseTextureColorSpace(token)) {
+            p.map_base_color.colorSpace = *cs;
+        } else {
+            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_base_color\n";
+        }
         return;
     }
     if (kw == "map_normal_colorspace") {
-        p.map_normal.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
+        const std::string token = value.value_or<std::string>("");
+        if (const auto cs = parseTextureColorSpace(token)) {
+            p.map_normal.colorSpace = *cs;
+        } else {
+            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_normal\n";
+        }
         return;
     }
     if (kw == "map_orm_colorspace") {
-        p.map_orm.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
+        const std::string token = value.value_or<std::string>("");
+        if (const auto cs = parseTextureColorSpace(token)) {
+            p.map_orm.colorSpace = *cs;
+        } else {
+            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_orm\n";
+        }
         return;
     }
     if (kw == "map_roughness_colorspace") {
-        p.map_roughness.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
+        const std::string token = value.value_or<std::string>("");
+        if (const auto cs = parseTextureColorSpace(token)) {
+            p.map_roughness.colorSpace = *cs;
+        } else {
+            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_roughness\n";
+        }
         return;
     }
     if (kw == "map_metalness_colorspace") {
-        p.map_metalness.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
+        const std::string token = value.value_or<std::string>("");
+        if (const auto cs = parseTextureColorSpace(token)) {
+            p.map_metalness.colorSpace = *cs;
+        } else {
+            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_metalness\n";
+        }
         return;
     }
     if (kw == "map_emission_color_colorspace") {
-        p.map_emission_color.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
+        const std::string token = value.value_or<std::string>("");
+        if (const auto cs = parseTextureColorSpace(token)) {
+            p.map_emission_color.colorSpace = *cs;
+        } else {
+            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_emission_color\n";
+        }
         return;
     }
     if (kw == "map_coat_normal_colorspace") {
-        p.map_coat_normal.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
+        const std::string token = value.value_or<std::string>("");
+        if (const auto cs = parseTextureColorSpace(token)) {
+            p.map_coat_normal.colorSpace = *cs;
+        } else {
+            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_coat_normal\n";
+        }
         return;
     }
     if (kw == "map_tangent_colorspace") {
-        p.map_tangent.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
+        const std::string token = value.value_or<std::string>("");
+        if (const auto cs = parseTextureColorSpace(token)) {
+            p.map_tangent.colorSpace = *cs;
+        } else {
+            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_tangent\n";
+        }
         return;
     }
     if (kw == "map_coat_tangent_colorspace") {
-        p.map_coat_tangent.colorSpace = parseTextureColorSpace(value.value_or<std::string>(""));
+        const std::string token = value.value_or<std::string>("");
+        if (const auto cs = parseTextureColorSpace(token)) {
+            p.map_coat_tangent.colorSpace = *cs;
+        } else {
+            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_coat_tangent\n";
+        }
         return;
     }
 
@@ -255,6 +303,59 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
 
 } // namespace
 
+// ── Color space helpers ─────────────────────────────────────────────────────
+
+namespace {
+
+/// Parse a material color space token (ColorInterop interop ID:
+/// "lin_rec709_scene" | "lin_rec2020_scene"). Unknown → nullopt.
+[[nodiscard]] std::optional<MaterialColorSpace> parseMaterialColorSpace(std::string_view token) noexcept {
+    if (token == "lin_rec709_scene") {
+        return MaterialColorSpace::LinRec709;
+    }
+    if (token == "lin_rec2020_scene") {
+        return MaterialColorSpace::LinRec2020;
+    }
+    return std::nullopt;
+}
+
+/// True when a color texture's declared space shares the primaries of the
+/// material's declared color space. Encodings (sRGB OETF vs linear) may
+/// differ — only the gamut must match. Data carries no primaries and is exempt.
+[[nodiscard]] bool primariesMatch(TextureColorSpace tex, MaterialColorSpace mat) noexcept {
+    switch (tex) {
+    case TextureColorSpace::Data:
+        return true;
+    case TextureColorSpace::SrgbRec709Scene:
+    case TextureColorSpace::LinRec709Scene:
+        return mat == MaterialColorSpace::LinRec709;
+    case TextureColorSpace::LinRec2020Scene:
+        return mat == MaterialColorSpace::LinRec2020;
+    }
+    return false;
+}
+
+/// Enforce the one-color-space-per-material rule: every color texture must use
+/// the primaries declared by the material's `colorspace`. Returns the name of
+/// the first offending texture key, or nullopt when consistent.
+[[nodiscard]] std::optional<std::string_view> findGamutMismatch(const MaterialDesc& p) noexcept {
+    const struct {
+        std::string_view key;
+        const TextureRef& ref;
+    } colorMaps[] = {
+        {"map_base_color", p.map_base_color},
+        {"map_emission_color", p.map_emission_color},
+    };
+    for (const auto& m : colorMaps) {
+        if (!m.ref.empty() && !primariesMatch(m.ref.colorSpace, p.inputColorSpace)) {
+            return m.key;
+        }
+    }
+    return std::nullopt;
+}
+
+} // namespace
+
 // ── MaterialLibrary ───────────────────────────────────────────────────────
 
 bool MaterialLibrary::load(const std::filesystem::path& path) {
@@ -265,25 +366,72 @@ bool MaterialLibrary::load(const std::filesystem::path& path) {
         return false;
     }
 
-    // File-level input color space (top-level `colorspace` key); default Rec.709.
-    MaterialColorSpace inputColorSpace = MaterialColorSpace::LinRec709;
+    // File-level defaults: input color space (`colorspace`, default lin_rec709)
+    // and material model (`model`, default openpbr). Both may be overridden
+    // per material.
+    MaterialColorSpace defaultColorSpace = MaterialColorSpace::LinRec709;
     if (const auto cs = root["colorspace"].value<std::string>()) {
-        inputColorSpace = (*cs == "lin_rec2020" || *cs == "rec2020") ? MaterialColorSpace::LinRec2020
-                                                                     : MaterialColorSpace::LinRec709;
+        if (const auto parsed = parseMaterialColorSpace(*cs)) {
+            defaultColorSpace = *parsed;
+        } else {
+            std::cerr << "[aether] " << path.filename().string() << ": unknown colorspace \"" << *cs
+                      << "\", using lin_rec709\n";
+        }
+    }
+    std::string defaultModel{"openpbr"};
+    if (const auto m = root["model"].value<std::string>()) {
+        defaultModel = *m;
     }
 
     // Every top-level table is a material named by its key.
     for (auto&& [key, node] : root) {
         const toml::table* matTbl = node.as_table();
         if (matTbl == nullptr) {
-            continue; // skip scalar top-level keys (e.g. `colorspace`)
+            continue; // skip scalar top-level keys (e.g. `colorspace`, `model`)
         }
 
         MaterialDesc params;
-        params.inputColorSpace = inputColorSpace;
+        params.inputColorSpace = defaultColorSpace;
+        params.model = defaultModel;
         for (auto&& [pKey, pNode] : *matTbl) {
-            applyKw(params, std::string_view{pKey.str()}, pNode);
+            const std::string_view pk{pKey.str()};
+            // Per-material overrides of the file-level defaults.
+            if (pk == "colorspace") {
+                if (const auto cs = pNode.value<std::string>()) {
+                    if (const auto parsed = parseMaterialColorSpace(*cs)) {
+                        params.inputColorSpace = *parsed;
+                    } else {
+                        std::cerr << "[aether] " << path.filename().string() << ": material \"" << key.str()
+                                  << "\": unknown colorspace \"" << *cs << "\", keeping default\n";
+                    }
+                }
+                continue;
+            }
+            if (pk == "model") {
+                if (const auto m = pNode.value<std::string>()) {
+                    params.model = *m;
+                }
+                continue;
+            }
+            applyKw(params, pk, pNode);
         }
+
+        // Unknown material model: warn and skip — a renderer cannot interpret
+        // parameters of a model it does not know.
+        if (params.model != "openpbr") {
+            std::cerr << "[aether] " << path.filename().string() << ": material \"" << key.str()
+                      << "\": unknown model \"" << params.model << "\", skipping\n";
+            continue;
+        }
+
+        // One color space per material: values and color textures must share
+        // the declared primaries.
+        if (const auto offending = findGamutMismatch(params)) {
+            std::cerr << "[aether] " << path.filename().string() << ": material \"" << key.str() << "\": "
+                      << *offending << " color space mixes primaries with the material colorspace, skipping\n";
+            continue;
+        }
+
         m_materials.insert_or_assign(std::string{key.str()}, params);
     }
 
