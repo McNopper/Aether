@@ -1,0 +1,216 @@
+# Alignment material library — Hyperion/Theia per-layer OpenPBR comparison.
+#
+# This library contains:
+#   Floor       — non-reflecting (purely diffuse) floor, mid-gray.
+#   BackSuzanne — non-reflecting diffuse back reference head, blue-gray.
+#   FrontTest   — the ACTIVE test material; swap its definition to compare each layer.
+#
+# Layer preset materials (FrontBase, FrontSpecular, …) isolate one OpenPBR lobe at a
+# time for systematic Hyperion ↔ Theia comparison.  Copy the desired block over
+# [FrontTest] or change the front Suzanne's material reference for each test pass.
+#
+# All color values are linear Rec.709; renderers convert to the working color space.
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+# ── Fixed scene materials ────────────────────────────────────────────────────
+
+[Floor]
+# Purely diffuse mid-gray.  specular_weight = 0 suppresses all specular reflection.
+base_color = [0.500, 0.500, 0.500]
+specular_weight = 0.0
+
+[BackSuzanne]
+# Purely diffuse blue-gray; clearly different from floor so spatial separation is legible.
+base_color = [0.250, 0.350, 0.600]
+specular_weight = 0.0
+
+# ── Active test material — edit this block for each comparison pass ──────────
+
+[FrontTest]
+# Starting point: neutral diffuse white (base layer, no specular).
+# Replace with the [FrontXxx] preset definition you want to test.
+base_color = [0.800, 0.800, 0.800]
+specular_weight = 0.0
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Per-layer comparison presets
+# To run a pass: set the front Suzanne material = "FrontXxx" in the scene, or
+# copy the definition block over [FrontTest] above.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── 1. Base layer ─────────────────────────────────────────────────────────────
+
+[FrontBase_Diffuse]
+# Pure diffuse with a vivid red-orange; validates base_color accuracy.
+base_color = [0.820, 0.180, 0.050]
+specular_weight = 0.0
+
+[FrontBase_Metallic]
+# Conductor (metallic) base — gold F0/F82.
+base_color = [0.929, 0.788, 0.374]
+base_metalness = 1.0
+specular_color = [0.987, 1.000, 0.997]
+specular_roughness = 0.02
+
+[FrontBase_RoughDiffuse]
+# High base_diffuse_roughness (Oren–Nayar) — validates diffuse lobe widening.
+base_color = [0.820, 0.180, 0.050]
+specular_weight = 0.0
+base_diffuse_roughness = 1.0
+
+# ── 2. Specular layer ─────────────────────────────────────────────────────────
+
+[FrontSpecular_Glossy]
+# Smooth dielectric highlight — isolates specular lobe shape.
+base_color = [0.200, 0.200, 0.200]
+specular_weight = 1.0
+specular_ior = 1.50
+specular_roughness = 0.05
+
+[FrontSpecular_Rough]
+# Rough dielectric — validates GGX tail behaviour.
+base_color = [0.200, 0.200, 0.200]
+specular_weight = 1.0
+specular_ior = 1.50
+specular_roughness = 0.50
+
+[FrontSpecular_Anisotropic]
+# Anisotropic specular highlight (hair-like streaks).
+base_color = [0.200, 0.200, 0.200]
+specular_weight = 1.0
+specular_ior = 1.50
+specular_roughness = 0.15
+specular_anisotropy = 0.8
+
+# ── 3. Coat layer ─────────────────────────────────────────────────────────────
+
+[FrontCoat_Clear]
+# Varnished diffuse — clear smooth coat over a colored base.
+base_color = [0.050, 0.200, 0.700]
+specular_roughness = 0.80
+coat_weight = 1.0
+coat_ior = 1.50
+coat_roughness = 0.05
+
+[FrontCoat_Rough]
+# Satin coat — same base, rougher coat lobe.
+base_color = [0.050, 0.200, 0.700]
+specular_roughness = 0.80
+coat_weight = 1.0
+coat_ior = 1.50
+coat_roughness = 0.35
+
+# ── 4. Fuzz layer ─────────────────────────────────────────────────────────────
+
+[FrontFuzz_Velvet]
+# Soft velvet — validates backscatter peak of the fuzz lobe.
+base_color = [0.400, 0.100, 0.100]
+specular_weight = 0.0
+fuzz_weight = 1.0
+fuzz_color = [0.600, 0.200, 0.200]
+fuzz_roughness = 0.5
+
+[FrontFuzz_Peach]
+# Peach-skin fuzz — light color, lower roughness.
+base_color = [0.820, 0.550, 0.380]
+specular_weight = 0.0
+fuzz_weight = 0.5
+fuzz_color = [1.000, 0.850, 0.750]
+fuzz_roughness = 0.3
+
+# ── 5. Emission layer ─────────────────────────────────────────────────────────
+
+[FrontEmission_Warm]
+# Warm emissive glow — validates emission luminance scaling.
+base_color = [0.050, 0.050, 0.050]
+specular_weight = 0.0
+emission_luminance = 500.0
+emission_color = [1.000, 0.650, 0.200]
+
+[FrontEmission_Strong]
+# Bright emissive — tests clamp/tonemap behaviour.
+base_color = [0.050, 0.050, 0.050]
+specular_weight = 0.0
+emission_luminance = 5000.0
+emission_color = [1.000, 1.000, 1.000]
+
+# ── 6. Thin-film layer ───────────────────────────────────────────────────────
+
+[FrontThinFilm_Soap]
+# Soap-bubble iridescence on a smooth dielectric base (400 nm – cyan fringe).
+specular_weight = 1.0
+specular_ior = 1.50
+specular_roughness = 0.02
+thin_film_weight = 1.0
+thin_film_thickness = 400.0
+thin_film_ior = 1.33
+
+[FrontThinFilm_Oil]
+# Oil-slick iridescence (600 nm – orange/gold fringe).
+specular_weight = 1.0
+specular_ior = 1.50
+specular_roughness = 0.02
+thin_film_weight = 1.0
+thin_film_thickness = 600.0
+thin_film_ior = 1.50
+
+# ── 7. Transmission layer ────────────────────────────────────────────────────
+
+[FrontTransmission_Glass]
+# Clear glass — smooth transmission, default IOR 1.5.
+transmission_weight = 1.0
+specular_weight = 1.0
+specular_ior = 1.50
+specular_roughness = 0.00
+
+[FrontTransmission_Frosted]
+# Frosted glass — rough transmission.
+transmission_weight = 1.0
+specular_weight = 1.0
+specular_ior = 1.50
+specular_roughness = 0.30
+
+[FrontTransmission_Tinted]
+# Tinted glass — transmission_color gives beer-law absorption.
+transmission_weight = 1.0
+transmission_color = [0.100, 0.700, 0.900]
+specular_weight = 1.0
+specular_ior = 1.50
+specular_roughness = 0.00
+
+# ── 8. Subsurface layer ──────────────────────────────────────────────────────
+# NOTE: Theia uses a screen-space SSS approximation; expect visible divergence
+# from Hyperion's volumetric path-traced SSS. Document, do not "fix" unless
+# a principled real-time solution is available.
+
+[FrontSubsurface_Skin]
+# Human skin (Fitzpatrick II) — canonical SSS reference.
+subsurface_weight = 1.0
+subsurface_color = [0.671, 0.505, 0.371]
+subsurface_radius = [0.482, 0.169, 0.109]
+specular_roughness = 0.50
+specular_ior = 1.40
+
+[FrontSubsurface_Wax]
+# Translucent wax — wide, near-isotropic scatter.
+subsurface_weight = 1.0
+subsurface_color = [0.900, 0.880, 0.700]
+subsurface_radius = [1.200, 1.100, 0.900]
+specular_roughness = 0.30
+specular_ior = 1.45
+
+# ── 9. Geometry opacity ──────────────────────────────────────────────────────
+
+[FrontOpacity_Half]
+# 50 % opacity cutout — validates alpha handling / stochastic transparency.
+base_color = [0.800, 0.200, 0.100]
+specular_weight = 0.0
+geometry_opacity = 0.5
+
+[FrontOpacity_Quarter]
+# 25 % opacity.
+base_color = [0.800, 0.200, 0.100]
+specular_weight = 0.0
+geometry_opacity = 0.25
