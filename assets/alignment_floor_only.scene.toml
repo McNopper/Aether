@@ -1,0 +1,21 @@
+# Floor-only IBL alignment scene.
+# Single flat Lambertian surface + IBL. No Suzannes, no inter-object bouncing.
+# Hyperion and Theia must agree here: Lo = (albedo/pi) * E.
+# Any diff beyond path-tracing noise is a pipeline bug.
+
+material_libraries = ["alignment.materials.toml"]
+
+[render]
+reference = "presets/alignment_16spp_8bounce.render.toml"
+
+[camera]
+reference = "presets/alignment.camera.toml"
+
+[tonemap]
+reference = "presets/agx.tonemap.toml"
+
+[[geometry]]
+type = "box"
+half_extents = [8.0, 0.05, 8.0]
+material = "Floor"
+translate = [0.0, -0.05, 4.0]
