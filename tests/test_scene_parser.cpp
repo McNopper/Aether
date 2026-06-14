@@ -1,3 +1,4 @@
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
@@ -204,6 +205,33 @@ TEST(SceneParser, TonemapGroupResolvedFromReferencePreset) {
     ASSERT_TRUE(f.scene.has_value());
     ASSERT_TRUE(f.scene->tonemapper.has_value());
     EXPECT_EQ(*f.scene->tonemapper, "agx");
+}
+
+TEST(SceneParser, ReadmeGalleryScenesParse) {
+    static constexpr std::array<std::string_view, 18> kGalleryScenes{
+        "cornell_classic.scene.toml",
+        "cornell_empty.scene.toml",
+        "cornell_spheres.scene.toml",
+        "cornell_suzanne.scene.toml",
+        "openpbr_metals.scene.toml",
+        "openpbr_dielectrics.scene.toml",
+        "openpbr_coat.scene.toml",
+        "openpbr_fuzz.scene.toml",
+        "openpbr_specular.scene.toml",
+        "openpbr_organics.scene.toml",
+        "openpbr_thinfilm.scene.toml",
+        "openpbr_special.scene.toml",
+        "meadow_scene.scene.toml",
+        "textured_cube.scene.toml",
+        "dragon_teapot.scene.toml",
+        "openpbr_advanced.scene.toml",
+        "mr_sphere.scene.toml",
+        "ABeautifulGame.scene.toml",
+    };
+    for (std::string_view name : kGalleryScenes) {
+        const auto parsed = aether::SceneParser::parse(assetsDir() / std::string{name});
+        EXPECT_TRUE(parsed.has_value()) << "failed to parse " << name;
+    }
 }
 
 // Smoke test: every shipped .scene.toml must parse without error or crash.
