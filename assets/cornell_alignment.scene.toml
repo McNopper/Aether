@@ -33,7 +33,7 @@ material_libraries = ["cornell.materials.toml", "cornell_alignment.materials.tom
 reference = "presets/comparison_direct_512spp.render.toml"
 
 [camera]
-reference = "presets/cornell.camera.toml"
+reference = "presets/cornell_alignment.camera.toml"
 
 [tonemap]
 tonemapper = "agx"
@@ -59,7 +59,7 @@ scale = 100.0
 [[geometry]]
 type = "instance"
 mesh = "suzanne.obj"
-material = "FrontTest"
+material = "FrontBase_Diffuse"
 translate = [190.0, 130.0, 190.0]
 rotate = [0.0, 1.0, 0.0, 0.0]
 scale = 100.0
