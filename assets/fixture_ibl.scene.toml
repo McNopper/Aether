@@ -1,0 +1,26 @@
+# Fixture: IBL Precompute Validation
+#
+# PURPOSE
+# -------
+# Validates IBL precompute wiring (environment load, prefilter/LUT conventions,
+# and sampling) under a minimal setup:
+#   - single HDR environment
+#   - single neutral matte sphere
+#   - no direct lights
+
+material_libraries = ["fixture_ibl.materials.toml"]
+
+[render]
+reference = "presets/comparison_ibl_512spp.render.toml"
+
+[camera]
+reference = "presets/fixture_ibl.camera.toml"
+
+[tonemap]
+tonemapper = "agx"
+
+[[geometry]]
+type = "sphere"
+radius = 0.6
+material = "MatteSphere"
+translate = [0.0, 0.6, 0.0]

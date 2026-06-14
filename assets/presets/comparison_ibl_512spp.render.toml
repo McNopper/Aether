@@ -1,0 +1,6 @@
+# Comparison render preset — IBL precompute validation.
+# High-spp Hyperion reference for stable pre-tonemap HDR diffs.
+samples_per_pixel = 512
+max_depth = 8
+environment_map = "meadow_2_4k.exr"
+environment_unit_nits = 10000
