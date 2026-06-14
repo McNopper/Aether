@@ -1,0 +1,5 @@
+# Comparison render preset — noise-free Hyperion reference.
+# 512 spp / 8 bounce, no environment map (direct light only).
+# Use this for the Hyperion reference render when building comparison pairs.
+samples_per_pixel = 512
+max_depth = 8

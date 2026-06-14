@@ -1,0 +1,45 @@
+# Fixture: Emissive Geometry
+#
+# PURPOSE
+# -------
+# Tests that emissive mesh geometry illuminates the rest of the scene correctly.
+# Hyperion samples emissive triangles via NEE; Theia auto-synthesizes a GpuLight
+# from the emissive mesh.  Validates that both produce equivalent irradiance on
+# the receiver plane below.
+#
+# LAYOUT (unit-scale, metres)
+#   - Receiver floor   box [0, 0, 0]     half [2, 0.05, 2]
+#   - Emissive quad    box [0, 2, 0]     half [0.5, 0.05, 0.5]  emissive
+#   - Side wall        box [-2, 1, 0]    half [0.05, 1, 2]  — catches indirect spill
+
+material_libraries = ["fixture_emissive.materials.toml"]
+
+[render]
+reference = "presets/comparison_512spp.render.toml"
+
+[camera]
+reference = "presets/fixture.camera.toml"
+
+[tonemap]
+tonemapper = "agx"
+
+# ── Receiver floor ─────────────────────────────────────────────────────────────
+[[geometry]]
+type = "box"
+half_extents = [2.0, 0.05, 2.0]
+material = "Receiver"
+translate = [0.0, 0.0, 0.0]
+
+# ── Emissive quad (area light geometry) ───────────────────────────────────────
+[[geometry]]
+type = "box"
+half_extents = [0.5, 0.05, 0.5]
+material = "EmissiveQuad"
+translate = [0.0, 2.0, 0.0]
+
+# ── Side wall (catches emissive spill — shows spatial falloff) ────────────────
+[[geometry]]
+type = "box"
+half_extents = [0.05, 1.0, 2.0]
+material = "Receiver"
+translate = [-2.0, 1.0, 0.0]

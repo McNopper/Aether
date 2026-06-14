@@ -1,0 +1,65 @@
+# Cornell Box — Alignment Scene
+#
+# PURPOSE
+# -------
+# Permanent reference scene for Hyperion ↔ Theia per-layer material comparison.
+# Uses the Cornell box geometry (area light in the ceiling) — direct light only,
+# no IBL — so every difference between the two renderers is purely the material
+# BRDF evaluation, not environment lighting.
+#
+# LAYOUT
+# ------
+#   - Cornell box shell (floor, ceiling, back/left/right walls, area light).
+#   - Back Suzanne  [370, 130, 380] — neutral diffuse blue-gray (reference).
+#   - Front Suzanne [190, 130, 190] — the material under test ("FrontTest").
+#     Positioned so both heads are clearly visible from the standard Cornell camera.
+#
+# WORKFLOW
+# --------
+# 1. Set [FrontTest] in cornell_alignment.materials.toml to the desired preset.
+#    (Or change the front geometry's `material` to e.g. "FrontSpecular_Glossy".)
+# 2. Render: hyperion --scene cornell_alignment --output hyp.exr --width 320 --height 240
+#            theia    --scene cornell_alignment --output theia.exr --width 320 --height 240
+# 3. Diff:   python tools/compare_renders.py hyp.exr theia.exr
+# 4. Fix Theia; promote to 512 spp / 1024×768 for final verification.
+#
+# Suzanne quaternion [0, 1, 0, 0] = 180° around Y → face points toward −Z (camera).
+# Suzanne.obj spans ±1.3 Blender units; scale=100 → ±130 world units.
+# Bottom of head at Y=0 (floor) when center Y=130.
+
+material_libraries = ["cornell.materials.toml", "cornell_alignment.materials.toml"]
+
+[render]
+reference = "presets/comparison_512spp.render.toml"
+
+[camera]
+reference = "presets/cornell.camera.toml"
+
+[tonemap]
+tonemapper = "agx"
+
+# ── Cornell box shell ────────────────────────────────────────────────────────
+[[geometry]]
+type = "instance"
+mesh = "cornell.obj"
+materials = { Floor = "WhiteWall", Ceiling = "WhiteWall", AreaLight = "AreaLight", BackWall = "WhiteWall", LeftWall = "RedWall", RightWall = "GreenWall" }
+
+# ── Back Suzanne (reference — neutral diffuse, blue-gray) ────────────────────
+# Positioned right-center, back of box.
+[[geometry]]
+type = "instance"
+mesh = "suzanne.obj"
+material = "BackSuzanne"
+translate = [370.0, 130.0, 380.0]
+rotate = [0.0, 1.0, 0.0, 0.0]
+scale = 100.0
+
+# ── Front Suzanne (material under test) ─────────────────────────────────────
+# Positioned left-center, front of box.
+[[geometry]]
+type = "instance"
+mesh = "suzanne.obj"
+material = "FrontTest"
+translate = [190.0, 130.0, 190.0]
+rotate = [0.0, 1.0, 0.0, 0.0]
+scale = 100.0

@@ -1,0 +1,5 @@
+# Comparison render preset — quick iteration.
+# 64 spp / 8 bounce, no environment map (direct light only).
+# Use during development; promote to comparison_512spp for final diffs.
+samples_per_pixel = 64
+max_depth = 8

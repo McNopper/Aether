@@ -1,0 +1,61 @@
+# Fixture: Point Light
+#
+# PURPOSE
+# -------
+# Isolates omnidirectional point light attenuation.  A small emissive sphere
+# (rendered as a point light by both Hyperion and Theia) illuminates three matte
+# spheres at increasing distances.  Validates the inverse-square falloff curve
+# and attenuation cutoff.
+#
+# LAYOUT (unit-scale, metres)
+#   - Floor            box [0, 0, 0]  half [4, 0.05, 4]
+#   - Point light      emissive sphere r=0.05 at [0, 2.5, 0]
+#   - Near sphere      r=0.3 at [ 0.8, 0.3, 0]
+#   - Mid sphere       r=0.3 at [ 1.8, 0.3, 0]
+#   - Far sphere       r=0.3 at [ 3.0, 0.3, 0]
+
+material_libraries = ["fixture_point_light.materials.toml"]
+
+[render]
+reference = "presets/comparison_512spp.render.toml"
+
+[camera]
+reference = "presets/fixture.camera.toml"
+
+[tonemap]
+tonemapper = "agx"
+
+# ── Floor ──────────────────────────────────────────────────────────────────────
+[[geometry]]
+type = "box"
+half_extents = [4.0, 0.05, 4.0]
+material = "Floor"
+translate = [0.0, 0.0, 0.0]
+
+# ── Point light (small emissive sphere) ───────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.05
+material = "PointLight"
+translate = [0.0, 2.5, 0.0]
+
+# ── Near receiver sphere ──────────────────────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.3
+material = "Matte"
+translate = [0.8, 0.3, 0.0]
+
+# ── Mid receiver sphere ───────────────────────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.3
+material = "Matte"
+translate = [1.8, 0.3, 0.0]
+
+# ── Far receiver sphere ───────────────────────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.3
+material = "Matte"
+translate = [3.0, 0.3, 0.0]

@@ -1,0 +1,91 @@
+# Cornell Alignment material library
+#
+# Extends cornell.materials.toml with the two Suzanne materials:
+#   BackSuzanne — fixed neutral diffuse reference (blue-gray, no specular).
+#   FrontTest   — the active material under test; edit this block per test pass.
+#
+# Preset materials (FrontXxx) are copied verbatim from alignment.materials.toml
+# so this file is self-contained for the Cornell scene.
+#
+# All color values are linear Rec.709; renderers convert to the working color space.
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+# ── Fixed reference materials ─────────────────────────────────────────────────
+
+[BackSuzanne]
+# Neutral diffuse blue-gray; clearly distinct from Cornell walls and FrontTest.
+base_color    = [0.250, 0.350, 0.600]
+specular_weight = 0.0
+
+# ── Active test material — edit this block for each comparison pass ───────────
+
+[FrontTest]
+# Starting point: neutral diffuse white (base layer only, no specular).
+base_color    = [0.800, 0.800, 0.800]
+specular_weight = 0.0
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Per-layer comparison presets
+# Copy one block over [FrontTest] or set material = "FrontXxx" on the geometry.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── 1. Base ──────────────────────────────────────────────────────────────────
+
+[FrontBase_Diffuse]
+base_color    = [0.820, 0.180, 0.050]
+specular_weight = 0.0
+
+[FrontBase_Metallic]
+base_color    = [0.929, 0.788, 0.374]
+base_metalness = 1.0
+specular_color = [0.987, 1.000, 0.997]
+specular_roughness = 0.02
+
+# ── 2. Specular ───────────────────────────────────────────────────────────────
+
+[FrontSpecular_Glossy]
+base_color      = [0.200, 0.200, 0.200]
+specular_weight = 1.0
+specular_ior    = 1.50
+specular_roughness = 0.05
+
+[FrontSpecular_Rough]
+base_color      = [0.200, 0.200, 0.200]
+specular_weight = 1.0
+specular_ior    = 1.50
+specular_roughness = 0.50
+
+# ── 3. Coat ───────────────────────────────────────────────────────────────────
+
+[FrontCoat_Clear]
+base_color         = [0.050, 0.200, 0.700]
+specular_roughness = 0.80
+coat_weight        = 1.0
+coat_ior           = 1.50
+coat_roughness     = 0.05
+
+[FrontCoat_Rough]
+base_color         = [0.050, 0.200, 0.700]
+specular_roughness = 0.80
+coat_weight        = 1.0
+coat_ior           = 1.50
+coat_roughness     = 0.35
+
+# ── 4. Emission ───────────────────────────────────────────────────────────────
+
+[FrontEmission_Warm]
+base_color         = [0.050, 0.050, 0.050]
+specular_weight    = 0.0
+emission_luminance = 500.0
+emission_color     = [1.000, 0.650, 0.200]
+
+# ── 5. Fuzz ───────────────────────────────────────────────────────────────────
+
+[FrontFuzz_Velvet]
+base_color     = [0.400, 0.100, 0.100]
+specular_weight = 0.0
+fuzz_weight    = 1.0
+fuzz_color     = [0.600, 0.200, 0.200]
+fuzz_roughness = 0.5

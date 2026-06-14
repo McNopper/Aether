@@ -1,0 +1,43 @@
+# Fixture: Rect Light
+#
+# PURPOSE
+# -------
+# Isolates rect (area) light evaluation.  Single emissive ceiling panel + matte
+# receiver sphere.  No IBL.  Compare Hyperion NEE vs Theia LTC.
+#
+# LAYOUT (unit-scale, metres)
+#   - Floor          box  [0, 0, 0]  half [3, 0.05, 3]
+#   - Receiver       sphere r=0.5    [0, 0.5, 0]
+#   - Rect light     box  [0, 3, 0]  half [0.6, 0.05, 0.6]  emissive
+
+material_libraries = ["fixture_rect_light.materials.toml"]
+
+[render]
+reference = "presets/comparison_512spp.render.toml"
+
+[camera]
+reference = "presets/fixture.camera.toml"
+
+[tonemap]
+tonemapper = "agx"
+
+# ── Floor ──────────────────────────────────────────────────────────────────────
+[[geometry]]
+type = "box"
+half_extents = [3.0, 0.05, 3.0]
+material = "Floor"
+translate = [0.0, 0.0, 0.0]
+
+# ── Receiver sphere ───────────────────────────────────────────────────────────
+[[geometry]]
+type = "sphere"
+radius = 0.5
+material = "Matte"
+translate = [0.0, 0.5, 0.0]
+
+# ── Rect light (ceiling panel) ────────────────────────────────────────────────
+[[geometry]]
+type = "box"
+half_extents = [0.6, 0.05, 0.6]
+material = "RectLight"
+translate = [0.0, 3.0, 0.0]
