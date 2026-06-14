@@ -15,7 +15,7 @@
 material_libraries = ["fixture_emissive.materials.toml"]
 
 [render]
-reference = "presets/comparison_512spp.render.toml"
+reference = "presets/comparison_direct_512spp.render.toml"
 
 [camera]
 reference = "presets/fixture.camera.toml"

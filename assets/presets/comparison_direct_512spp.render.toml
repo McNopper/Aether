@@ -1,0 +1,5 @@
+# Comparison render preset — direct-light only (max_depth=1).
+# 512 spp, 1 bounce — matches Theia's rasterizer (no indirect GI).
+# Use this for direct-light parity comparisons (Group 2B).
+samples_per_pixel = 512
+max_depth = 1
