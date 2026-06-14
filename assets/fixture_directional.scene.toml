@@ -1,0 +1,43 @@
+# Fixture: Directional Light Approximation
+#
+# PURPOSE
+# -------
+# Evaluates directional-style shadow quality (precision, bias, filtering) using
+# a large distant emissive panel that approximates parallel incoming light.
+# No IBL, direct-light only.
+#
+# LAYOUT (unit-scale, metres)
+#   - Floor          box [0, 0, 0]      half [6, 0.05, 6]
+#   - Occluder post  box [0, 1.0, 0]    half [0.10, 1.0, 0.10]
+#   - Sun panel      quad [0, 20, 0] scale [20, 1, 20] emissive (facing down)
+
+material_libraries = ["fixture_directional.materials.toml"]
+
+[render]
+reference = "presets/comparison_direct_512spp.render.toml"
+
+[camera]
+reference = "presets/fixture.camera.toml"
+
+[tonemap]
+tonemapper = "agx"
+
+[[geometry]]
+type = "box"
+half_extents = [6.0, 0.05, 6.0]
+material = "Floor"
+translate = [0.0, 0.0, 0.0]
+
+[[geometry]]
+type = "box"
+half_extents = [0.10, 1.0, 0.10]
+material = "Occluder"
+translate = [0.0, 1.0, 0.0]
+
+[[geometry]]
+type = "instance"
+mesh = "quad.obj"
+scale = [20.0, 1.0, 20.0]
+rotate = [-0.7071, 0.0, 0.0, 0.7071]
+material = "SunPanel"
+translate = [0.0, 20.0, 0.0]
