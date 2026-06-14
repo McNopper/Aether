@@ -59,7 +59,7 @@ scale = 100.0
 [[geometry]]
 type = "instance"
 mesh = "suzanne.obj"
-material = "FrontBase_Diffuse"
+material = "FrontTest"
 translate = [190.0, 130.0, 190.0]
 rotate = [0.0, 1.0, 0.0, 0.0]
 scale = 100.0

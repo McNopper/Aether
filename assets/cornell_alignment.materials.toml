@@ -81,6 +81,13 @@ specular_weight    = 0.0
 emission_luminance = 500.0
 emission_color     = [1.000, 0.650, 0.200]
 
+[FrontEmission_Surface]
+base_color         = [0.050, 0.050, 0.050]
+specular_weight    = 0.0
+emission_luminance = 50.0
+emission_color     = [1.000, 0.650, 0.200]
+emission_as_light_source = false
+
 # ── 5. Fuzz ───────────────────────────────────────────────────────────────────
 
 [FrontFuzz_Velvet]

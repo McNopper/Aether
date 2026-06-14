@@ -236,6 +236,14 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
         }
         return;
     }
+    if (kw == "emission_as_light_source") {
+        if (const auto b = value.value<bool>()) {
+            p.emission_as_light_source = *b;
+        } else if (const auto f = asFloat(value)) {
+            p.emission_as_light_source = (*f != 0.0F);
+        }
+        return;
+    }
 
     // ── Scalar keywords ───────────────────────────────────────────────────
     const auto opt = asFloat(value);

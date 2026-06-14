@@ -84,6 +84,7 @@ struct MaterialDesc {
     // ── emission ───────────────────────────────────────────────────────────
     Vec3 emission_color{1.0F, 1.0F, 1.0F};
     float emission_luminance = 0.0F;
+    bool emission_as_light_source = true; ///< false = visible emission only (skip NEE/light synthesis)
 
     // ── subsurface (defaults per OpenPBR Surface spec) ─────────────────────
     float subsurface_weight = 0.0F;

@@ -2,6 +2,6 @@
 # Keeps both Suzannes in view while excluding the ceiling emitter from the frame
 # so per-layer diffs are not dominated by light-edge raster/path-trace AA mismatch.
 translate = [278.0, 273.0, -800.0]
-look_at = [278.0, 150.0, 279.5]
+look_at = [278.0, 130.0, 279.5]
 vertical_field_of_view = 39.1
 ev100 = 7.0
