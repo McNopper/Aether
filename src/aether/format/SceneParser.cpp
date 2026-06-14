@@ -1,7 +1,5 @@
 #include "aether/format/SceneParser.hpp"
 
-#include <toml++/toml.hpp>
-
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -9,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <toml++/toml.hpp>
 
 namespace aether {
 namespace {
@@ -126,8 +125,11 @@ using SectionFn = void (*)(const toml::table&, SceneDesc&);
 /// Resolve a `[section]` that may carry an external `reference` (a base preset
 /// file, applied first) plus inline keys that override it. References are
 /// resolved relative to the scene file's directory.
-void resolveSection(const toml::table& root, std::string_view key, const std::filesystem::path& baseDir,
-                    SceneDesc& desc, SectionFn apply) {
+void resolveSection(const toml::table& root,
+                    std::string_view key,
+                    const std::filesystem::path& baseDir,
+                    SceneDesc& desc,
+                    SectionFn apply) {
     const toml::table* tbl = root[key].as_table();
     if (tbl == nullptr) {
         return;

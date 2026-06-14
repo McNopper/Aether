@@ -1,7 +1,7 @@
 #include <filesystem>
 #include <fstream>
-#include <string_view>
 #include <gtest/gtest.h>
+#include <string_view>
 
 #include "aether/format/MaterialLibrary.hpp"
 

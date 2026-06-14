@@ -1,12 +1,11 @@
 #include "aether/format/MaterialLibrary.hpp"
 
-#include <toml++/toml.hpp>
-
 #include <algorithm>
 #include <iostream>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <toml++/toml.hpp>
 
 namespace aether {
 namespace {
@@ -427,8 +426,8 @@ bool MaterialLibrary::load(const std::filesystem::path& path) {
         // One color space per material: values and color textures must share
         // the declared primaries.
         if (const auto offending = findGamutMismatch(params)) {
-            std::cerr << "[aether] " << path.filename().string() << ": material \"" << key.str() << "\": "
-                      << *offending << " color space mixes primaries with the material colorspace, skipping\n";
+            std::cerr << "[aether] " << path.filename().string() << ": material \"" << key.str() << "\": " << *offending
+                      << " color space mixes primaries with the material colorspace, skipping\n";
             continue;
         }
 
