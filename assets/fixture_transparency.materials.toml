@@ -1,0 +1,27 @@
+# Fixture: Transparency Parity Validation — material library
+#
+# Two OpenPBR-native transparency signals, isolated:
+#   - Glass    : transmission_weight = 1 (refractive dielectric)
+#   - Coverage : geometry_opacity < 1 (geometric coverage / alpha)
+# Plus one opaque reference, visible through both.
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+# Refractive dielectric — exercises transmission_weight (the refraction path).
+[Glass]
+base_color = [1.0, 1.0, 1.0]
+transmission_weight = 1.0
+specular_ior = 1.52
+specular_roughness = 0.0
+
+# Geometric coverage — exercises geometry_opacity (alpha coverage), no refraction.
+[Coverage]
+base_color = [0.85, 0.85, 0.90]
+specular_weight = 0.0
+opacity = 0.5
+
+# Opaque reference behind the transparent objects.
+[MatteRed]
+base_color = [0.55, 0.06, 0.05]
+specular_weight = 0.0

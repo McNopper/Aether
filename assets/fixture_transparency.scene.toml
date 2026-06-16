@@ -1,0 +1,48 @@
+# Fixture: Transparency Parity Validation
+#
+# PURPOSE
+# -------
+# Isolate transparency (refraction + geometric coverage) under a minimal setup,
+# using OpenPBR-native material signals only — no custom alpha_mode:
+#   - geometry_opacity (`opacity`)  → coverage / alpha
+#   - transmission_weight           → refractive glass
+#
+# Lit by IBL only (no direct lights). The IBL path is well-aligned between
+# Hyperion and Theia, so this fixture isolates transparency behavior rather
+# than confounding it with area-light differences.
+#
+# Layout: one opaque reference sphere behind, with a refractive glass sphere
+# and a coverage (opacity) sphere in front of it — so both transparent objects
+# are seen against both the opaque reference and the HDR environment.
+
+material_libraries = ["fixture_transparency.materials.toml"]
+
+[render]
+reference = "presets/comparison_ibl_512spp.render.toml"
+
+[camera]
+reference = "presets/fixture_ibl.camera.toml"
+
+[tonemap]
+tonemapper = "agx"
+
+# Opaque reference (behind) — visible through the transparent spheres.
+[[geometry]]
+type = "sphere"
+radius = 0.5
+material = "MatteRed"
+translate = [0.0, 0.6, 0.4]
+
+# Refractive glass (front-left) — transmission_weight.
+[[geometry]]
+type = "sphere"
+radius = 0.45
+material = "Glass"
+translate = [-0.45, 0.55, -0.3]
+
+# Geometric coverage / alpha (front-right) — geometry_opacity.
+[[geometry]]
+type = "sphere"
+radius = 0.45
+material = "Coverage"
+translate = [0.45, 0.55, -0.3]
