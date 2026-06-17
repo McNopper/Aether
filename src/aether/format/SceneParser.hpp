@@ -17,12 +17,13 @@ namespace aether {
 ///
 ///   material_libraries = ["name.materials.toml", ...]  # single string also ok
 ///
-///   [render]   samples_per_pixel, max_depth, environment_map,
-///              environment_unit_nits,
-///              working_color_space ("lin_rec2020_scene" | "lin_rec709_scene")
-///   [camera]   translate, look_at, up, rotate ([qx,qy,qz,qw]), rotate_y,
-///              vertical_field_of_view, ev100   (look_at wins over rotate)
-///   [tonemap]  tonemapper   (raw keyword token, e.g. "agx")
+///   [render]        samples_per_pixel, max_depth, environment_map,
+///                   environment_unit_nits,
+///                   working_color_space ("lin_rec2020_scene" | "lin_rec709_scene")
+///   [camera]        translate, look_at, up, rotate ([qx,qy,qz,qw]), rotate_y,
+///                   vertical_field_of_view, ev100   (look_at wins over rotate)
+///   [tonemap]       tonemapper   (raw keyword token, e.g. "agx")
+///   [post_tonemap]   renderer     (raw keyword token, e.g. "green_screen")
 ///
 /// REFERENCE + OVERRIDE
 /// ────────────────────

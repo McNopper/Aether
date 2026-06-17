@@ -1,0 +1,20 @@
+# Cornell Box — Empty Overlay Demo
+# Same geometry as the empty Cornell scene, plus a post-tonemap renderer hook.
+#
+# Syntax reference: see SceneLoader.hpp
+
+material_libraries = ["cornell.materials.toml"]
+
+[render]
+reference = "presets/preview.render.toml"
+
+[camera]
+reference = "presets/cornell.camera.toml"
+
+[post_tonemap]
+renderer = "green_screen"
+
+[[geometry]]
+type = "instance"
+mesh = "cornell.obj"
+materials = { Floor = "WhiteWall", Ceiling = "WhiteWall", AreaLight = "AreaLight", BackWall = "WhiteWall", LeftWall = "RedWall", RightWall = "GreenWall" }

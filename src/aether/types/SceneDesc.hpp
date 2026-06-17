@@ -53,8 +53,8 @@ struct GeometryBlock {
 /// Fully parsed `.scene.toml` file — pure CPU data, no GPU/renderer types.
 ///
 /// References (mtllibs, OBJ paths, env map) are recorded as relative paths; the
-/// consumer resolves and loads them. The tonemapper is carried as the raw
-/// keyword token (e.g. "agx") — mapping it to a renderer tonemapping mode is a
+/// consumer resolves and loads them. The tonemapper and post-tonemap renderer
+/// are carried as raw keyword tokens — mapping them to renderer modes is a
 /// Harmonia / renderer concern, not file-format data.
 struct SceneDesc {
     CameraDesc camera;
@@ -64,6 +64,7 @@ struct SceneDesc {
     std::optional<float> envUnitNits;      ///< cd/m² per unit EXR value
     std::optional<std::string> envMapFile; ///< equirect EXR IBL path (relative)
     std::optional<std::string> tonemapper; ///< raw `tonemapper` token (e.g. "agx")
+    std::optional<std::string> postTonemapRenderer; ///< raw `renderer` token (e.g. "green_screen")
     /// Raw `working_color_space` token from [render]
     /// ("lin_rec2020_scene" | "lin_rec709_scene" — always linear).
     /// The scene-referred working color space all assets are converted into;

@@ -120,6 +120,12 @@ void applyTonemap(const toml::table& tonemap, SceneDesc& desc) {
     }
 }
 
+void applyPostTonemap(const toml::table& postTonemap, SceneDesc& desc) {
+    if (const auto v = postTonemap["renderer"].value<std::string>()) {
+        desc.postTonemapRenderer = *v;
+    }
+}
+
 using SectionFn = void (*)(const toml::table&, SceneDesc&);
 
 /// Resolve a `[section]` that may carry an external `reference` (a base preset
@@ -219,6 +225,7 @@ std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFi
     resolveSection(root, "render", baseDir, desc, applyRender);
     resolveSection(root, "camera", baseDir, desc, applyCamera);
     resolveSection(root, "tonemap", baseDir, desc, applyTonemap);
+    resolveSection(root, "post_tonemap", baseDir, desc, applyPostTonemap);
 
     // ── Geometry (ordered) ──
     if (const toml::array* geo = root["geometry"].as_array()) {

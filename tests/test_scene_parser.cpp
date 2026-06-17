@@ -220,6 +220,13 @@ TEST(SceneParser, TonemapGroupResolvedFromReferencePreset) {
     EXPECT_EQ(*f.scene->tonemapper, "agx");
 }
 
+TEST(SceneParser, PostTonemapGroupResolvedFromReferencePreset) {
+    PresetFixture f{"post_tonemap", "renderer = \"green_screen\"\n"};
+    ASSERT_TRUE(f.scene.has_value());
+    ASSERT_TRUE(f.scene->postTonemapRenderer.has_value());
+    EXPECT_EQ(*f.scene->postTonemapRenderer, "green_screen");
+}
+
 TEST(SceneParser, ReadmeGalleryScenesParse) {
     static constexpr std::array<std::string_view, 18> kGalleryScenes{
         "cornell_classic.scene.toml",

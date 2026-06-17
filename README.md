@@ -21,7 +21,7 @@ CPU structs; consumers (Harmonia and the renderers) own all GPU upload.
 
 | Parses | Into |
 |--------|------|
-| `<name>.scene.toml` (TOML scene description) | `aether::SceneDesc` (camera, render settings, env, tonemapper, geometry blocks with TRS + material refs, material-library references) |
+| `<name>.scene.toml` (TOML scene description) | `aether::SceneDesc` (camera, render settings, env, tonemapper, post-tonemap renderer, geometry blocks with TRS + material refs, material-library references) |
 | `<name>.materials.toml` (TOML OpenPBR material library) | `aether::MaterialDesc` (OpenPBR Surface v1.1 parameters + texture references) |
 | Wavefront OBJ (geometry only — **triangles only**; OBJ material directives ignored) | `aether::MeshData` / `aether::MeshGroup` (deduplicated vertices + indices, local space) |
 
@@ -40,7 +40,7 @@ conversion.
 ### File-format notes
 
 * **Scene** (`<name>.scene.toml`): top-level `material_libraries` array; `[render]`,
-  `[camera]` and `[tonemap]` tables; an ordered `[[geometry]]` array whose entries have
+  `[camera]`, `[tonemap]` and `[post_tonemap]` tables; an ordered `[[geometry]]` array whose entries have
   `type = "instance" | "box" | "sphere"`. Keys are spelled in full words for clarity
   (`samples_per_pixel`, `environment_map`, `vertical_field_of_view`, `mesh`,
   `half_extents`, `material`, …). The `[render]` table may select the scene-referred
@@ -48,7 +48,7 @@ conversion.
   "lin_rec709_scene"` (absent → consumer default, Rec.2020); consumers convert all
   assets to it on load.
 * **Setting presets** (`presets/<name>.<group>.toml`): the `[render]`, `[camera]` and
-  `[tonemap]` sections may carry a `reference = "presets/…"` key pointing at a standalone
+  `[tonemap]` and `[post_tonemap]` sections may carry a `reference = "presets/…"` key pointing at a standalone
   preset file (top-level keys, same shape as the inline section). The referenced file is
   applied first as a base, then any inline keys override it (*local wins*). Settings shared
   across scenes therefore live in a single deduplicated preset file (e.g. all Cornell scenes
