@@ -1,0 +1,17 @@
+material_libraries = ["furnace.materials.toml"]
+
+[render]
+reference = "presets/preview.render.toml"
+working_color_space = "lin_rec2020_scene"
+
+[camera]
+reference = "presets/cornell.camera.toml"
+
+[tonemap]
+tonemapper = "agx"
+
+[[geometry]]
+type = "sphere"
+radius = 0.3
+translate = [0.0, 0.0, 0.0]
+materials = { Material = "WhiteCoverage" }
