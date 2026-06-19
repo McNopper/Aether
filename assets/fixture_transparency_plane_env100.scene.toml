@@ -1,0 +1,30 @@
+# Fixture: Transparency Plane IBL Unit Probe (100 nits)
+#
+# Same as the base IBL coverage fixture, but with a lower environment scale to
+# test how the residual responds to brightness.
+
+material_libraries = ["fixture_transparency_plane.materials.toml"]
+
+[render]
+reference = "presets/comparison_ibl_512spp.render.toml"
+environment_unit_nits = 100.0
+
+[camera]
+reference = "presets/fixture_ibl.camera.toml"
+
+[tonemap]
+tonemapper = "agx"
+
+[[geometry]]
+type = "sphere"
+radius = 0.5
+material = "MatteRed"
+translate = [0.0, 0.6, 0.4]
+
+[[geometry]]
+type = "instance"
+mesh = "quad.obj"
+scale = [1.2, 1.0, 1.2]
+rotate = [0.7071, 0.0, 0.0, 0.7071]
+material = "CoveragePlane"
+translate = [0.0, 0.6, -0.25]
