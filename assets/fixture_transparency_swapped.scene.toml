@@ -1,0 +1,31 @@
+# Fixture: Transparency Parity Validation (swapped transparent geometry order)
+material_libraries = ["fixture_transparency.materials.toml"]
+
+[render]
+reference = "presets/comparison_ibl_512spp.render.toml"
+
+[camera]
+reference = "presets/fixture_ibl.camera.toml"
+
+[tonemap]
+tonemapper = "agx"
+
+[[geometry]]
+type = "sphere"
+radius = 0.5
+material = "MatteRed"
+translate = [0.0, 0.6, 0.4]
+
+# Coverage first (swapped order)
+[[geometry]]
+type = "sphere"
+radius = 0.45
+material = "Coverage"
+translate = [0.45, 0.55, -0.3]
+
+# Glass second (swapped order)
+[[geometry]]
+type = "sphere"
+radius = 0.45
+material = "Glass"
+translate = [-0.45, 0.55, -0.3]
