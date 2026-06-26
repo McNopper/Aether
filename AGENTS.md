@@ -32,6 +32,13 @@ Material colors are linear Rec.709 unless the material lib says otherwise
 (`colorspace = "lin_rec709_scene"`); renderers convert to the working color space.
 Format is TOML (chosen as the best token/readability/comment compromise).
 
+**Material model = OpenPBR Surface** (Academy Software Foundation). Material libraries are
+tagged `model = "openpbr"` and use **OpenPBR parameter names** (`base_color`, `specular_ior`,
+`transmission_weight`, `geometry_opacity`, `coat_*`, `subsurface_*`, `thin_film_*`, …).
+OpenPBR's canonical/reference implementation is **MaterialX** (`mx_*` nodes); when adding or
+naming parameters, follow OpenPBR/MaterialX, not a renderer-specific convention. The tag exists
+so future material models can coexist.
+
 ### ⚠️ FetchContent asset gotcha (read this — it bites every session)
 
 Hyperion and Theia do **NOT** read assets from this working tree. They read from their
@@ -71,4 +78,5 @@ cd build; ctest --output-on-failure
 - Commit, but do **not** push unless asked.
 - OBJ winding must be outward-facing (CCW-from-outside); inward winding renders black
   (Hyperion derives emissive-triangle normals from winding).
-- Material model is tagged (`model = "openpbr"`); the tag exists so future models can coexist.
+- Material model is **OpenPBR Surface** (tagged `model = "openpbr"`, MaterialX-defined); the tag
+  exists so future models can coexist.
