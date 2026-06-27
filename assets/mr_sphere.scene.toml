@@ -33,10 +33,12 @@ half_extents = [14.0, 0.1, 14.0]
 material = "NeutralFloor"
 translate = [0.0, -1.05, 0.0]
 
-# ── Light — emissive green sphere, upper-left, camera-facing ─────────────────
-# Positioned so it is always in the camera frustum.
+# ── Light — emissive green box (area light), upper-left, camera-facing ───────
+# A box is a triangle mesh, so the path tracer samples it via Next Event
+# Estimation (analytic spheres are not NEE-sampled) — this keeps the render
+# clean at normal sample counts instead of fireflying from BSDF-only hits.
 [[geometry]]
-type = "sphere"
-radius = 0.45
+type = "box"
+half_extents = [0.32, 0.32, 0.32]
 material = "GreenLight"
-translate = [-2.2, 2.4, 1.2]
+translate = [-2.35, 2.5, 1.2]
