@@ -11,7 +11,7 @@ reference = "presets/meadow_16spp_10bounce.render.toml"
 reference = "presets/meadow.camera.toml"
 
 [tonemap]
-reference = "presets/agx.tonemap.toml"
+reference = "presets/aces.tonemap.toml"
 
 # Ground plane — large enough to fill the IBL horizon
 [[geometry]]

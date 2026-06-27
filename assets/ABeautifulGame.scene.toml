@@ -12,7 +12,7 @@ reference = "presets/meadow_256spp_12bounce.render.toml"
 reference = "presets/abeautifulgame.camera.toml"
 
 [tonemap]
-reference = "presets/agx.tonemap.toml"
+reference = "presets/aces.tonemap.toml"
 
 [[geometry]]
 type = "instance"

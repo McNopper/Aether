@@ -12,7 +12,7 @@ reference = "presets/relax_256spp_16bounce.render.toml"
 reference = "presets/dragon_teapot.camera.toml"
 
 [tonemap]
-reference = "presets/agx.tonemap.toml"
+reference = "presets/aces.tonemap.toml"
 
 # Studio pedestal (top face at y = 0) — kept small so the HDR environment
 # remains visible around and behind the objects.

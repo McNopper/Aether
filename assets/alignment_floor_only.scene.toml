@@ -12,7 +12,7 @@ reference = "presets/alignment_16spp_8bounce.render.toml"
 reference = "presets/alignment.camera.toml"
 
 [tonemap]
-reference = "presets/agx.tonemap.toml"
+reference = "presets/aces.tonemap.toml"
 
 [[geometry]]
 type = "box"
