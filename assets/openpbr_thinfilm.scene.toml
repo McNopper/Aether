@@ -1,7 +1,9 @@
-# OpenPBR Thin-Film Iridescence Showcase — Hyperion demo
-# 15 spheres in 3 rows × 5, lit by IBL panorama.
-# Tests thin_film_thickness on glass (row 0), on silver metal (row 1),
-# and named iridescent materials (row 2).
+# OpenPBR Thin-Film Iridescence Showcase
+# 15 spheres in 3 rows x 5, lit by an IBL panorama.
+# Rows 0-1: a continuous anodized-metal thickness sweep (100 -> 730 nm) walking the
+#           first-order interference rainbow. Row 2: named real-world iridescent materials.
+# Thin-film model: OpenPBR thin_film lobe = MaterialX mx_fresnel_airy (Belcour-Barla),
+# metals using the true complex-IOR conductor phase.
 # Materials from openpbr_thinfilm.materials.toml.
 
 material_libraries = ["openpbr_thinfilm.materials.toml", "floor.materials.toml"]
@@ -19,69 +21,69 @@ half_extents = [12.0, 0.1, 10.0]
 material = "NeutralFloor"
 translate = [0.0, -0.05, 1.0]
 
-# ── Row 0  z = -2.0  thickness sweep on glass ────────────────────────────────
+# -- Row 0  z = -2.0  anodized sweep 100 -> 380 nm --------------------------------
 [[geometry]]
 type = "sphere"
 radius = 0.70
-material = "TF_Glass_300nm"
+material = "Anodized_100nm"
 translate = [-5.0, 0.70, -2.0]
 
 [[geometry]]
 type = "sphere"
 radius = 0.70
-material = "TF_Glass_500nm"
+material = "Anodized_170nm"
 translate = [-2.5, 0.70, -2.0]
 
 [[geometry]]
 type = "sphere"
 radius = 0.70
-material = "TF_Glass_700nm"
+material = "Anodized_240nm"
 translate = [0.0, 0.70, -2.0]
 
 [[geometry]]
 type = "sphere"
 radius = 0.70
-material = "TF_Glass_900nm"
+material = "Anodized_310nm"
 translate = [2.5, 0.70, -2.0]
 
 [[geometry]]
 type = "sphere"
 radius = 0.70
-material = "TF_Glass_1100nm"
+material = "Anodized_380nm"
 translate = [5.0, 0.70, -2.0]
 
-# ── Row 1  z = +0.5  thickness sweep on silver metal ─────────────────────────
+# -- Row 1  z = +0.5  anodized sweep 450 -> 730 nm -------------------------------
 [[geometry]]
 type = "sphere"
 radius = 0.70
-material = "TF_Metal_300nm"
+material = "Anodized_450nm"
 translate = [-5.0, 0.70, 0.5]
 
 [[geometry]]
 type = "sphere"
 radius = 0.70
-material = "TF_Metal_500nm"
+material = "Anodized_520nm"
 translate = [-2.5, 0.70, 0.5]
 
 [[geometry]]
 type = "sphere"
 radius = 0.70
-material = "TF_Metal_700nm"
+material = "Anodized_590nm"
 translate = [0.0, 0.70, 0.5]
 
 [[geometry]]
 type = "sphere"
 radius = 0.70
-material = "TF_Metal_900nm"
+material = "Anodized_660nm"
 translate = [2.5, 0.70, 0.5]
 
 [[geometry]]
 type = "sphere"
 radius = 0.70
-material = "TF_Metal_1100nm"
+material = "Anodized_730nm"
 translate = [5.0, 0.70, 0.5]
 
-# ── Row 2  z = +3.0  named iridescent materials ───────────────────────────────
+# -- Row 2  z = +3.0  named iridescent materials ---------------------------------
 [[geometry]]
 type = "sphere"
 radius = 0.70
@@ -109,5 +111,5 @@ translate = [2.5, 0.70, 3.0]
 [[geometry]]
 type = "sphere"
 radius = 0.70
-material = "SoapBubbleIrid"
+material = "BismuthOxide"
 translate = [5.0, 0.70, 3.0]
