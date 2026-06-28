@@ -32,14 +32,15 @@ struct TextureRef {
     [[nodiscard]] bool empty() const noexcept { return path.empty(); }
 };
 
-/// Parsed OpenPBR Surface v1.1 material — pure CPU data, no GPU types.
+/// Parsed OpenPBR Surface v1.1.1 material — pure CPU data, no GPU types.
 ///
 /// Color-valued fields (base_color, specular_color, …) are stored in the space
-/// declared by `inputColorSpace`; non-color data (subsurface_radius,
+/// declared by `inputColorSpace`; non-color data (subsurface_radius_scale,
 /// transmission_scatter) is never color-converted by the consumer.
 ///
-/// Default values follow the OpenPBR Surface specification, matching a
-/// diffuse-gray material when default-constructed.
+/// Field names are the exact OpenPBR Surface 1.1.1 input names (no abbreviation
+/// or aliasing). Default values follow the OpenPBR Surface 1.1.1 specification,
+/// matching a diffuse-gray material when default-constructed.
 struct MaterialDesc {
     // ── base ───────────────────────────────────────────────────────────────
     Vec3 base_color{0.8F, 0.8F, 0.8F};
@@ -86,16 +87,16 @@ struct MaterialDesc {
     float emission_luminance = 0.0F;
     bool emission_as_light_source = true; ///< false = visible emission only (skip NEE/light synthesis)
 
-    // ── subsurface (defaults per OpenPBR Surface spec) ─────────────────────
+    // ── subsurface (OpenPBR Surface 1.1.1 names & types) ───────────────────
     float subsurface_weight = 0.0F;
     Vec3 subsurface_color{0.8F, 0.8F, 0.8F};
-    Vec3 subsurface_radius{1.0F, 0.5F, 0.25F};
-    float subsurface_scale = 1.0F;
+    float subsurface_radius = 1.0F;                  ///< scalar mean-free-path length (OpenPBR float, default 1.0)
+    Vec3 subsurface_radius_scale{1.0F, 0.5F, 0.25F}; ///< per-channel RGB MFP multiplier (OpenPBR color3)
     float subsurface_scatter_anisotropy = 0.0F; ///< HG mean cosine g ∈ [-1,1]
 
-    // ── geometry ───────────────────────────────────────────────────────────
-    float opacity = 1.0F;
-    bool thin_walled = false; ///< geometry_thin_walled: double-sided thin sheet
+    // ── geometry (OpenPBR Surface 1.1.1 names) ─────────────────────────────
+    float geometry_opacity = 1.0F;
+    bool geometry_thin_walled = false; ///< double-sided infinitesimally-thin shell
 
     // ── material model tag ─────────────────────────────────────────────────
     /// Material model this description follows. Only "openpbr" exists today;

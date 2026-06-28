@@ -9,7 +9,7 @@ colorspace = "lin_rec709_scene"
 [CoveragePlane]
 base_color = [0.0, 0.0, 0.0]
 specular_weight = 0.0
-opacity = 0.5
+geometry_opacity = 0.5
 emission_color = [0.050, 0.250, 0.900]
 emission_luminance = 2000.0
 emission_as_light_source = false

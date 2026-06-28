@@ -10,20 +10,14 @@
 namespace aether {
 namespace {
 
-/// Map OpenPBR Surface parameter names to this library's internal storage field
-/// names (which abbreviate a few of the longer spec names). This is **not**
-/// alias resolution — every accepted keyword is a verbatim OpenPBR Surface
-/// keyword; we only translate the canonical spec name to the struct field that
-/// holds it. Foreign-format names (UsdPreviewSurface / MaterialX / Wavefront
-/// MTL) are intentionally NOT accepted — material files are authored in OpenPBR.
+/// Map an OpenPBR Surface 1.1.1 keyword to the texture-slot struct field that
+/// holds it. Scalar/color material parameters use the **verbatim OpenPBR field
+/// name** (no translation, no abbreviation); only the `geometry_*` normal/tangent
+/// *vector* inputs are realised as the renderer's texture-map slots, so just
+/// those are mapped here. Foreign-format names (UsdPreviewSurface / MaterialX /
+/// Wavefront MTL) are intentionally NOT accepted — files are authored in OpenPBR.
 [[nodiscard]] std::string_view normalise(std::string_view kw) noexcept {
-    // OpenPBR `geometry_*` parameters → internal fields.
-    if (kw == "geometry_opacity") {
-        return "opacity";
-    }
-    if (kw == "geometry_thin_walled") {
-        return "thin_walled";
-    }
+    // OpenPBR `geometry_*` normal/tangent vector inputs → texture-map slots.
     if (kw == "geometry_normal") {
         return "map_normal";
     }
@@ -35,10 +29,6 @@ namespace {
     }
     if (kw == "geometry_coat_tangent") {
         return "map_coat_tangent";
-    }
-    // OpenPBR `subsurface_radius_scale` → internal `subsurface_scale` field.
-    if (kw == "subsurface_radius_scale") {
-        return "subsurface_scale";
     }
     return kw;
 }
@@ -197,9 +187,9 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
     // ── Colour keywords (3-element arrays) ────────────────────────────────
     // NOTE: Aether records colors verbatim in the declared input color space
     // (p.inputColorSpace); the consumer performs any conversion. Non-color data
-    // (subsurface_radius, transmission_scatter) is never color-converted.
+    // (subsurface_radius_scale, transmission_scatter) is never color-converted.
     if (kw == "base_color" || kw == "specular_color" || kw == "transmission_color" || kw == "coat_color" ||
-        kw == "fuzz_color" || kw == "emission_color" || kw == "subsurface_color" || kw == "subsurface_radius" ||
+        kw == "fuzz_color" || kw == "emission_color" || kw == "subsurface_color" || kw == "subsurface_radius_scale" ||
         kw == "transmission_scatter") {
         const auto c = asVec3(value);
         if (!c) {
@@ -221,18 +211,18 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
             p.emission_color = *c;
         } else if (kw == "subsurface_color") {
             p.subsurface_color = *c;
-        } else if (kw == "subsurface_radius") {
-            p.subsurface_radius = *c;
+        } else if (kw == "subsurface_radius_scale") {
+            p.subsurface_radius_scale = *c;
         }
         return;
     }
 
     // ── Boolean keyword ───────────────────────────────────────────────────
-    if (kw == "thin_walled") {
+    if (kw == "geometry_thin_walled") {
         if (const auto b = value.value<bool>()) {
-            p.thin_walled = *b;
+            p.geometry_thin_walled = *b;
         } else if (const auto f = asFloat(value)) {
-            p.thin_walled = (*f != 0.0F);
+            p.geometry_thin_walled = (*f != 0.0F);
         }
         return;
     }
@@ -299,12 +289,12 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
         p.emission_luminance = f;
     } else if (kw == "subsurface_weight") {
         p.subsurface_weight = f;
-    } else if (kw == "subsurface_scale") {
-        p.subsurface_scale = f;
+    } else if (kw == "subsurface_radius") {
+        p.subsurface_radius = f;
     } else if (kw == "subsurface_scatter_anisotropy") {
         p.subsurface_scatter_anisotropy = std::clamp(f, -1.0F, 1.0F);
-    } else if (kw == "opacity") {
-        p.opacity = f;
+    } else if (kw == "geometry_opacity") {
+        p.geometry_opacity = f;
     }
 }
 

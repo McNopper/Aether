@@ -8,8 +8,8 @@
 # Aether's `map_*` keys. Any unrecognised keyword is silently ignored.
 #
 # Color values are linear Rec.709 by default; the consumer converts them to its
-# working color space. The exception is "subsurface_radius", a physical distance
-# (not a colour), stored as-is. Declare the input color space explicitly with:
+# working color space. The exception is "subsurface_radius_scale", a per-channel
+# scatter multiplier (not a colour), stored as-is. Declare the input color space explicitly with:
 #   colorspace = "lin_rec709_scene"   (default — consumer converts to lin_rec2020)
 #   colorspace = "lin_rec2020_scene"  (no conversion — values already in lin_rec2020)
 
@@ -62,5 +62,5 @@ base_color = [1.000, 0.900, 0.700]
 specular_roughness = 0.4
 subsurface_weight = 0.6
 subsurface_color = [1.000, 0.800, 0.600]
-subsurface_radius = [4.0, 2.0, 1.5]
-subsurface_radius_scale = 5.0
+subsurface_radius_scale = [4.0, 2.0, 1.5]
+subsurface_radius = 5.0

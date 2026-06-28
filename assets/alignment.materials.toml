@@ -189,7 +189,7 @@ specular_roughness = 0.00
 # Human skin (Fitzpatrick II) — canonical SSS reference.
 subsurface_weight = 1.0
 subsurface_color = [0.671, 0.505, 0.371]
-subsurface_radius = [0.482, 0.169, 0.109]
+subsurface_radius_scale = [0.482, 0.169, 0.109]
 specular_roughness = 0.50
 specular_ior = 1.40
 
@@ -197,7 +197,7 @@ specular_ior = 1.40
 # Translucent wax — wide, near-isotropic scatter.
 subsurface_weight = 1.0
 subsurface_color = [0.900, 0.880, 0.700]
-subsurface_radius = [1.200, 1.100, 0.900]
+subsurface_radius_scale = [1.200, 1.100, 0.900]
 specular_roughness = 0.30
 specular_ior = 1.45
 
