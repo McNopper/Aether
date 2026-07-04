@@ -1,0 +1,16 @@
+# camera_suzanne.materials.toml — a material for the Blender-exported Suzanne,
+# authored manually (the Blender exporter emits geometry/scene/camera only).
+# Colours are linear Rec.709; renderers convert to the working colour space.
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+# Glossy emerald dielectric.
+[Suzanne]
+base_color = [0.045, 0.42, 0.22]
+base_weight = 1.0
+specular_roughness = 0.18
+specular_ior = 1.5
+coat_weight = 1.0
+coat_roughness = 0.05
+coat_ior = 1.5

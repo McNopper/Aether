@@ -1,12 +1,15 @@
-# shader_ball.scene — ShaderBall with 5 independently assignable material zones.
-# Replace any zone's material name to preview a different OpenPBR material there.
+# shader_ball.scene — ShaderBall as a single-material preview with 5 independently
+# assignable zones. Replace a zone's material name to preview a different material.
 #
 # Zone layout (assign via the 'materials' map below):
-#   InnerBottom  — inner ring of the base pedestal
-#   MiddleBottom — middle ring of the base pedestal
-#   OuterBottom  — outer ring of the base pedestal
-#   InnerBall    — inner (recessed) portion of the main ball
-#   OuterBall    — outer (prominent) portion of the main ball  ← primary showcase zone
+#   BaseFoot     — wide flat outer disc / outer rim   ← hero material (with BallSurface)
+#   BaseStem     — central stem / riser               (neutral)
+#   BaseTop      — inner collar plate at the base      (neutral)
+#   BallInner    — inner cut of the main ball          (neutral)
+#   BallSurface  — main ball surface + rim             ← primary hero zone
+#
+# Standard convention: the hero material is shown on BallSurface + BaseFoot; the
+# other zones are neutral so they don't compete with it.
 #
 # Raw OBJ bounds: x ∈ [-13.46, 13.46]  y ∈ [0.21, 26.78]  z ∈ [-13.46, 11.55]
 # At scale 0.1: ~2.7 units tall, seated at y ≈ 0.
@@ -27,7 +30,7 @@ reference = "presets/aces.tonemap.toml"
 [[geometry]]
 type = "box"
 half_extents = [6.0, 0.1, 6.0]
-material = "InnerBottom"
+material = "BaseTop"
 translate = [0.0, -0.1, 0.0]
 
 # ShaderBall — scaled to ~2.7 units tall, centred, seated on floor.
@@ -35,6 +38,6 @@ translate = [0.0, -0.1, 0.0]
 [[geometry]]
 type = "instance"
 mesh = "shader_ball.obj"
-materials = { InnerBottom = "InnerBottom", MiddleBottom = "MiddleBottom", OuterBottom = "OuterBottom", InnerBall = "InnerBall", OuterBall = "OuterBall" }
+materials = { BaseTop = "BaseTop", BaseStem = "BaseStem", BaseFoot = "BaseFoot", BallInner = "BallInner", BallSurface = "BallSurface" }
 scale = 0.1
 translate = [0.0, -0.021, 0.095]

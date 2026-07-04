@@ -1,0 +1,9 @@
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+[ClearGlass]
+base_color = [1.0, 1.0, 1.0]
+specular_roughness = 0.0
+specular_ior = 1.52
+transmission_weight = 1.0
+transmission_color = [0.9, 0.98, 0.95]

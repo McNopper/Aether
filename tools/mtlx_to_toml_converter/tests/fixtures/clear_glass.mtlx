@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <surfacematerial name="ClearGlass" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="clear_glass_srf" />
+  </surfacematerial>
+  <open_pbr_surface name="clear_glass_srf" type="surfaceshader">
+    <input name="base_color" type="color3" value="1.0, 1.0, 1.0" />
+    <input name="transmission_weight" type="float" value="1.0" />
+    <input name="transmission_color" type="color3" value="0.9, 0.98, 0.95" />
+    <input name="specular_ior" type="float" value="1.52" />
+    <input name="specular_roughness" type="float" value="0.0" />
+  </open_pbr_surface>
+</materialx>

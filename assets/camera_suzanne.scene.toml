@@ -1,0 +1,24 @@
+# camera_suzanne.scene — Blender-exported scene (geometry + camera from
+# camera_suzanne.blend via the Aether Blender exporter), with an IBL environment
+# and a manually authored OpenPBR material added afterwards. Demonstrates the
+# full workflow: Blender exports geometry/scene/camera, materials are authored in
+# TOML and assigned from the scene file.
+
+material_libraries = ["camera_suzanne.materials.toml"]
+
+[render]
+reference = "presets/relax_256spp_16bounce.render.toml"
+
+[camera]
+reference = "presets/camera_suzanne.camera.toml"
+
+[tonemap]
+reference = "presets/aces.tonemap.toml"
+
+[[geometry]]
+type = "instance"
+mesh = "camera_suzanne.obj"
+material = "Suzanne"
+translate = [0.0, 0.0, 0.0]
+rotate = [-0.3826834559440613, 0.0, 0.0, 0.9238795638084412]
+scale = [1.0, 0.9999999403953552, 0.9999999403953552]

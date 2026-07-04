@@ -1,0 +1,5 @@
+# Camera exported from camera_suzanne.blend, converted Blender Z-up -> Aether Y-up.
+translate = [7.358891487121582, 4.958309173583984, 6.925790786743164]
+look_at = [6.707333087921143, 4.51303768157959, 6.311620235443115]
+vertical_field_of_view = 26.991466429975517
+ev100 = 12.0

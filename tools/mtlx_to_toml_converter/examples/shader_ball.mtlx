@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<!-- OpenPBR MaterialX library for the Aether shader_ball.obj.
+     Convert with:
+       python mtlx_to_toml.py examples/shader_ball.mtlx examples/shader_ball_openpbr.materials.toml
+     Material names match the shader_ball.obj zones and shader_ball.scene.toml, so
+     the converted library is a drop-in replacement for assets/shader_ball.materials.toml.
+
+     Standard shader-ball convention: the hero material is shown on the ball
+     surface AND the outer rim (BallSurface + BaseFoot); the other zones are
+     neutral grey. -->
+<materialx version="1.39" colorspace="lin_rec709">
+
+  <!-- Hero material — ball surface + outer rim (polished copper). -->
+  <surfacematerial name="BallSurface" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="ball_surface_srf" />
+  </surfacematerial>
+  <open_pbr_surface name="ball_surface_srf" type="surfaceshader">
+    <input name="base_color" type="color3" value="0.955, 0.638, 0.538" />
+    <input name="base_metalness" type="float" value="1.0" />
+    <input name="specular_roughness" type="float" value="0.1" />
+  </open_pbr_surface>
+
+  <surfacematerial name="BaseFoot" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="base_foot_srf" />
+  </surfacematerial>
+  <open_pbr_surface name="base_foot_srf" type="surfaceshader">
+    <input name="base_color" type="color3" value="0.955, 0.638, 0.538" />
+    <input name="base_metalness" type="float" value="1.0" />
+    <input name="specular_roughness" type="float" value="0.1" />
+  </open_pbr_surface>
+
+  <!-- Neutral zones. -->
+  <surfacematerial name="BallInner" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="ball_inner_srf" />
+  </surfacematerial>
+  <open_pbr_surface name="ball_inner_srf" type="surfaceshader">
+    <input name="base_color" type="color3" value="0.6, 0.6, 0.6" />
+    <input name="specular_roughness" type="float" value="0.6" />
+  </open_pbr_surface>
+
+  <surfacematerial name="BaseTop" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="base_top_srf" />
+  </surfacematerial>
+  <open_pbr_surface name="base_top_srf" type="surfaceshader">
+    <input name="base_color" type="color3" value="0.52, 0.52, 0.52" />
+    <input name="specular_roughness" type="float" value="0.6" />
+  </open_pbr_surface>
+
+  <surfacematerial name="BaseStem" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="base_stem_srf" />
+  </surfacematerial>
+  <open_pbr_surface name="base_stem_srf" type="surfaceshader">
+    <input name="base_color" type="color3" value="0.44, 0.44, 0.45" />
+    <input name="specular_roughness" type="float" value="0.6" />
+  </open_pbr_surface>
+
+</materialx>

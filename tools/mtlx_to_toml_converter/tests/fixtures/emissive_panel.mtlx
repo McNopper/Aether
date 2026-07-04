@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <surfacematerial name="EmissivePanel" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="emissive_panel_srf" />
+  </surfacematerial>
+  <open_pbr_surface name="emissive_panel_srf" type="surfaceshader">
+    <input name="base_color" type="color3" value="0.02, 0.02, 0.02" />
+    <input name="emission_luminance" type="float" value="1500.0" />
+    <input name="emission_color" type="color3" value="1.0, 0.95, 0.85" />
+    <input name="specular_roughness" type="float" value="0.4" />
+  </open_pbr_surface>
+</materialx>

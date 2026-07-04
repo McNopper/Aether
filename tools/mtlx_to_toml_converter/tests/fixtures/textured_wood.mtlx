@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <surfacematerial name="TexturedWood" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="textured_wood_srf" />
+  </surfacematerial>
+  <image name="wood_basecolor" type="color3" colorspace="srgb_texture">
+    <input name="file" type="filename" value="textures/wood_basecolor.png" />
+  </image>
+  <image name="wood_normal" type="vector3">
+    <input name="file" type="filename" value="textures/wood_normal.png" />
+  </image>
+  <image name="wood_roughness" type="float">
+    <input name="file" type="filename" value="textures/wood_roughness.png" />
+  </image>
+  <open_pbr_surface name="textured_wood_srf" type="surfaceshader">
+    <input name="base_color" type="color3" nodename="wood_basecolor" />
+    <input name="specular_roughness" type="float" nodename="wood_roughness" />
+    <input name="geometry_normal" type="vector3" nodename="wood_normal" />
+    <input name="specular_ior" type="float" value="1.5" />
+  </open_pbr_surface>
+</materialx>

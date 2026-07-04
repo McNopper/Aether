@@ -37,6 +37,29 @@ world placement lives on the scene's geometry blocks (TRS). Colors are kept in t
 input color space, tagged with `MaterialColorSpace`, so the consumer performs any color-space
 conversion.
 
+### Why TOML — and not OpenUSD or glTF?
+
+OpenUSD and glTF are both excellent formats — but for different jobs than Aether's.
+glTF is a *runtime delivery* format: binary buffers, a fixed metallic-roughness PBR
+model (not OpenPBR), optimized for engines to load, not for humans or agents to read
+and edit. OpenUSD is a powerful *composition and interchange* system (layering,
+references, variants) but is heavyweight and complex — far more than a small hobby
+renderer needs, and not something you hand-edit in a text box.
+
+Aether deliberately takes the best of both and stays small and **agentic-friendly**:
+
+* **Human- and agent-readable/editable text** (like neither format's binary payloads) —
+  small, single-purpose TOML files with comments, cheap for an LLM to read and generate.
+* **OBJ for bulk geometry** — the one thing that genuinely needs a compact vertex/index
+  container (glTF's buffers, but simpler and ubiquitous), kept separate from the text.
+* **Lightweight composition** — scene/camera/render/tonemap presets referenced and
+  overridden (a small nod to USD layering) without USD's machinery.
+* **OpenPBR verbatim** — material parameters use the exact OpenPBR Surface 1.1.1 names,
+  rather than glTF's or USD's own material models, so nothing is lost in translation.
+
+The result: files small enough to diff and hand-edit, structured enough to compose, and
+faithful to OpenPBR — the sweet spot glTF and USD each sit to one side of.
+
 ### File-format notes
 
 * **Scene** (`<name>.scene.toml`): top-level `material_libraries` array; `[render]`,
@@ -47,6 +70,9 @@ conversion.
   **working color space** via `working_color_space = "lin_rec2020_scene" |
   "lin_rec709_scene"` (absent → consumer default, Rec.2020); consumers convert all
   assets to it on load.
+* **Camera preset** (`<name>.camera.toml`): a small standalone preset file with
+  `translate`, `look_at`, `vertical_field_of_view` and `ev100` keys. It is meant to
+  be referenced from the scene file's `[camera]` section.
 * **Setting presets** (`presets/<name>.<group>.toml`): the `[render]`, `[camera]` and
   `[tonemap]` and `[post_tonemap]` sections may carry a `reference = "presets/…"` key pointing at a standalone
   preset file (top-level keys, same shape as the inline section). The referenced file is
@@ -61,6 +87,13 @@ conversion.
   Aether's `map_*` keys.
 * **OBJ**: geometry only. Non-triangle faces are skipped and all `usemtl` / `mtllib`
   directives are ignored — materials are assigned exclusively from the scene file.
+
+### Authoring tools
+
+See `tools/README.md` for the Blender scene exporter and the MaterialX-to-TOML
+converter. The Blender addon exports a `.scene.toml`, a matching `.camera.toml`
+and OBJ files; OpenPBR materials stay in TOML and can be authored separately or
+generated from MaterialX OpenPBR libraries.
 
 > **Tip:** in VS Code, install the *Even Better TOML* extension for syntax highlighting,
 > formatting, and (with a JSON Schema) live validation of the `.toml` files.
@@ -101,3 +134,18 @@ Hyperion, Theia and Harmonia pull Aether via CMake `FetchContent` and link the
 | [GLM](https://github.com/g-truc/glm) | Vector / quaternion math |
 | [toml++](https://github.com/marzer/tomlplusplus) | TOML parsing for the `.scene.toml` / `.materials.toml` formats |
 | [GoogleTest](https://github.com/google/googletest) | Unit testing (tests only) |
+
+---
+
+## References
+
+The material model follows the OpenPBR Surface specification; MaterialX is the
+canonical node reference used by the `tools/` MaterialX→TOML converter.
+
+* **OpenPBR Surface v1.1.1** — Academy Software Foundation.
+  <https://academysoftwarefoundation.github.io/OpenPBR/> ·
+  [reference repo](https://github.com/AcademySoftwareFoundation/OpenPBR)
+* **MaterialX** — specification and node library (OpenPBR `open_pbr_surface`).
+  <https://materialx.org/> ·
+  <https://github.com/AcademySoftwareFoundation/MaterialX>
+* **Wavefront OBJ** — geometry container (triangles only; material directives ignored).

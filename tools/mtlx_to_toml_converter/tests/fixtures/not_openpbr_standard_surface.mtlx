@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<!-- Non-OpenPBR fixture: Autodesk Standard Surface. The converter MUST reject
+     this, because Standard Surface is a different (older) node schema that
+     OpenPBR supersedes. -->
+<materialx version="1.39" colorspace="lin_rec709">
+  <surfacematerial name="StdSurface" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="std_surface_srf" />
+  </surfacematerial>
+  <standard_surface name="std_surface_srf" type="surfaceshader">
+    <input name="base" type="float" value="1.0" />
+    <input name="base_color" type="color3" value="0.8, 0.2, 0.2" />
+    <input name="specular_roughness" type="float" value="0.4" />
+  </standard_surface>
+</materialx>

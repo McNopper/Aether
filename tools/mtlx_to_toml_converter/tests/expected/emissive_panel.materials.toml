@@ -1,0 +1,8 @@
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+[EmissivePanel]
+base_color = [0.02, 0.02, 0.02]
+specular_roughness = 0.4
+emission_color = [1.0, 0.95, 0.85]
+emission_luminance = 1500.0

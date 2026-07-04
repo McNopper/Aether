@@ -1,0 +1,24 @@
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+[BallSurface]
+base_color = [0.955, 0.638, 0.538]
+base_metalness = 1.0
+specular_roughness = 0.1
+
+[BaseFoot]
+base_color = [0.955, 0.638, 0.538]
+base_metalness = 1.0
+specular_roughness = 0.1
+
+[BallInner]
+base_color = [0.6, 0.6, 0.6]
+specular_roughness = 0.6
+
+[BaseTop]
+base_color = [0.52, 0.52, 0.52]
+specular_roughness = 0.6
+
+[BaseStem]
+base_color = [0.44, 0.44, 0.45]
+specular_roughness = 0.6

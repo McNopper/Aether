@@ -1,0 +1,7 @@
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+[DiffuseGray]
+base_color = [0.6, 0.6, 0.6]
+base_weight = 1.0
+specular_roughness = 0.5

@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<!-- OpenPBR MaterialX library for the Aether bunny.obj scene.
+     Convert with:
+       python mtlx_to_toml.py examples/bunny.mtlx examples/bunny_openpbr.materials.toml
+     Material names match bunny.scene.toml (Bunny, Floor). -->
+<materialx version="1.39" colorspace="lin_rec709">
+
+  <surfacematerial name="Bunny" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="bunny_srf" />
+  </surfacematerial>
+  <open_pbr_surface name="bunny_srf" type="surfaceshader">
+    <input name="base_weight" type="float" value="1.0" />
+    <input name="base_color" type="color3" value="0.9, 0.88, 0.86" />
+    <input name="base_metalness" type="float" value="0.0" />
+    <input name="specular_roughness" type="float" value="0.45" />
+    <input name="specular_ior" type="float" value="1.5" />
+  </open_pbr_surface>
+
+  <surfacematerial name="Floor" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="floor_srf" />
+  </surfacematerial>
+  <open_pbr_surface name="floor_srf" type="surfaceshader">
+    <input name="base_color" type="color3" value="0.35, 0.35, 0.37" />
+    <input name="specular_roughness" type="float" value="0.55" />
+  </open_pbr_surface>
+
+</materialx>

@@ -1,0 +1,11 @@
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+[TexturedWood]
+specular_ior = 1.5
+map_base_color = "../fixtures/textures/wood_basecolor.png"
+map_base_color_colorspace = "srgb_rec709_scene"
+map_roughness = "../fixtures/textures/wood_roughness.png"
+map_roughness_colorspace = "data"
+map_normal = "../fixtures/textures/wood_normal.png"
+map_normal_colorspace = "data"

@@ -1,0 +1,51 @@
+# bunny_shaderball.materials.toml — materials for the combined bunny + ShaderBall
+# showcase, following the standard shader-ball convention:
+#   * the hero material is shown on the ball surface AND the outer rim
+#     (BallSurface + BaseFoot);
+#   * all other zones (ball inner cut, inner collar, stem) plus the studio floor
+#     are neutral so they don't compete with the hero material.
+# Colours are linear Rec.709; renderers convert to the working colour space.
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+# ── Hero objects ──────────────────────────────────────────────────────────────
+
+# Stanford bunny — matte white ceramic.
+[Bunny]
+base_color = [0.900, 0.880, 0.860]
+base_weight = 1.0
+base_metalness = 0.0
+specular_roughness = 0.45
+specular_ior = 1.5
+
+# Shared studio floor — neutral.
+[Floor]
+base_color = [0.350, 0.350, 0.370]
+specular_roughness = 0.55
+
+# ── ShaderBall hero material — polished copper on the ball + outer rim ────────
+
+[BallSurface]
+base_color = [0.955, 0.638, 0.538]
+base_metalness = 1.0
+specular_roughness = 0.10
+
+[BaseFoot]
+base_color = [0.955, 0.638, 0.538]
+base_metalness = 1.0
+specular_roughness = 0.10
+
+# ── ShaderBall neutral zones ─────────────────────────────────────────────────
+
+[BallInner]
+base_color = [0.600, 0.600, 0.600]
+specular_roughness = 0.60
+
+[BaseTop]
+base_color = [0.520, 0.520, 0.520]
+specular_roughness = 0.60
+
+[BaseStem]
+base_color = [0.440, 0.440, 0.450]
+specular_roughness = 0.60

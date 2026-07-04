@@ -1,0 +1,44 @@
+# bunny_shaderball.scene — Stanford bunny beside the 5-zone ShaderBall, lit by an
+# HDR environment (IBL). A combined showcase of two Aether OBJ assets sharing a
+# floor, using the existing bunny and shader_ball OpenPBR material libraries.
+#
+# Bunny raw bounds:  x ∈ [-0.691, 0.860]  y ∈ [-0.015, 1.522]  z ∈ [-0.698, 0.506]
+# ShaderBall raw:    x ∈ [-13.46, 13.46]  y ∈ [0.21, 26.78]    z ∈ [-13.46, 11.55]
+
+material_libraries = ["bunny_shaderball.materials.toml"]
+
+[render]
+reference = "presets/relax_256spp_16bounce.render.toml"
+
+[camera]
+reference = "presets/bunny_shaderball.camera.toml"
+
+[tonemap]
+reference = "presets/aces.tonemap.toml"
+
+# Shared studio floor — wide enough to seat both objects.
+[[geometry]]
+type = "box"
+half_extents = [7.0, 0.1, 4.0]
+material = "Floor"
+translate = [0.0, -0.1, 0.0]
+
+# Stanford bunny — left, scaled ~1.5x (~2.3 units tall), seated on the floor.
+# rotate_y turns it to face outward (away from the shader ball).
+[[geometry]]
+type = "instance"
+mesh = "bunny.obj"
+material = "Bunny"
+scale = 1.5
+rotate_y = 180
+translate = [-2.627, 0.023, 0.144]
+
+# ShaderBall — right, scale 0.1 (~2.7 units tall), seated on the floor.
+# rotate_y turns its front to face outward (opposite the bunny).
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "BaseTop", BaseStem = "BaseStem", BaseFoot = "BaseFoot", BallInner = "BallInner", BallSurface = "BallSurface" }
+scale = 0.1
+rotate_y = 180
+translate = [2.5, -0.021, 0.095]

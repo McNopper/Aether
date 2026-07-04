@@ -1,0 +1,8 @@
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+[PolishedCopper]
+base_color = [0.955, 0.638, 0.538]
+base_metalness = 1.0
+specular_roughness = 0.1
+specular_roughness_anisotropy = 0.0
