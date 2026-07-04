@@ -1,0 +1,33 @@
+# bunny.scene — Stanford bunny on a studio floor, lit by an HDR environment.
+# Demonstrates a smooth matte dielectric under image-based lighting.
+#
+# Bunny bounds (raw OBJ): x ∈ [-0.691, 0.860]  y ∈ [-0.015, 1.522]  z ∈ [-0.698, 0.506]
+# translate centres the mesh (x/z) and seats it exactly on y = 0.
+
+material_libraries = ["bunny.materials.toml"]
+
+[render]
+reference = "presets/relax_256spp_16bounce.render.toml"
+
+[camera]
+reference = "presets/dragon_teapot.camera.toml"
+
+[tonemap]
+reference = "presets/aces.tonemap.toml"
+
+# Studio pedestal — flush with y = 0 so the bunny sits on it naturally.
+[[geometry]]
+type = "box"
+half_extents = [4.0, 0.1, 4.0]
+material = "Floor"
+translate = [0.0, -0.1, 0.0]
+
+# Stanford bunny — centred, seated on the floor.
+# x offset: -((-0.691 + 0.860) / 2) ≈ -0.085
+# z offset: -((-0.698 + 0.506) / 2) ≈  0.096
+# y offset:   0.015 (lifts min-y to exactly 0)
+[[geometry]]
+type = "instance"
+mesh = "bunny.obj"
+material = "Bunny"
+translate = [-0.085, 0.015, 0.096]
