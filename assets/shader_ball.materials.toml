@@ -1,0 +1,39 @@
+# shader_ball.materials.toml — Five distinct OpenPBR materials for the shader ball zones.
+# Each zone (InnerBottom, MiddleBottom, OuterBottom, InnerBall, OuterBall) gets a
+# different material class to showcase the shader ball as a material preview tool.
+# Colours are linear Rec.709; renderers convert to the working colour space.
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+# InnerBottom — rough matte white (reference / neutral diffuse)
+[InnerBottom]
+base_color = [0.900, 0.900, 0.900]
+base_weight = 1.0
+specular_roughness = 1.0
+
+# MiddleBottom — brushed gold conductor
+[MiddleBottom]
+base_color = [1.000, 0.782, 0.344]
+base_metalness = 1.0
+specular_roughness = 0.35
+
+# OuterBottom — deep red automotive lacquer (coat over diffuse)
+[OuterBottom]
+base_color = [0.600, 0.030, 0.020]
+specular_roughness = 0.60
+coat_weight = 1.0
+coat_roughness = 0.04
+coat_ior = 1.5
+
+# InnerBall — primary material showcase zone: smooth dielectric (glass-like plastic)
+[InnerBall]
+base_color = [0.920, 0.920, 0.920]
+specular_roughness = 0.08
+specular_ior = 1.5
+
+# OuterBall — polished copper conductor
+[OuterBall]
+base_color = [0.955, 0.638, 0.538]
+base_metalness = 1.0
+specular_roughness = 0.10

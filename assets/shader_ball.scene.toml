@@ -1,0 +1,40 @@
+# shader_ball.scene — ShaderBall with 5 independently assignable material zones.
+# Replace any zone's material name to preview a different OpenPBR material there.
+#
+# Zone layout (assign via the 'materials' map below):
+#   InnerBottom  — inner ring of the base pedestal
+#   MiddleBottom — middle ring of the base pedestal
+#   OuterBottom  — outer ring of the base pedestal
+#   InnerBall    — inner (recessed) portion of the main ball
+#   OuterBall    — outer (prominent) portion of the main ball  ← primary showcase zone
+#
+# Raw OBJ bounds: x ∈ [-13.46, 13.46]  y ∈ [0.21, 26.78]  z ∈ [-13.46, 11.55]
+# At scale 0.1: ~2.7 units tall, seated at y ≈ 0.
+# translate centres z (raw centre z = -0.951, scaled = -0.095).
+
+material_libraries = ["shader_ball.materials.toml"]
+
+[render]
+reference = "presets/relax_256spp_16bounce.render.toml"
+
+[camera]
+reference = "presets/openpbr_studio_far.camera.toml"
+
+[tonemap]
+reference = "presets/aces.tonemap.toml"
+
+# Studio pedestal — flush with y = 0.
+[[geometry]]
+type = "box"
+half_extents = [6.0, 0.1, 6.0]
+material = "InnerBottom"
+translate = [0.0, -0.1, 0.0]
+
+# ShaderBall — scaled to ~2.7 units tall, centred, seated on floor.
+# y_min (raw) = 0.206 → at scale 0.1: 0.021 above floor → subtract to seat exactly.
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { InnerBottom = "InnerBottom", MiddleBottom = "MiddleBottom", OuterBottom = "OuterBottom", InnerBall = "InnerBall", OuterBall = "OuterBall" }
+scale = 0.1
+translate = [0.0, -0.021, 0.095]
