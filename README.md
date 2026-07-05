@@ -9,7 +9,12 @@ library that parses TOML scene/material files and OBJ geometry into plain CPU da
 > travels.* Aether is the **medium**: it carries a scene's description, untied to any
 > renderer or GPU.
 
-> ⚠️ **Early stage / work in progress.**
+```mermaid
+flowchart LR
+    A["<b>Aether</b><br/>file format"] --> H["Harmonia<br/>shared Vulkan lib"]
+    H --> Hy["Hyperion<br/>path tracer · ground truth"]
+    H --> T["Theia<br/>real-time renderer"]
+```
 
 ---
 
@@ -22,7 +27,7 @@ CPU structs; consumers (Harmonia and the renderers) own all GPU upload.
 | Parses | Into |
 |--------|------|
 | `<name>.scene.toml` (TOML scene description) | `aether::SceneDesc` (camera, render settings, env, tonemapper, post-tonemap renderer, geometry blocks with TRS + material refs, material-library references) |
-| `<name>.materials.toml` (TOML OpenPBR material library) | `aether::MaterialDesc` (OpenPBR Surface v1.1 parameters + texture references) |
+| `<name>.materials.toml` (TOML OpenPBR material library) | `aether::MaterialDesc` (OpenPBR Surface v1.1.1 parameters + texture references) |
 | Wavefront OBJ (geometry only — **triangles only**; OBJ material directives ignored) | `aether::MeshData` / `aether::MeshGroup` (deduplicated vertices + indices, local space) |
 
 Geometry stays in OBJ (bulk vertex/index data); every other element — scene, camera,
@@ -40,9 +45,11 @@ conversion.
 ### Why TOML — and not OpenUSD or glTF?
 
 OpenUSD and glTF are both excellent formats — but for different jobs than Aether's.
-glTF is a *runtime delivery* format: binary buffers, a fixed metallic-roughness PBR
-model (not OpenPBR), optimized for engines to load, not for humans or agents to read
-and edit. OpenUSD is a powerful *composition and interchange* system (layering,
+glTF is a *runtime delivery* format: binary buffers optimized for engines to load, not
+for humans or agents to read and edit. Its 2.0 core material is metallic-roughness;
+**OpenPBR is not yet fully supported** — it is only partially reachable through material
+extensions (`KHR_materials_*`, still evolving) — and **glTF 2.0 does not yet cover complex
+scenes**. OpenUSD is a powerful *composition and interchange* system (layering,
 references, variants) but is heavyweight and complex — far more than a small hobby
 renderer needs, and not something you hand-edit in a text box.
 
@@ -81,7 +88,7 @@ faithful to OpenPBR — the sweet spot glTF and USD each sit to one side of.
   share `presets/cornell.camera.toml` and `presets/preview.render.toml`). References resolve
   relative to the scene directory.
 * **Materials** (`<name>.materials.toml`): one TOML table per material (keyed by name), using
-  [OpenPBR Surface v1.1](https://academysoftwarefoundation.github.io/OpenPBR/) parameter names
+  [OpenPBR Surface v1.1.1](https://academysoftwarefoundation.github.io/OpenPBR/) parameter names
   verbatim; optional top-level `colorspace` and `model` (default `"openpbr"` — the material
   model tag, anticipating additional material models in the future). Texture bindings use
   Aether's `map_*` keys.

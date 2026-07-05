@@ -11,9 +11,11 @@ no GPU-optimized layouts.
 
 Pipeline (dependency direction):
 
-```
-Aether (file format)  ->  Harmonia (shared Vulkan pipeline lib)  ->  Hyperion (path tracer)
-                                                                  \-> Theia    (real-time rasterizer)
+```mermaid
+flowchart LR
+    A["<b>Aether</b><br/>file format (this repo)"] --> H["Harmonia<br/>shared Vulkan lib"]
+    H --> Hy["Hyperion<br/>path tracer · ground truth"]
+    H --> T["Theia<br/>real-time renderer"]
 ```
 
 - **Hyperion** = path tracer, the **ground-truth** reference renderer.
