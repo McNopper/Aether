@@ -4,7 +4,7 @@
 ///
 /// Single convenience header that exposes the full public API: the parsed CPU
 /// data types and the three parsers (.scene.toml, .materials.toml, OBJ). Aether depends only
-/// on GLM and never touches Vulkan, the GPU, or a renderer.
+/// on slang-math and never touches Vulkan, the GPU, or a renderer.
 
 #include "aether/format/MaterialLibrary.hpp"
 #include "aether/format/ObjImporter.hpp"

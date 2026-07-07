@@ -43,7 +43,7 @@ struct GeometryBlock {
 
     std::string materialName; ///< usemtl override (whole-object material name)
     Vec3 translation{0.0F};
-    Quat rotation{1.0F, 0.0F, 0.0F, 0.0F}; ///< GLM (w, x, y, z)
+    Quat rotation{0.0F, 0.0F, 0.0F, 1.0F}; ///< identity, slang-math order (x, y, z, w)
     Vec3 scale{1.0F};
 
     /// Per-group material overrides: OBJ group/object name → material name.
