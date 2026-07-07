@@ -21,7 +21,7 @@ flowchart LR
 ## What Aether is (and isn't)
 
 Aether is **fully independent**: it has **no Vulkan, no GPU, and no renderer
-dependencies** (only GLM for math and toml++ for parsing). It turns text files into plain
+dependencies** (only [slang-math](https://github.com/McNopper/slang-math) for math and toml++ for parsing). It turns text files into plain
 CPU structs; consumers (Harmonia and the renderers) own all GPU upload.
 
 | Parses | Into |
@@ -109,7 +109,7 @@ generated from MaterialX OpenPBR libraries.
 
 ## Building
 
-**Requirements:** CMake 3.28+, a C++23 compiler, vcpkg (provides GLM and toml++).
+**Requirements:** CMake 3.28+, a C++23 compiler, vcpkg (provides toml++; slang-math is pulled via CMake FetchContent).
 
 ```bash
 cmake -S . -B build -G Ninja \
@@ -138,7 +138,7 @@ Hyperion, Theia and Harmonia pull Aether via CMake `FetchContent` and link the
 
 | Library | Purpose |
 |---------|---------|
-| [GLM](https://github.com/g-truc/glm) | Vector / quaternion math |
+| [slang-math](https://github.com/McNopper/slang-math) | Vector / quaternion math (header-only, via FetchContent) |
 | [toml++](https://github.com/marzer/tomlplusplus) | TOML parsing for the `.scene.toml` / `.materials.toml` formats |
 | [GoogleTest](https://github.com/google/googletest) | Unit testing (tests only) |
 
