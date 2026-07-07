@@ -126,7 +126,7 @@ struct VertexEqual {
         const Vec3 nrm = (n >= 0 && std::cmp_less(n, normals.size())) ? normals[static_cast<std::size_t>(n)]
                                                                       : Vec3(0.0F, 1.0F, 0.0F);
         const Vec2 uv =
-            (t >= 0 && std::cmp_less(t, texcoords.size())) ? texcoords[static_cast<std::size_t>(t)] : Vec2(0.0F);
+            (t >= 0 && std::cmp_less(t, texcoords.size())) ? texcoords[static_cast<std::size_t>(t)] : Vec2{0.0F, 0.0F};
 
         const Vertex v{.position = pos, .normal = nrm, .uv = uv};
 
@@ -175,7 +175,7 @@ std::optional<std::vector<MeshGroup>> ObjImporter::parse(const std::filesystem::
         } else if (kw == "vn") {
             Vec3 n{};
             if (parseVec3(ss, n)) {
-                normals.push_back(glm::normalize(n));
+                normals.push_back(sm::normalize(n));
             }
         } else if (kw == "vt") {
             Vec2 uv{};

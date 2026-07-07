@@ -1,7 +1,6 @@
 #include "aether/format/SceneParser.hpp"
 
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/quaternion.hpp>
+#include <slang-math/slang-math.hpp>
 
 #include <filesystem>
 #include <optional>
@@ -28,7 +27,7 @@ namespace {
     return Vec3{static_cast<float>(*x), static_cast<float>(*y), static_cast<float>(*z)};
 }
 
-/// Read a quaternion stored on disk as [qx, qy, qz, qw] into a GLM (w,x,y,z) quat.
+/// Read a quaternion stored on disk as [qx, qy, qz, qw] into a slang-math (x,y,z,w) quat.
 [[nodiscard]] std::optional<Quat> asQuat(const toml::node& n) {
     const toml::array* arr = n.as_array();
     if (arr == nullptr || arr->size() != 4) {
@@ -41,13 +40,14 @@ namespace {
     if (!qx || !qy || !qz || !qw) {
         return std::nullopt;
     }
-    return Quat{static_cast<float>(*qw), static_cast<float>(*qx), static_cast<float>(*qy), static_cast<float>(*qz)};
+    return Quat{static_cast<float>(*qx), static_cast<float>(*qy), static_cast<float>(*qz), static_cast<float>(*qw)};
 }
 
 /// Resolve a `scale` value: a single number (uniform) or a 3-element array.
 [[nodiscard]] std::optional<Vec3> asScale(const toml::node& n) {
     if (const auto s = n.value<double>()) {
-        return Vec3{static_cast<float>(*s)};
+        const float scale = static_cast<float>(*s);
+        return Vec3{scale, scale, scale};
     }
     return asVec3(n);
 }
@@ -70,22 +70,22 @@ void applyCamera(const toml::table& cam, SceneDesc& desc) {
         rotation = asQuat(*r);
     }
     if (const auto deg = cam["rotate_y"].value<double>()) {
-        rotation = glm::angleAxis(glm::radians(static_cast<float>(*deg)), Vec3(0.0F, 1.0F, 0.0F));
+        rotation = sm::angleAxis(sm::radians(static_cast<float>(*deg)), Vec3{0.0F, 1.0F, 0.0F});
     }
 
     if (const auto* l = cam.get("look_at")) {
         if (const auto lookAt = asVec3(*l)) {
             desc.camera.lookAt = *lookAt;
             if (const auto* upNode = cam.get("up")) {
-                desc.camera.up = asVec3(*upNode).value_or(Vec3(0.0F, 1.0F, 0.0F));
+                desc.camera.up = asVec3(*upNode).value_or(Vec3{0.0F, 1.0F, 0.0F});
             } else if (!desc.camera.up) {
-                desc.camera.up = Vec3(0.0F, 1.0F, 0.0F);
+                desc.camera.up = Vec3{0.0F, 1.0F, 0.0F};
             }
         }
     } else if (rotation) {
-        const Vec3 pos = desc.camera.position.value_or(Vec3(0.0F));
-        desc.camera.lookAt = pos + (*rotation * Vec3(0.0F, 0.0F, -1.0F));
-        desc.camera.up = *rotation * Vec3(0.0F, 1.0F, 0.0F);
+        const Vec3 pos = desc.camera.position.value_or(Vec3{0.0F, 0.0F, 0.0F});
+        desc.camera.lookAt = pos + (*rotation * Vec3{0.0F, 0.0F, -1.0F});
+        desc.camera.up = *rotation * Vec3{0.0F, 1.0F, 0.0F};
     }
 
     if (const auto vfov = cam["vertical_field_of_view"].value<double>()) {
@@ -169,7 +169,7 @@ void parseGeometry(const toml::table& g, SceneDesc& desc) {
     } else if (type == "box") {
         blk.kind = GeometryBlock::Kind::Box;
         if (const auto* h = g.get("half_extents")) {
-            blk.boxHalf = asVec3(*h).value_or(Vec3(0.0F));
+            blk.boxHalf = asVec3(*h).value_or(Vec3{0.0F, 0.0F, 0.0F});
         }
     } else {
         return; // unknown geometry type — skip
@@ -177,7 +177,7 @@ void parseGeometry(const toml::table& g, SceneDesc& desc) {
 
     // Shared transform + whole-object material.
     if (const auto* t = g.get("translate")) {
-        blk.translation = asVec3(*t).value_or(Vec3(0.0F));
+        blk.translation = asVec3(*t).value_or(Vec3{0.0F, 0.0F, 0.0F});
     }
     if (const auto* r = g.get("rotate")) {
         if (const auto q = asQuat(*r)) {
@@ -185,10 +185,10 @@ void parseGeometry(const toml::table& g, SceneDesc& desc) {
         }
     }
     if (const auto deg = g["rotate_y"].value<double>()) {
-        blk.rotation = glm::angleAxis(glm::radians(static_cast<float>(*deg)), Vec3(0.0F, 1.0F, 0.0F));
+        blk.rotation = sm::angleAxis(sm::radians(static_cast<float>(*deg)), Vec3{0.0F, 1.0F, 0.0F});
     }
     if (const auto* s = g.get("scale")) {
-        blk.scale = asScale(*s).value_or(Vec3(1.0F));
+        blk.scale = asScale(*s).value_or(Vec3{1.0F, 1.0F, 1.0F});
     }
     blk.materialName = g["material"].value_or<std::string>("");
 

@@ -109,7 +109,7 @@ TEST(SceneParser, ResolvesTonemapFromReferencedPreset) {
     const auto scene = aether::SceneParser::parse(assetsDir() / "dragon_teapot.scene.toml");
     ASSERT_TRUE(scene.has_value());
     ASSERT_TRUE(scene->tonemapper.has_value());
-    EXPECT_EQ(*scene->tonemapper, "agx");
+    EXPECT_EQ(*scene->tonemapper, "aces");
 }
 
 TEST(SceneParser, ResolvesEnvironmentMapFromReferencedRenderPreset) {

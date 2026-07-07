@@ -19,10 +19,16 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # (MT/static): it causes RuntimeLibrary mismatches when Aether is linked as a
 # FetchContent subproject alongside vcpkg/gtest libraries.
 
-# Dependencies (provided via vcpkg). Aether has no Vulkan / GPU deps.
-#   GLM           — vector / quaternion math
-#   tomlplusplus  — header-only TOML parser for the .scene.toml / .materials.toml formats
-find_package(glm CONFIG REQUIRED)
+# Dependencies. Aether has no Vulkan / GPU deps.
+#   slang-math   — vector / quaternion math
+#   tomlplusplus — header-only TOML parser for the .scene.toml / .materials.toml formats
+include(FetchContent)
+FetchContent_Declare(
+    slang_math
+    GIT_REPOSITORY https://github.com/McNopper/slang-math.git
+    GIT_TAG v0.1.0
+)
+FetchContent_MakeAvailable(slang_math)
 find_package(tomlplusplus CONFIG REQUIRED)
 
 set(AETHER_SOURCES
@@ -42,7 +48,7 @@ target_include_directories(aether
 )
 
 target_link_libraries(aether
-    PUBLIC glm::glm
+    PUBLIC slang-math::slang-math
     PRIVATE aether_project_options tomlplusplus::tomlplusplus
 )
 
