@@ -40,7 +40,7 @@ namespace {
     if (!qx || !qy || !qz || !qw) {
         return std::nullopt;
     }
-    return Quat{static_cast<float>(*qx), static_cast<float>(*qy), static_cast<float>(*qz), static_cast<float>(*qw)};
+    return Quat{static_cast<float>(*qw), static_cast<float>(*qx), static_cast<float>(*qy), static_cast<float>(*qz)};
 }
 
 /// Resolve a `scale` value: a single number (uniform) or a 3-element array.
