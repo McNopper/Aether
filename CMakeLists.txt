@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(aether VERSION 0.6.12 LANGUAGES CXX)
+project(aether VERSION 0.6.13 LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
