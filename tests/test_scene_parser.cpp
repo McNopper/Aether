@@ -113,14 +113,14 @@ TEST(SceneParser, ResolvesTonemapFromReferencedPreset) {
 }
 
 TEST(SceneParser, ResolvesEnvironmentMapFromReferencedRenderPreset) {
-    const auto scene = aether::SceneParser::parse(assetsDir() / "meadow_scene.scene.toml");
+    const auto scene = aether::SceneParser::parse(assetsDir() / "shaderball_metal.scene.toml");
     ASSERT_TRUE(scene.has_value());
     ASSERT_TRUE(scene->envMapFile.has_value());
     EXPECT_EQ(*scene->envMapFile, "meadow_2_4k.exr");
     ASSERT_TRUE(scene->spp.has_value());
-    EXPECT_EQ(*scene->spp, 16U);
+    EXPECT_EQ(*scene->spp, 64U);
     ASSERT_TRUE(scene->maxDepth.has_value());
-    EXPECT_EQ(*scene->maxDepth, 10U);
+    EXPECT_EQ(*scene->maxDepth, 6U);
 }
 
 TEST(SceneParser, InlineKeyOverridesReferencedPreset) {
@@ -214,7 +214,7 @@ TEST(SceneParser, PostTonemapGroupResolvedFromReferencePreset) {
 }
 
 TEST(SceneParser, ReadmeGalleryScenesParse) {
-    static constexpr std::array<std::string_view, 17> kGalleryScenes{
+    static constexpr std::array<std::string_view, 15> kGalleryScenes{
         "cornell_classic.scene.toml",
         "cornell_empty.scene.toml",
         "cornell_spheres.scene.toml",
@@ -226,8 +226,6 @@ TEST(SceneParser, ReadmeGalleryScenesParse) {
         "openpbr_specular.scene.toml",
         "openpbr_organics.scene.toml",
         "openpbr_thinfilm.scene.toml",
-        "openpbr_special.scene.toml",
-        "meadow_scene.scene.toml",
         "cornell_textured_cube.scene.toml",
         "dragon_teapot.scene.toml",
         "openpbr_advanced.scene.toml",
