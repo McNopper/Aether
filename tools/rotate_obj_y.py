@@ -62,7 +62,7 @@ def transform_xyz_line(line_bytes, swizzle):
         eol = stripped[-1:] + eol
         stripped = stripped[:-1]
 
-    text = stripped.decode("ascii")
+    text = stripped.decode("utf-8")
     parts = text.split()
     keyword = parts[0]
     coords = parts[1:]
@@ -74,9 +74,9 @@ def transform_xyz_line(line_bytes, swizzle):
     nx, ny, nz = swizzle(coords[0], coords[1], coords[2])
 
     new_parts = [keyword, nx, ny, nz]
-    new_parts.extend(coords[3:])  # preserve extra columns verbatim
+    new_parts.extend(coords[3:])  # preserve extra columns verbatim (e.g. trailing "# ..." comments)
     out = " ".join(new_parts)
-    return out.encode("ascii") + eol
+    return out.encode("utf-8") + eol
 
 
 def process(input_path, angle, output_path):

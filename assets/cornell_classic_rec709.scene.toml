@@ -13,7 +13,7 @@ working_color_space = "lin_rec709_scene"
 
 [camera]
 reference = "presets/cornell.camera.toml"
-translate = [2.78, 2.73, -8.0]
+translate = [0.0, 2.73, -8.0]
 rotate_x = 0.0000
 rotate_y = 180.0000
 
@@ -21,13 +21,14 @@ rotate_y = 180.0000
 type = "instance"
 mesh = "cornell.obj"
 materials = { Floor = "WhiteWall", Ceiling = "WhiteWall", AreaLight = "AreaLight", BackWall = "WhiteWall", LeftWall = "RedWall", RightWall = "GreenWall" }
+rotate_y = 180.0000  # compensates for the 180deg Y bake in cornell.obj
 
 # Short box  (82.5 × 82.5 × 82.5,  rotated −18° around Y)
 [[geometry]]
 type = "box"
 half_extents = [0.825, 0.825, 0.825]
 material = "WhiteWall"
-translate = [1.85, 0.825, 1.69]
+translate = [-0.93, 0.825, 1.69]
 rotate = [0.0, -0.1564, 0.0, 0.9877]
 
 # Tall box  (82.5 × 165.0 × 82.5,  rotated +15° around Y)
@@ -35,5 +36,5 @@ rotate = [0.0, -0.1564, 0.0, 0.9877]
 type = "box"
 half_extents = [0.825, 1.65, 0.825]
 material = "WhiteWall"
-translate = [3.68, 1.65, 3.51]
+translate = [0.90, 1.65, 3.51]
 rotate = [0.0, 0.1305, 0.0, 0.9914]

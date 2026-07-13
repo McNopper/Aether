@@ -13,7 +13,7 @@ reference = "presets/preview.render.toml"
 
 [camera]
 reference = "presets/cornell.camera.toml"
-translate = [2.78, 2.73, -8.0]
+translate = [0.0, 2.73, -8.0]
 rotate_x = 0.0000
 rotate_y = 180.0000
 
@@ -21,35 +21,36 @@ rotate_y = 180.0000
 type = "instance"
 mesh = "cornell.obj"
 materials = { Floor = "WhiteWall", Ceiling = "WhiteWall", AreaLight = "AreaLight", BackWall = "WhiteWall", LeftWall = "RedWall", RightWall = "GreenWall" }
+rotate_y = 180.0000  # compensates for the 180deg Y bake in cornell.obj
 
 # ── Back row  z = 350 ─────────────────────────────────────────────────────────
 [[geometry]]
 type = "sphere"
 radius = 0.7
 material = "Mirror"
-translate = [0.9, 0.7, 3.5]
+translate = [-1.88, 0.7, 3.5]
 
 [[geometry]]
 type = "sphere"
 radius = 0.7
 material = "Glass"
-translate = [2.78, 0.7, 3.5]
+translate = [0.0, 0.7, 3.5]
 
 [[geometry]]
 type = "sphere"
 radius = 0.7
 material = "ClearcoatRed"
-translate = [4.66, 0.7, 3.5]
+translate = [1.88, 0.7, 3.5]
 
 # ── Front row  z = 160 ────────────────────────────────────────────────────────
 [[geometry]]
 type = "sphere"
 radius = 0.7
 material = "RoughGold"
-translate = [1.84, 0.7, 1.6]
+translate = [-0.94, 0.7, 1.6]
 
 [[geometry]]
 type = "sphere"
 radius = 0.7
 material = "Copper"
-translate = [3.72, 0.7, 1.6]
+translate = [0.94, 0.7, 1.6]
