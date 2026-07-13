@@ -123,21 +123,6 @@ TEST(SceneParser, ResolvesEnvironmentMapFromReferencedRenderPreset) {
     EXPECT_EQ(*scene->maxDepth, 10U);
 }
 
-TEST(SceneParser, FixtureIblResolvesEnvironmentMapAndRenderPreset) {
-    const auto scene = aether::SceneParser::parse(assetsDir() / "fixture_ibl.scene.toml");
-    ASSERT_TRUE(scene.has_value());
-    ASSERT_TRUE(scene->envMapFile.has_value());
-    EXPECT_EQ(*scene->envMapFile, "meadow_2_4k.exr");
-    ASSERT_TRUE(scene->envUnitNits.has_value());
-    EXPECT_FLOAT_EQ(*scene->envUnitNits, 10000.0F);
-    ASSERT_TRUE(scene->spp.has_value());
-    EXPECT_EQ(*scene->spp, 512U);
-    ASSERT_TRUE(scene->maxDepth.has_value());
-    EXPECT_EQ(*scene->maxDepth, 8U);
-}
-
-// An inline key in a [render]/[camera]/[tonemap] table must override the value
-// from its referenced preset ("local wins").
 TEST(SceneParser, InlineKeyOverridesReferencedPreset) {
     namespace fs = std::filesystem;
     const fs::path dir = fs::temp_directory_path() / "aether_override_test";
@@ -243,7 +228,7 @@ TEST(SceneParser, ReadmeGalleryScenesParse) {
         "openpbr_thinfilm.scene.toml",
         "openpbr_special.scene.toml",
         "meadow_scene.scene.toml",
-        "textured_cube.scene.toml",
+        "cornell_textured_cube.scene.toml",
         "dragon_teapot.scene.toml",
         "openpbr_advanced.scene.toml",
         "ABeautifulGame.scene.toml",

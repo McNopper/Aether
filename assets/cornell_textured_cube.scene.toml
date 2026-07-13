@@ -1,4 +1,4 @@
-# textured_cube.scene — Cornell box with a decorated cube in the center.
+# cornell_textured_cube.scene — Cornell box with a decorated cube in the center.
 
 material_libraries = ["cornell.materials.toml", "textured_cube.materials.toml"]
 
