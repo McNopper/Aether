@@ -47,12 +47,12 @@ TEST(SceneParser, ReadsCameraParameters) {
     const auto scene = aether::SceneParser::parse(assetsDir() / "cornell_classic.scene.toml");
     ASSERT_TRUE(scene.has_value());
 
-    ASSERT_TRUE(scene->camera.position.has_value());
-    EXPECT_FLOAT_EQ(scene->camera.position->x, 278.0F);
-    EXPECT_FLOAT_EQ(scene->camera.position->y, 273.0F);
-    EXPECT_FLOAT_EQ(scene->camera.position->z, -800.0F);
+    ASSERT_TRUE(scene->camera.translation.has_value());
+    EXPECT_FLOAT_EQ(scene->camera.translation->x, 278.0F);
+    EXPECT_FLOAT_EQ(scene->camera.translation->y, 273.0F);
+    EXPECT_FLOAT_EQ(scene->camera.translation->z, -800.0F);
 
-    ASSERT_TRUE(scene->camera.lookAt.has_value());
+    ASSERT_TRUE(scene->camera.rotation.has_value());
     ASSERT_TRUE(scene->camera.vfov.has_value());
     EXPECT_FLOAT_EQ(*scene->camera.vfov, 39.1F);
 }
@@ -171,12 +171,13 @@ TEST(SceneParser, InlineKeyOverridesReferencedPreset) {
 TEST(SceneParser, CameraGroupResolvedFromReferencePreset) {
     PresetFixture f{"camera",
                     "translate = [1.0, 2.0, 3.0]\n"
-                    "look_at = [0.0, 0.0, 0.0]\n"
+                    "rotate_y = 30.0\n"
                     "vertical_field_of_view = 45.0\n"
                     "ev100 = 9.0\n"};
     ASSERT_TRUE(f.scene.has_value());
-    ASSERT_TRUE(f.scene->camera.position.has_value());
-    EXPECT_FLOAT_EQ(f.scene->camera.position->z, 3.0F);
+    ASSERT_TRUE(f.scene->camera.translation.has_value());
+    EXPECT_FLOAT_EQ(f.scene->camera.translation->z, 3.0F);
+    ASSERT_TRUE(f.scene->camera.rotation.has_value());
     ASSERT_TRUE(f.scene->camera.vfov.has_value());
     EXPECT_FLOAT_EQ(*f.scene->camera.vfov, 45.0F);
     ASSERT_TRUE(f.scene->camera.ev100.has_value());

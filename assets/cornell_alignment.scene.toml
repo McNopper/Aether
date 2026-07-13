@@ -33,7 +33,12 @@ material_libraries = ["cornell.materials.toml", "cornell_alignment.materials.tom
 reference = "presets/comparison_direct_512spp.render.toml"
 
 [camera]
-reference = "presets/cornell_alignment.camera.toml"
+# Keeps both Suzannes in view while excluding the ceiling emitter from the frame
+# so per-layer diffs are not dominated by light-edge raster/path-trace AA mismatch.
+reference = "presets/cornell.camera.toml"
+translate = [278.0, 273.0, -800.0]
+rotate_x = -7.5460
+rotate_y = 180.0000
 
 [tonemap]
 tonemapper = "agx"

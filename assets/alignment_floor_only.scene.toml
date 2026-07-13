@@ -10,6 +10,9 @@ reference = "presets/alignment_16spp_8bounce.render.toml"
 
 [camera]
 reference = "presets/alignment.camera.toml"
+translate = [0.0, 2.2, -3.8]
+rotate_x = -9.8737
+rotate_y = -175.4622
 
 [tonemap]
 reference = "presets/aces.tonemap.toml"

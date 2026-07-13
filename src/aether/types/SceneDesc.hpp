@@ -12,15 +12,20 @@ namespace aether {
 
 /// Camera parameters parsed from a `camera` block.
 ///
-/// `rotate` / `rotate_y` and `look_at` are resolved by the parser into a
-/// look-at target + up vector (last-one-wins), so consumers see a single
-/// representation regardless of how the file expressed orientation.
+/// The camera's placement is a plain TRS transform — exactly the same
+/// representation `GeometryBlock` uses (translate, rotate quaternion,
+/// rotate_x/y/z Euler as shorthand, scale). SceneParser only records the raw
+/// transform; deriving a forward/look-at direction or view matrix from
+/// `rotation` is the consumer's job (mirrors how geometry's `rotation` isn't
+/// interpreted here either). `scale` is parsed for structural parity with
+/// geometry but has no defined meaning for a camera — consumers should ignore
+/// it.
 struct CameraDesc {
-    std::optional<Vec3> position;
-    std::optional<Vec3> lookAt;
-    std::optional<Vec3> up;
-    std::optional<float> vfov;  ///< vertical field of view in degrees
-    std::optional<float> ev100; ///< physical camera EV100 override
+    std::optional<Vec3> translation;
+    std::optional<Quat> rotation; ///< slang-math order (x, y, z, w)
+    std::optional<Vec3> scale;    ///< parsed for parity with GeometryBlock; unused by cameras
+    std::optional<float> vfov;    ///< vertical field of view in degrees
+    std::optional<float> ev100;   ///< physical camera EV100 override
 };
 
 /// A single geometry block from a `.scene.toml` file.

@@ -20,8 +20,13 @@ namespace aether {
 ///   [render]        samples_per_pixel, max_depth, environment_map,
 ///                   environment_unit_nits,
 ///                   working_color_space ("lin_rec2020_scene" | "lin_rec709_scene")
-///   [camera]        translate, look_at, up, rotate ([qx,qy,qz,qw]), rotate_y,
-///                   vertical_field_of_view, ev100   (look_at wins over rotate)
+///   [camera]        translate, rotate ([qx,qy,qz,qw]), rotate_x, rotate_y, rotate_z,
+///                   scale, vertical_field_of_view, ev100   (rotate wins over Euler;
+///                   Euler composed XYZ: q = qz * qy * qx). The camera's placement is
+///                   a plain TRS transform — the *same* shared keys and semantics as a
+///                   geometry block (see below); SceneParser does not derive a look-at
+///                   direction or view matrix, that is the consumer's job. `scale` is
+///                   parsed for parity with geometry but has no defined camera meaning.
 ///   [tonemap]       tonemapper   (raw keyword token, e.g. "agx")
 ///   [post_tonemap]   renderer     (raw keyword token, e.g. "green_screen")
 ///
@@ -40,7 +45,8 @@ namespace aether {
 ///     instance:  mesh = "...", materials = { Group = "Mat", ... }
 ///     box:       half_extents = [hx,hy,hz]
 ///     sphere:    radius = r
-///     shared:    material, translate, rotate, rotate_y, scale (number or [x,y,z])
+///     shared:    material, translate, rotate ([qx,qy,qz,qw]), rotate_x, rotate_y,
+///                rotate_z, scale (number or [x,y,z])   (rotate wins over Euler; XYZ order)
 ///
 /// Transform composition follows the glTF convention: T × R × S.
 /// Unknown keys / geometry types are silently ignored.

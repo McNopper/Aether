@@ -11,13 +11,16 @@ reference = "presets/relax_256spp_16bounce.render.toml"
 
 [camera]
 reference = "presets/camera_suzanne.camera.toml"
+translate = [7.358891487121582, 4.958309173583984, 6.925790786743164]
+rotate_x = -26.4407
+rotate_y = 46.6919
 
 [tonemap]
 reference = "presets/aces.tonemap.toml"
 
 [[geometry]]
 type = "instance"
-mesh = "camera_suzanne.obj"
+mesh = "suzanne.obj"
 material = "Suzanne"
 translate = [0.0, 0.0, 0.0]
 rotate = [-0.3826834559440613, 0.0, 0.0, 0.9238795638084412]

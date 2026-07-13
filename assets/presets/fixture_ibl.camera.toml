@@ -1,5 +1,3 @@
 # Fixture IBL camera — single sphere framing for precompute validation.
-translate = [0.0, 1.0, -3.2]
-look_at = [0.0, 0.6, 0.0]
 vertical_field_of_view = 40
 ev100 = 11

@@ -18,6 +18,9 @@ reference = "presets/preview.render.toml"
 
 [camera]
 reference = "presets/mr_sphere.camera.toml"
+translate = [0.0, 0.8, 6.5]
+rotate_x = -7.0165
+rotate_y = 0.0000
 
 # ── Subject — brushed-metal sphere ───────────────────────────────────────────
 [[geometry]]

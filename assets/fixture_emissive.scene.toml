@@ -19,6 +19,9 @@ reference = "presets/comparison_direct_512spp.render.toml"
 
 [camera]
 reference = "presets/fixture.camera.toml"
+translate = [0.0, 1.5, -4.0]
+rotate_x = -14.0362
+rotate_y = 180.0000
 
 [tonemap]
 tonemapper = "agx"

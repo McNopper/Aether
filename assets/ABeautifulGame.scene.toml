@@ -10,6 +10,9 @@ reference = "presets/meadow_256spp_12bounce.render.toml"
 
 [camera]
 reference = "presets/abeautifulgame.camera.toml"
+translate = [0.45, 0.4, 0.55]
+rotate_x = -26.8663
+rotate_y = 39.2894
 
 [tonemap]
 reference = "presets/aces.tonemap.toml"

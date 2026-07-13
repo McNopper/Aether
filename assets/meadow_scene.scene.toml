@@ -9,6 +9,9 @@ reference = "presets/meadow_16spp_10bounce.render.toml"
 
 [camera]
 reference = "presets/meadow.camera.toml"
+translate = [0.0, 1.5, -8.0]
+rotate_x = -7.1250
+rotate_y = 180.0000
 
 [tonemap]
 reference = "presets/aces.tonemap.toml"

@@ -16,6 +16,9 @@ reference = "presets/comparison_ibl_512spp.render.toml"
 
 [camera]
 reference = "presets/fixture_ibl.camera.toml"
+translate = [0.0, 1.0, -3.2]
+rotate_x = -7.1250
+rotate_y = 180.0000
 
 [tonemap]
 tonemapper = "agx"

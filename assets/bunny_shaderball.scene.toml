@@ -11,7 +11,10 @@ material_libraries = ["bunny_shaderball.materials.toml"]
 reference = "presets/relax_256spp_16bounce.render.toml"
 
 [camera]
-reference = "presets/bunny_shaderball.camera.toml"
+reference = "presets/openpbr_studio_wide.camera.toml"
+translate = [0.0, 3.4, -13.0]
+rotate_x = -10.0331
+rotate_y = 180.0000
 
 [tonemap]
 reference = "presets/aces.tonemap.toml"
@@ -24,21 +27,16 @@ material = "Floor"
 translate = [0.0, -0.1, 0.0]
 
 # Stanford bunny — left, scaled ~1.5x (~2.3 units tall), seated on the floor.
-# rotate_y turns it to face outward (away from the shader ball).
 [[geometry]]
 type = "instance"
 mesh = "bunny.obj"
 material = "Bunny"
 scale = 1.5
-rotate_y = 180
 translate = [-2.627, 0.023, 0.144]
 
 # ShaderBall — right, scale 0.1 (~2.7 units tall), seated on the floor.
-# rotate_y turns its front to face outward (opposite the bunny).
 [[geometry]]
 type = "instance"
 mesh = "shader_ball.obj"
 materials = { BaseTop = "BaseTop", BaseStem = "BaseStem", BaseFoot = "BaseFoot", BallInner = "BallInner", BallSurface = "BallSurface" }
-scale = 0.1
-rotate_y = 180
 translate = [2.5, -0.021, 0.095]

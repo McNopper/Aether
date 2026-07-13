@@ -10,7 +10,10 @@ material_libraries = ["bunny.materials.toml"]
 reference = "presets/relax_256spp_16bounce.render.toml"
 
 [camera]
-reference = "presets/dragon_teapot.camera.toml"
+reference = "presets/openpbr_studio_near.camera.toml"
+translate = [0.5, 3.2, -9.5]
+rotate_x = -14.7241
+rotate_y = 176.9872
 
 [tonemap]
 reference = "presets/aces.tonemap.toml"

@@ -21,7 +21,10 @@ material_libraries = ["shader_ball.materials.toml"]
 reference = "presets/relax_256spp_16bounce.render.toml"
 
 [camera]
-reference = "presets/openpbr_studio_far.camera.toml"
+reference = "presets/openpbr_studio_near.camera.toml"
+translate = [0.0, 2.0, -8.0]
+rotate_x = -9.2299
+rotate_y = 180.0000
 
 [tonemap]
 reference = "presets/aces.tonemap.toml"
@@ -39,5 +42,4 @@ translate = [0.0, -0.1, 0.0]
 type = "instance"
 mesh = "shader_ball.obj"
 materials = { BaseTop = "BaseTop", BaseStem = "BaseStem", BaseFoot = "BaseFoot", BallInner = "BallInner", BallSurface = "BallSurface" }
-scale = 0.1
 translate = [0.0, -0.021, 0.095]

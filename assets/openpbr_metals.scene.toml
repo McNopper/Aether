@@ -9,7 +9,10 @@ material_libraries = ["openpbr_metals.materials.toml", "floor.materials.toml"]
 reference = "presets/meadow_64spp_6bounce.render.toml"
 
 [camera]
-reference = "presets/openpbr_studio_far.camera.toml"
+reference = "presets/openpbr_studio_wide.camera.toml"
+translate = [0.0, 3.0, -12.0]
+rotate_x = -10.8501
+rotate_y = 180.0000
 
 # Ground plane
 [[geometry]]

@@ -9,7 +9,10 @@ material_libraries = ["dragon_teapot.materials.toml"]
 reference = "presets/relax_256spp_16bounce.render.toml"
 
 [camera]
-reference = "presets/dragon_teapot.camera.toml"
+reference = "presets/openpbr_studio_near.camera.toml"
+translate = [0.5, 3.2, -9.5]
+rotate_x = -14.7241
+rotate_y = 176.9872
 
 [tonemap]
 reference = "presets/aces.tonemap.toml"
@@ -31,11 +34,11 @@ translate = [-2.2, 0.0, 0.0]
 scale = [0.5, 0.5, 0.5]
 
 # Gem dragon — doubled in size and lifted so it rests on the floor
-# (model min y = -0.583 * 2 = -1.166), placed right.
+# (model min y = -0.083 * 2 = -0.166), placed right.
 [[geometry]]
 type = "instance"
 mesh = "dragon.obj"
 material = "Gem"
-translate = [1.8, 1.166, 0.0]
+translate = [1.8, 0.166, 0.0]
 rotate_y = 35
 scale = [2.0, 2.0, 2.0]

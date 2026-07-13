@@ -6,6 +6,9 @@ working_color_space = "lin_rec2020_scene"
 
 [camera]
 reference = "presets/cornell.camera.toml"
+translate = [278.0, 273.0, -800.0]
+rotate_x = 0.0000
+rotate_y = 180.0000
 
 [tonemap]
 tonemapper = "agx"

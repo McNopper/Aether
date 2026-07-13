@@ -11,6 +11,9 @@ reference = "presets/meadow_128spp_8bounce.render.toml"
 
 [camera]
 reference = "presets/openpbr_studio_wide.camera.toml"
+translate = [0.0, 2.5, -10.0]
+rotate_x = -9.2933
+rotate_y = 180.0000
 
 # Ground plane
 [[geometry]]

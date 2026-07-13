@@ -52,41 +52,52 @@ namespace {
     return asVec3(n);
 }
 
+/// Parse Euler rotation (rotate_x, rotate_y, rotate_z in degrees) from a TOML table.
+/// Composed in XYZ order: q = qz * qy * qx. Returns nullopt if no Euler angles present.
+[[nodiscard]] std::optional<Quat> parseEulerRotation(const toml::table& tbl) {
+    const auto rxDeg = tbl["rotate_x"].value<double>();
+    const auto ryDeg = tbl["rotate_y"].value<double>();
+    const auto rzDeg = tbl["rotate_z"].value<double>();
+    if (!rxDeg && !ryDeg && !rzDeg) {
+        return std::nullopt;
+    }
+    const auto qx = sm::angleAxis(sm::radians(static_cast<float>(rxDeg.value_or(0.0))), Vec3{1.0F, 0.0F, 0.0F});
+    const auto qy = sm::angleAxis(sm::radians(static_cast<float>(ryDeg.value_or(0.0))), Vec3{0.0F, 1.0F, 0.0F});
+    const auto qz = sm::angleAxis(sm::radians(static_cast<float>(rzDeg.value_or(0.0))), Vec3{0.0F, 0.0F, 1.0F});
+    return qz * qy * qx;
+}
+
 // ── Section appliers ────────────────────────────────────────────────────────
 // Each applies only the keys present in @p tbl, so a referenced base file can be
 // applied first and an inline table applied on top to override individual keys.
 
-void applyCamera(const toml::table& cam, SceneDesc& desc) {
-    if (const auto* t = cam.get("translate")) {
+/// Parse the shared TRS keys (translate, rotate/[Euler], scale) from @p tbl.
+/// Used identically by geometry blocks and the camera block — a camera's
+/// placement is a plain transform, exactly like a mesh instance's; only the
+/// keys actually present in @p tbl are written.
+void parseTRS(const toml::table& tbl,
+              std::optional<Vec3>& translation,
+              std::optional<Quat>& rotation,
+              std::optional<Vec3>& scale) {
+    if (const auto* t = tbl.get("translate")) {
         if (const auto p = asVec3(*t)) {
-            desc.camera.position = *p;
+            translation = *p;
         }
     }
-
-    // Orientation: `look_at` takes precedence; otherwise derive from `rotate` /
-    // `rotate_y` (camera default forward is -Z).
-    std::optional<Quat> rotation;
-    if (const auto* r = cam.get("rotate")) {
-        rotation = asQuat(*r);
-    }
-    if (const auto deg = cam["rotate_y"].value<double>()) {
-        rotation = sm::angleAxis(sm::radians(static_cast<float>(*deg)), Vec3{0.0F, 1.0F, 0.0F});
-    }
-
-    if (const auto* l = cam.get("look_at")) {
-        if (const auto lookAt = asVec3(*l)) {
-            desc.camera.lookAt = *lookAt;
-            if (const auto* upNode = cam.get("up")) {
-                desc.camera.up = asVec3(*upNode).value_or(Vec3{0.0F, 1.0F, 0.0F});
-            } else if (!desc.camera.up) {
-                desc.camera.up = Vec3{0.0F, 1.0F, 0.0F};
-            }
+    if (const auto* r = tbl.get("rotate")) {
+        if (const auto q = asQuat(*r)) {
+            rotation = *q;
         }
-    } else if (rotation) {
-        const Vec3 pos = desc.camera.position.value_or(Vec3{0.0F, 0.0F, 0.0F});
-        desc.camera.lookAt = pos + (*rotation * Vec3{0.0F, 0.0F, -1.0F});
-        desc.camera.up = *rotation * Vec3{0.0F, 1.0F, 0.0F};
+    } else if (const auto euler = parseEulerRotation(tbl)) {
+        rotation = *euler;
     }
+    if (const auto* s = tbl.get("scale")) {
+        scale = asScale(*s).value_or(Vec3{1.0F, 1.0F, 1.0F});
+    }
+}
+
+void applyCamera(const toml::table& cam, SceneDesc& desc) {
+    parseTRS(cam, desc.camera.translation, desc.camera.rotation, desc.camera.scale);
 
     if (const auto vfov = cam["vertical_field_of_view"].value<double>()) {
         desc.camera.vfov = static_cast<float>(*vfov);
@@ -176,20 +187,13 @@ void parseGeometry(const toml::table& g, SceneDesc& desc) {
     }
 
     // Shared transform + whole-object material.
-    if (const auto* t = g.get("translate")) {
-        blk.translation = asVec3(*t).value_or(Vec3{0.0F, 0.0F, 0.0F});
-    }
-    if (const auto* r = g.get("rotate")) {
-        if (const auto q = asQuat(*r)) {
-            blk.rotation = *q;
-        }
-    }
-    if (const auto deg = g["rotate_y"].value<double>()) {
-        blk.rotation = sm::angleAxis(sm::radians(static_cast<float>(*deg)), Vec3{0.0F, 1.0F, 0.0F});
-    }
-    if (const auto* s = g.get("scale")) {
-        blk.scale = asScale(*s).value_or(Vec3{1.0F, 1.0F, 1.0F});
-    }
+    std::optional<Vec3> translation;
+    std::optional<Quat> rotation;
+    std::optional<Vec3> scale;
+    parseTRS(g, translation, rotation, scale);
+    blk.translation = translation.value_or(Vec3{0.0F, 0.0F, 0.0F});
+    blk.rotation = rotation.value_or(Quat{0.0F, 0.0F, 0.0F, 1.0F});
+    blk.scale = scale.value_or(Vec3{1.0F, 1.0F, 1.0F});
     blk.materialName = g["material"].value_or<std::string>("");
 
     desc.geometry.push_back(std::move(blk));
