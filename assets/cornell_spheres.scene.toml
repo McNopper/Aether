@@ -1,7 +1,7 @@
 # Cornell Box — Spheres
 # Five spheres showcasing different OpenPBR materials.
-# Layout: 3 spheres in the back row (z=350), 2 in the front row (z=160).
-# Radius 70 gives 48-unit gaps within each row and 80-unit cross-row gaps,
+# Layout: 3 spheres in the back row (z=3.5), 2 in the front row (z=1.6).
+# Radius 0.7 gives 0.48-unit gaps within each row and 0.8-unit cross-row gaps,
 # ensuring inter-sphere reflections are clearly visible.
 # 
 # Syntax reference: see SceneLoader.hpp
@@ -13,7 +13,7 @@ reference = "presets/preview.render.toml"
 
 [camera]
 reference = "presets/cornell.camera.toml"
-translate = [278.0, 273.0, -800.0]
+translate = [2.78, 2.73, -8.0]
 rotate_x = 0.0000
 rotate_y = 180.0000
 
@@ -25,31 +25,31 @@ materials = { Floor = "WhiteWall", Ceiling = "WhiteWall", AreaLight = "AreaLight
 # ── Back row  z = 350 ─────────────────────────────────────────────────────────
 [[geometry]]
 type = "sphere"
-radius = 70.0
+radius = 0.7
 material = "Mirror"
-translate = [90.0, 70.0, 350.0]
+translate = [0.9, 0.7, 3.5]
 
 [[geometry]]
 type = "sphere"
-radius = 70.0
+radius = 0.7
 material = "Glass"
-translate = [278.0, 70.0, 350.0]
+translate = [2.78, 0.7, 3.5]
 
 [[geometry]]
 type = "sphere"
-radius = 70.0
+radius = 0.7
 material = "ClearcoatRed"
-translate = [466.0, 70.0, 350.0]
+translate = [4.66, 0.7, 3.5]
 
 # ── Front row  z = 160 ────────────────────────────────────────────────────────
 [[geometry]]
 type = "sphere"
-radius = 70.0
+radius = 0.7
 material = "RoughGold"
-translate = [184.0, 70.0, 160.0]
+translate = [1.84, 0.7, 1.6]
 
 [[geometry]]
 type = "sphere"
-radius = 70.0
+radius = 0.7
 material = "Copper"
-translate = [372.0, 70.0, 160.0]
+translate = [3.72, 0.7, 1.6]

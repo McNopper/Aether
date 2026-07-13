@@ -13,7 +13,7 @@ working_color_space = "lin_rec709_scene"
 
 [camera]
 reference = "presets/cornell.camera.toml"
-translate = [278.0, 273.0, -800.0]
+translate = [2.78, 2.73, -8.0]
 rotate_x = 0.0000
 rotate_y = 180.0000
 
@@ -25,15 +25,15 @@ materials = { Floor = "WhiteWall", Ceiling = "WhiteWall", AreaLight = "AreaLight
 # Short box  (82.5 × 82.5 × 82.5,  rotated −18° around Y)
 [[geometry]]
 type = "box"
-half_extents = [82.5, 82.5, 82.5]
+half_extents = [0.825, 0.825, 0.825]
 material = "WhiteWall"
-translate = [185.0, 82.5, 169.0]
+translate = [1.85, 0.825, 1.69]
 rotate = [0.0, -0.1564, 0.0, 0.9877]
 
 # Tall box  (82.5 × 165.0 × 82.5,  rotated +15° around Y)
 [[geometry]]
 type = "box"
-half_extents = [82.5, 165.0, 82.5]
+half_extents = [0.825, 1.65, 0.825]
 material = "WhiteWall"
-translate = [368.0, 165.0, 351.0]
+translate = [3.68, 1.65, 3.51]
 rotate = [0.0, 0.1305, 0.0, 0.9914]

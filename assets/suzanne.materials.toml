@@ -63,4 +63,4 @@ specular_roughness = 0.4
 subsurface_weight = 0.6
 subsurface_color = [1.000, 0.800, 0.600]
 subsurface_radius_scale = [4.0, 2.0, 1.5]
-subsurface_radius = 5.0
+subsurface_radius = 0.05

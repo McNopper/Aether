@@ -43,3 +43,4 @@ type = "instance"
 mesh = "shader_ball.obj"
 materials = { BaseTop = "BaseTop", BaseStem = "BaseStem", BaseFoot = "BaseFoot", BallInner = "BallInner", BallSurface = "BallSurface" }
 translate = [0.0, -0.021, 0.095]
+rotate_y = 180.0000

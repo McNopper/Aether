@@ -48,9 +48,9 @@ TEST(SceneParser, ReadsCameraParameters) {
     ASSERT_TRUE(scene.has_value());
 
     ASSERT_TRUE(scene->camera.translation.has_value());
-    EXPECT_FLOAT_EQ(scene->camera.translation->x, 278.0F);
-    EXPECT_FLOAT_EQ(scene->camera.translation->y, 273.0F);
-    EXPECT_FLOAT_EQ(scene->camera.translation->z, -800.0F);
+    EXPECT_FLOAT_EQ(scene->camera.translation->x, 2.78F);
+    EXPECT_FLOAT_EQ(scene->camera.translation->y, 2.73F);
+    EXPECT_FLOAT_EQ(scene->camera.translation->z, -8.0F);
 
     ASSERT_TRUE(scene->camera.rotation.has_value());
     ASSERT_TRUE(scene->camera.vfov.has_value());

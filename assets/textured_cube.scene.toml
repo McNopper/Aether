@@ -7,7 +7,7 @@ reference = "presets/preview.render.toml"
 
 [camera]
 reference = "presets/cornell.camera.toml"
-translate = [278.0, 273.0, -800.0]
+translate = [2.78, 2.73, -8.0]
 rotate_x = 0.0000
 rotate_y = 180.0000
 
@@ -16,10 +16,10 @@ type = "instance"
 mesh = "cornell.obj"
 materials = { Floor = "WhiteWall", Ceiling = "WhiteWall", AreaLight = "AreaLight", BackWall = "WhiteWall", LeftWall = "RedWall", RightWall = "GreenWall" }
 
-# Cube centered in the box, scaled to 100 units per side
+# Cube centered in the box, scaled to 1 unit per side
 [[geometry]]
 type = "instance"
 mesh = "textured_cube.obj"
 material = "cube_textured"
-translate = [278, 100, 279]
-scale = [100, 100, 100]
+translate = [2.78, 1.0, 2.79]
+scale = [1, 1, 1]
