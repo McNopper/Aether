@@ -1,0 +1,91 @@
+# OpenPBR transmission (refraction) layer material library — shader_ball demo
+#
+# Row 0 sweeps transmission_weight on a fixed glass base; row 1 shows named
+# optical substances at full transmission_weight, varying specular_ior.
+# Source: AcademySoftwareFoundation/OpenPBR examples (open_pbr_*.mtlx); IOR
+# values from physical measurement.
+# Color values are linear Rec.709; Hyperion/Theia convert to linear Rec.2020 on load.
+#
+# Standard MTL keywords (Kd, Ks, Ka, …) are SILENTLY IGNORED.
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+# ── Neutral zones (shared by every shader_ball instance in the grid) ─────────
+
+[NeutralBall]
+base_color = [0.600, 0.600, 0.600]
+specular_roughness = 0.60
+
+[NeutralTop]
+base_color = [0.520, 0.520, 0.520]
+specular_roughness = 0.60
+
+[NeutralStem]
+base_color = [0.440, 0.440, 0.450]
+specular_roughness = 0.60
+
+# ── Row 0: transmission_weight sweep — clear glass base, ior 1.52 ────────────
+# weight 0 → fully opaque dielectric; 1 → fully transparent glass.
+
+[TransWeight_000]
+base_color = [1.000, 1.000, 1.000]
+transmission_weight = 0.00
+specular_ior = 1.52
+specular_roughness = 0.00
+
+[TransWeight_025]
+base_color = [1.000, 1.000, 1.000]
+transmission_weight = 0.25
+specular_ior = 1.52
+specular_roughness = 0.00
+
+[TransWeight_050]
+base_color = [1.000, 1.000, 1.000]
+transmission_weight = 0.50
+specular_ior = 1.52
+specular_roughness = 0.00
+
+[TransWeight_075]
+base_color = [1.000, 1.000, 1.000]
+transmission_weight = 0.75
+specular_ior = 1.52
+specular_roughness = 0.00
+
+[TransWeight_100]
+base_color = [1.000, 1.000, 1.000]
+transmission_weight = 1.00
+specular_ior = 1.52
+specular_roughness = 0.00
+
+# ── Row 1: named optical substances — full transmission_weight ───────────────
+
+[Glass]
+base_color = [1.000, 1.000, 1.000]
+transmission_weight = 1.0
+specular_ior = 1.52
+specular_roughness = 0.00
+
+[Diamond]
+base_color = [1.000, 1.000, 1.000]
+transmission_weight = 1.0
+specular_ior = 2.42
+specular_roughness = 0.00
+
+[Water]
+base_color = [1.000, 1.000, 1.000]
+transmission_weight = 1.0
+specular_ior = 1.33
+specular_roughness = 0.00
+
+[Ice]
+base_color = [0.950, 0.970, 1.000]
+transmission_weight = 1.0
+specular_ior = 1.31
+specular_roughness = 0.50
+
+[Sapphire]
+base_color = [0.711, 0.759, 0.841]
+transmission_weight = 1.0
+specular_ior = 1.77
+specular_roughness = 0.00

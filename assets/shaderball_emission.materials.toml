@@ -1,0 +1,58 @@
+# OpenPBR emission layer material library — shader_ball demo
+#
+# Systematically exercises emission_luminance on a fixed warm-white emission
+# colour over a neutral base, showing the falloff from unlit through to
+# strongly glowing/bloom-inducing intensities.
+# Source: OpenPBR Surface v1.1 specification §5.7 (emission).
+# Color values are linear Rec.709; Hyperion/Theia convert to linear Rec.2020 on load.
+#
+# Standard MTL keywords (Kd, Ks, Ka, …) are SILENTLY IGNORED.
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+# ── Neutral zones (shared by every shader_ball instance in the grid) ─────────
+
+[NeutralBall]
+base_color = [0.600, 0.600, 0.600]
+specular_roughness = 0.60
+
+[NeutralTop]
+base_color = [0.520, 0.520, 0.520]
+specular_roughness = 0.60
+
+[NeutralStem]
+base_color = [0.440, 0.440, 0.450]
+specular_roughness = 0.60
+
+# ── Row 0: emission_luminance sweep — warm-white glow on a neutral base ──────
+
+[EmitLum_0]
+base_color = [0.600, 0.550, 0.450]
+specular_roughness = 0.60
+emission_color = [1.000, 0.900, 0.700]
+emission_luminance = 0.0
+
+[EmitLum_1000]
+base_color = [0.600, 0.550, 0.450]
+specular_roughness = 0.60
+emission_color = [1.000, 0.900, 0.700]
+emission_luminance = 1000.0
+
+[EmitLum_10000]
+base_color = [0.600, 0.550, 0.450]
+specular_roughness = 0.60
+emission_color = [1.000, 0.900, 0.700]
+emission_luminance = 10000.0
+
+[EmitLum_50000]
+base_color = [0.600, 0.550, 0.450]
+specular_roughness = 0.60
+emission_color = [1.000, 0.900, 0.700]
+emission_luminance = 50000.0
+
+[EmitLum_200000]
+base_color = [0.600, 0.550, 0.450]
+specular_roughness = 0.60
+emission_color = [1.000, 0.900, 0.700]
+emission_luminance = 200000.0

@@ -1,0 +1,58 @@
+# shaderball_base.scene — OpenPBR base/diffuse layer showcase.
+# 5 shader_ball instances in a single row, lit by the meadow IBL panorama.
+# Tests base_diffuse_roughness (Oren-Nayar roughness), the diffuse lobe's only
+# shape parameter. Materials from shaderball_base.materials.toml.
+
+material_libraries = ["shaderball_base.materials.toml", "floor.materials.toml"]
+
+[render]
+reference = "presets/meadow_64spp_6bounce.render.toml"
+
+[camera]
+reference = "presets/openpbr_studio_wide.camera.toml"
+translate = [0.0, 9.5, -17.5]
+rotate_x = -16.0000
+rotate_y = 180.0000
+
+# Ground plane
+[[geometry]]
+type = "box"
+half_extents = [14.0, 0.1, 10.0]
+material = "NeutralFloor"
+translate = [0.0, -0.1, 2.5]
+
+# ── Row 0  z = 0.0  base_diffuse_roughness sweep ─────────────────────────────
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "BaseRough_100", BallInner = "NeutralBall", BallSurface = "BaseRough_100" }
+translate = [-10.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "BaseRough_075", BallInner = "NeutralBall", BallSurface = "BaseRough_075" }
+translate = [-5.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "BaseRough_050", BallInner = "NeutralBall", BallSurface = "BaseRough_050" }
+translate = [0.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "BaseRough_025", BallInner = "NeutralBall", BallSurface = "BaseRough_025" }
+translate = [5.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "BaseRough_000", BallInner = "NeutralBall", BallSurface = "BaseRough_000" }
+translate = [10.0, -0.021, 0.095]
+rotate_y = 180.0000

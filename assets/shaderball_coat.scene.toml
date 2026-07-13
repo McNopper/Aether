@@ -1,0 +1,94 @@
+# shaderball_coat.scene — OpenPBR coat layer showcase.
+# 10 shader_ball instances in 2 rows x 5, lit by the meadow IBL panorama.
+# Tests coat_weight (row 0) and coat_roughness (row 1).
+# Materials from shaderball_coat.materials.toml.
+
+material_libraries = ["shaderball_coat.materials.toml", "floor.materials.toml"]
+
+[render]
+reference = "presets/meadow_64spp_8bounce.render.toml"
+
+[camera]
+reference = "presets/openpbr_studio_wide.camera.toml"
+translate = [0.0, 9.5, -17.5]
+rotate_x = -16.0000
+rotate_y = 180.0000
+
+# Ground plane
+[[geometry]]
+type = "box"
+half_extents = [14.0, 0.1, 10.0]
+material = "NeutralFloor"
+translate = [0.0, -0.1, 2.5]
+
+# ── Row 0  z = 0.0  coat_weight sweep ────────────────────────────────────────
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatWeight_100", BallInner = "NeutralBall", BallSurface = "CoatWeight_100" }
+translate = [-10.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatWeight_75", BallInner = "NeutralBall", BallSurface = "CoatWeight_75" }
+translate = [-5.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatWeight_50", BallInner = "NeutralBall", BallSurface = "CoatWeight_50" }
+translate = [0.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatWeight_25", BallInner = "NeutralBall", BallSurface = "CoatWeight_25" }
+translate = [5.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatWeight_0", BallInner = "NeutralBall", BallSurface = "CoatWeight_0" }
+translate = [10.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+# ── Row 1  z = 5.0  coat_roughness sweep ─────────────────────────────────────
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatRough_80", BallInner = "NeutralBall", BallSurface = "CoatRough_80" }
+translate = [-10.0, -0.021, 5.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatRough_50", BallInner = "NeutralBall", BallSurface = "CoatRough_50" }
+translate = [-5.0, -0.021, 5.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatRough_30", BallInner = "NeutralBall", BallSurface = "CoatRough_30" }
+translate = [0.0, -0.021, 5.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatRough_15", BallInner = "NeutralBall", BallSurface = "CoatRough_15" }
+translate = [5.0, -0.021, 5.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatRough_0", BallInner = "NeutralBall", BallSurface = "CoatRough_0" }
+translate = [10.0, -0.021, 5.095]
+rotate_y = 180.0000

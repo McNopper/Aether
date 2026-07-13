@@ -1,0 +1,109 @@
+# OpenPBR subsurface scattering layer material library — shader_ball demo
+#
+# Row 0 sweeps subsurface_weight on a fixed skin-tone base; row 1 shows named
+# organic materials at full subsurface_weight.
+# subsurface_radius_scale is the per-channel scatter-radius multiplier;
+# subsurface_radius is the scalar mean-free-path (OpenPBR 1.1.1).
+# Source: AcademySoftwareFoundation/OpenPBR examples (open_pbr_*.mtlx).
+# Color values are linear Rec.709; Hyperion/Theia convert to linear Rec.2020 on load.
+#
+# Standard MTL keywords (Kd, Ks, Ka, …) are SILENTLY IGNORED.
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+# ── Neutral zones (shared by every shader_ball instance in the grid) ─────────
+
+[NeutralBall]
+base_color = [0.600, 0.600, 0.600]
+specular_roughness = 0.60
+
+[NeutralTop]
+base_color = [0.520, 0.520, 0.520]
+specular_roughness = 0.60
+
+[NeutralStem]
+base_color = [0.440, 0.440, 0.450]
+specular_roughness = 0.60
+
+# ── Row 0: subsurface_weight sweep — skin-tone base ──────────────────────────
+# weight 0 → plain diffuse surface reflectance; 1 → full subsurface scattering.
+
+[SssWeight_000]
+base_color = [0.671, 0.505, 0.371]
+subsurface_weight = 0.00
+specular_roughness = 0.50
+specular_ior = 1.40
+
+[SssWeight_025]
+base_color = [0.671, 0.505, 0.371]
+subsurface_weight = 0.25
+subsurface_color = [0.671, 0.505, 0.371]
+subsurface_radius_scale = [0.482, 0.169, 0.109]
+specular_roughness = 0.50
+specular_ior = 1.40
+
+[SssWeight_050]
+base_color = [0.671, 0.505, 0.371]
+subsurface_weight = 0.50
+subsurface_color = [0.671, 0.505, 0.371]
+subsurface_radius_scale = [0.482, 0.169, 0.109]
+specular_roughness = 0.50
+specular_ior = 1.40
+
+[SssWeight_075]
+base_color = [0.671, 0.505, 0.371]
+subsurface_weight = 0.75
+subsurface_color = [0.671, 0.505, 0.371]
+subsurface_radius_scale = [0.482, 0.169, 0.109]
+specular_roughness = 0.50
+specular_ior = 1.40
+
+[SssWeight_100]
+base_color = [0.671, 0.505, 0.371]
+subsurface_weight = 1.00
+subsurface_color = [0.671, 0.505, 0.371]
+subsurface_radius_scale = [0.482, 0.169, 0.109]
+specular_roughness = 0.50
+specular_ior = 1.40
+
+# ── Row 1: named organic/subsurface materials ────────────────────────────────
+
+[SkinII]
+subsurface_weight = 1.0
+subsurface_color = [0.671, 0.505, 0.371]
+subsurface_radius_scale = [0.482, 0.169, 0.109]
+specular_roughness = 0.50
+specular_ior = 1.40
+
+[Milk]
+subsurface_weight = 1.0
+subsurface_color = [0.808, 0.811, 0.699]
+subsurface_radius_scale = [1.842, 1.044, 0.350]
+specular_roughness = 0.00
+specular_ior = 1.35
+
+[HoneyCrystallized]
+subsurface_weight = 1.0
+subsurface_color = [0.384, 0.324, 0.054]
+subsurface_radius_scale = [0.200, 0.200, 0.200]
+specular_roughness = 0.20
+specular_ior = 1.50
+
+[Snow]
+subsurface_weight = 1.0
+subsurface_color = [0.850, 0.850, 0.850]
+subsurface_radius_scale = [0.200, 0.200, 1.000]
+specular_roughness = 0.50
+specular_ior = 1.31
+
+[Pearl]
+subsurface_weight = 1.0
+subsurface_color = [0.778, 0.753, 0.708]
+subsurface_radius_scale = [0.300, 0.500, 0.300]
+coat_weight = 1.0
+coat_roughness = 0.15
+coat_ior = 1.68
+thin_film_weight = 1.0
+thin_film_thickness = 0.40
+thin_film_ior = 2.00

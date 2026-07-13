@@ -1,0 +1,93 @@
+# OpenPBR metal layer material library — shader_ball demo
+#
+# Row 0 sweeps metal identity (base_color/specular_color F0+F82); row 1 sweeps
+# specular_roughness on a fixed gold base.
+# Source: AcademySoftwareFoundation/OpenPBR examples (open_pbr_*.mtlx).
+# All base_color values are the measured F0 reflectance (scene-linear Rec.709).
+# specular_color is the F82 reflectance used in the conductor Fresnel model.
+# Hyperion/Theia convert both to linear Rec.2020 on load.
+#
+# Standard MTL keywords (Kd, Ks, Ka, …) are SILENTLY IGNORED.
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+# ── Neutral zones (shared by every shader_ball instance in the grid) ─────────
+
+[NeutralBall]
+base_color = [0.600, 0.600, 0.600]
+specular_roughness = 0.60
+
+[NeutralTop]
+base_color = [0.520, 0.520, 0.520]
+specular_roughness = 0.60
+
+[NeutralStem]
+base_color = [0.440, 0.440, 0.450]
+specular_roughness = 0.60
+
+# ── Row 0: metal identity sweep — noble/engineering metals, mirror-smooth ────
+
+[Copper]
+base_color = [0.811, 0.643, 0.542]
+base_metalness = 1.0
+specular_color = [0.970, 0.950, 0.946]
+specular_roughness = 0.02
+
+[Gold]
+base_color = [0.929, 0.788, 0.374]
+base_metalness = 1.0
+specular_color = [0.987, 1.000, 0.997]
+specular_roughness = 0.02
+
+[Silver]
+base_color = [0.988, 0.985, 0.975]
+base_metalness = 1.0
+specular_color = [0.995, 0.995, 0.998]
+specular_roughness = 0.02
+
+[Iron]
+base_color = [0.523, 0.514, 0.497]
+base_metalness = 1.0
+specular_color = [0.767, 0.768, 0.797]
+specular_roughness = 0.02
+
+[Chromium]
+base_color = [0.666, 0.682, 0.698]
+base_metalness = 1.0
+specular_color = [0.706, 0.726, 0.788]
+specular_roughness = 0.02
+
+# ── Row 1: specular_roughness sweep — fixed gold base ────────────────────────
+# roughness 0 → mirror gold; 1 → fully rough (metal Fresnel still visible,
+# but the reflection is entirely diffused).
+
+[GoldRough_000]
+base_color = [0.929, 0.788, 0.374]
+base_metalness = 1.0
+specular_color = [0.987, 1.000, 0.997]
+specular_roughness = 0.00
+
+[GoldRough_025]
+base_color = [0.929, 0.788, 0.374]
+base_metalness = 1.0
+specular_color = [0.987, 1.000, 0.997]
+specular_roughness = 0.25
+
+[GoldRough_050]
+base_color = [0.929, 0.788, 0.374]
+base_metalness = 1.0
+specular_color = [0.987, 1.000, 0.997]
+specular_roughness = 0.50
+
+[GoldRough_075]
+base_color = [0.929, 0.788, 0.374]
+base_metalness = 1.0
+specular_color = [0.987, 1.000, 0.997]
+specular_roughness = 0.75
+
+[GoldRough_100]
+base_color = [0.929, 0.788, 0.374]
+base_metalness = 1.0
+specular_color = [0.987, 1.000, 0.997]
+specular_roughness = 1.00

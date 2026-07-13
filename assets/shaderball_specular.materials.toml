@@ -1,0 +1,82 @@
+# OpenPBR specular lobe material library — shader_ball demo
+#
+# Systematically exercises specular_roughness (row 0) and specular_ior (row 1) —
+# two of the three axes of the GGX specular lobe (the third, anisotropy, is
+# demonstrated in shaderball_metal via brushed-metal identity).
+# Source: OpenPBR Surface v1.1 specification §5.2 (specular lobe).
+# Color values are linear Rec.709; Hyperion/Theia convert to linear Rec.2020 on load.
+#
+# Standard MTL keywords (Kd, Ks, Ka, …) are SILENTLY IGNORED.
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+# ── Neutral zones (shared by every shader_ball instance in the grid) ─────────
+
+[NeutralBall]
+base_color = [0.600, 0.600, 0.600]
+specular_roughness = 0.60
+
+[NeutralTop]
+base_color = [0.520, 0.520, 0.520]
+specular_roughness = 0.60
+
+[NeutralStem]
+base_color = [0.440, 0.440, 0.450]
+specular_roughness = 0.60
+
+# ── Row 0: specular_roughness sweep — warm terracotta dielectric ─────────────
+# roughness 0 → mirror-perfect specular; 1 → fully Lambertian (diffuse dominates).
+
+[SpecRough_000]
+base_color = [0.600, 0.250, 0.100]
+specular_roughness = 0.00
+specular_ior = 1.50
+
+[SpecRough_010]
+base_color = [0.600, 0.250, 0.100]
+specular_roughness = 0.10
+specular_ior = 1.50
+
+[SpecRough_025]
+base_color = [0.600, 0.250, 0.100]
+specular_roughness = 0.25
+specular_ior = 1.50
+
+[SpecRough_050]
+base_color = [0.600, 0.250, 0.100]
+specular_roughness = 0.50
+specular_ior = 1.50
+
+[SpecRough_100]
+base_color = [0.600, 0.250, 0.100]
+specular_roughness = 1.00
+specular_ior = 1.50
+
+# ── Row 1: specular_ior sweep — smooth neutral-grey dielectric ───────────────
+# F0 scales as ((η-1)/(η+1))²: IOR 1.2 ≈ 1 % reflectance; 2.5 ≈ 18 %.
+
+[SpecIOR_1_2]
+base_color = [0.500, 0.500, 0.500]
+specular_roughness = 0.05
+specular_ior = 1.20
+
+[SpecIOR_1_4]
+base_color = [0.500, 0.500, 0.500]
+specular_roughness = 0.05
+specular_ior = 1.40
+
+[SpecIOR_1_6]
+base_color = [0.500, 0.500, 0.500]
+specular_roughness = 0.05
+specular_ior = 1.60
+
+[SpecIOR_2_0]
+base_color = [0.500, 0.500, 0.500]
+specular_roughness = 0.05
+specular_ior = 2.00
+
+[SpecIOR_2_5]
+base_color = [0.500, 0.500, 0.500]
+specular_roughness = 0.05
+specular_ior = 2.50

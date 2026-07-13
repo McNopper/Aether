@@ -1,0 +1,95 @@
+# shaderball_thinfilm.scene — OpenPBR thin-film iridescence layer showcase.
+# 10 shader_ball instances in 2 rows x 5, lit by the meadow IBL panorama.
+# Tests thin_film_thickness sweep across the visible spectrum (row 0) and named
+# real-world iridescent materials (row 1). Materials from
+# shaderball_thinfilm.materials.toml.
+
+material_libraries = ["shaderball_thinfilm.materials.toml", "floor.materials.toml"]
+
+[render]
+reference = "presets/meadow_128spp_16bounce.render.toml"
+
+[camera]
+reference = "presets/openpbr_studio_wide.camera.toml"
+translate = [0.0, 9.5, -17.5]
+rotate_x = -16.0000
+rotate_y = 180.0000
+
+# Ground plane
+[[geometry]]
+type = "box"
+half_extents = [14.0, 0.1, 10.0]
+material = "NeutralFloor"
+translate = [0.0, -0.1, 2.5]
+
+# ── Row 0  z = 0.0  thin_film_thickness sweep ────────────────────────────────
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "Anodized_660nm", BallInner = "NeutralBall", BallSurface = "Anodized_660nm" }
+translate = [-10.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "Anodized_520nm", BallInner = "NeutralBall", BallSurface = "Anodized_520nm" }
+translate = [-5.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "Anodized_380nm", BallInner = "NeutralBall", BallSurface = "Anodized_380nm" }
+translate = [0.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "Anodized_240nm", BallInner = "NeutralBall", BallSurface = "Anodized_240nm" }
+translate = [5.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "Anodized_100nm", BallInner = "NeutralBall", BallSurface = "Anodized_100nm" }
+translate = [10.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+# ── Row 1  z = 5.0  named iridescent materials ───────────────────────────────
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "BismuthOxide", BallInner = "NeutralBall", BallSurface = "BismuthOxide" }
+translate = [-10.0, -0.021, 5.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "JewelBeetle", BallInner = "NeutralBall", BallSurface = "JewelBeetle" }
+translate = [-5.0, -0.021, 5.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "AbaloneShell", BallInner = "NeutralBall", BallSurface = "AbaloneShell" }
+translate = [0.0, -0.021, 5.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "PeacockFeather", BallInner = "NeutralBall", BallSurface = "PeacockFeather" }
+translate = [5.0, -0.021, 5.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "OilSlick", BallInner = "NeutralBall", BallSurface = "OilSlick" }
+translate = [10.0, -0.021, 5.095]
+rotate_y = 180.0000

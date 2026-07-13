@@ -1,0 +1,96 @@
+# OpenPBR fuzz / sheen layer material library — shader_ball demo
+#
+# Systematically exercises fuzz_weight (row 0) and fuzz_roughness (row 1).
+# Source: OpenPBR Surface v1.1 specification §5.6 (fuzz lobe).
+# Color values are linear Rec.709; Hyperion/Theia convert to linear Rec.2020 on load.
+#
+# Standard MTL keywords (Kd, Ks, Ka, …) are SILENTLY IGNORED.
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+# ── Neutral zones (shared by every shader_ball instance in the grid) ─────────
+
+[NeutralBall]
+base_color = [0.600, 0.600, 0.600]
+specular_roughness = 0.60
+
+[NeutralTop]
+base_color = [0.520, 0.520, 0.520]
+specular_roughness = 0.60
+
+[NeutralStem]
+base_color = [0.440, 0.440, 0.450]
+specular_roughness = 0.60
+
+# ── Row 0: fuzz_weight sweep — dark purple base, off-white fuzz ──────────────
+
+[FuzzWeight_0]
+base_color = [0.040, 0.010, 0.120]
+specular_roughness = 0.90
+fuzz_weight = 0.0
+
+[FuzzWeight_20]
+base_color = [0.040, 0.010, 0.120]
+specular_roughness = 0.90
+fuzz_weight = 0.20
+fuzz_color = [0.700, 0.680, 0.660]
+fuzz_roughness = 0.50
+
+[FuzzWeight_40]
+base_color = [0.040, 0.010, 0.120]
+specular_roughness = 0.90
+fuzz_weight = 0.40
+fuzz_color = [0.700, 0.680, 0.660]
+fuzz_roughness = 0.50
+
+[FuzzWeight_70]
+base_color = [0.040, 0.010, 0.120]
+specular_roughness = 0.90
+fuzz_weight = 0.70
+fuzz_color = [0.700, 0.680, 0.660]
+fuzz_roughness = 0.50
+
+[FuzzWeight_100]
+base_color = [0.040, 0.010, 0.120]
+specular_roughness = 0.90
+fuzz_weight = 1.0
+fuzz_color = [0.700, 0.680, 0.660]
+fuzz_roughness = 0.50
+
+# ── Row 1: fuzz_roughness sweep — cream base, full fuzz weight ───────────────
+
+[FuzzRough_10]
+base_color = [0.780, 0.780, 0.760]
+specular_roughness = 0.90
+fuzz_weight = 1.0
+fuzz_color = [0.780, 0.780, 0.760]
+fuzz_roughness = 0.10
+
+[FuzzRough_25]
+base_color = [0.780, 0.780, 0.760]
+specular_roughness = 0.90
+fuzz_weight = 1.0
+fuzz_color = [0.780, 0.780, 0.760]
+fuzz_roughness = 0.25
+
+[FuzzRough_50]
+base_color = [0.780, 0.780, 0.760]
+specular_roughness = 0.90
+fuzz_weight = 1.0
+fuzz_color = [0.780, 0.780, 0.760]
+fuzz_roughness = 0.50
+
+[FuzzRough_75]
+base_color = [0.780, 0.780, 0.760]
+specular_roughness = 0.90
+fuzz_weight = 1.0
+fuzz_color = [0.780, 0.780, 0.760]
+fuzz_roughness = 0.75
+
+[FuzzRough_100]
+base_color = [0.780, 0.780, 0.760]
+specular_roughness = 0.90
+fuzz_weight = 1.0
+fuzz_color = [0.780, 0.780, 0.760]
+fuzz_roughness = 1.00

@@ -1,0 +1,106 @@
+# OpenPBR coat layer material library — shader_ball demo
+#
+# Systematically exercises coat_weight (row 0) and coat_roughness (row 1) on a
+# diffuse blue base. Source values from OpenPBR Surface v1.1 specification §5.4
+# (coat lobe).
+# Color values are linear Rec.709; Hyperion/Theia convert to linear Rec.2020 on load.
+#
+# Standard MTL keywords (Kd, Ks, Ka, …) are SILENTLY IGNORED.
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+# ── Neutral zones (shared by every shader_ball instance in the grid) ─────────
+
+[NeutralBall]
+base_color = [0.600, 0.600, 0.600]
+specular_roughness = 0.60
+
+[NeutralTop]
+base_color = [0.520, 0.520, 0.520]
+specular_roughness = 0.60
+
+[NeutralStem]
+base_color = [0.440, 0.440, 0.450]
+specular_roughness = 0.60
+
+# ── Row 0: coat_weight sweep — diffuse blue base, coat_ior 1.5, coat_roughness 0.05 ──
+
+[CoatWeight_0]
+base_color = [0.050, 0.200, 0.700]
+specular_roughness = 0.80
+coat_weight = 0.0
+
+[CoatWeight_25]
+base_color = [0.050, 0.200, 0.700]
+specular_roughness = 0.80
+coat_weight = 0.25
+coat_roughness = 0.05
+coat_ior = 1.50
+coat_darkening = 1.0
+
+[CoatWeight_50]
+base_color = [0.050, 0.200, 0.700]
+specular_roughness = 0.80
+coat_weight = 0.50
+coat_roughness = 0.05
+coat_ior = 1.50
+coat_darkening = 1.0
+
+[CoatWeight_75]
+base_color = [0.050, 0.200, 0.700]
+specular_roughness = 0.80
+coat_weight = 0.75
+coat_roughness = 0.05
+coat_ior = 1.50
+coat_darkening = 1.0
+
+[CoatWeight_100]
+base_color = [0.050, 0.200, 0.700]
+specular_roughness = 0.80
+coat_weight = 1.0
+coat_roughness = 0.05
+coat_ior = 1.50
+coat_darkening = 1.0
+
+# ── Row 1: coat_roughness sweep — fully coated blue base, coat_weight 1.0 ────
+
+[CoatRough_0]
+base_color = [0.050, 0.200, 0.700]
+specular_roughness = 0.80
+coat_weight = 1.0
+coat_roughness = 0.00
+coat_ior = 1.50
+coat_darkening = 1.0
+
+[CoatRough_15]
+base_color = [0.050, 0.200, 0.700]
+specular_roughness = 0.80
+coat_weight = 1.0
+coat_roughness = 0.15
+coat_ior = 1.50
+coat_darkening = 1.0
+
+[CoatRough_30]
+base_color = [0.050, 0.200, 0.700]
+specular_roughness = 0.80
+coat_weight = 1.0
+coat_roughness = 0.30
+coat_ior = 1.50
+coat_darkening = 1.0
+
+[CoatRough_50]
+base_color = [0.050, 0.200, 0.700]
+specular_roughness = 0.80
+coat_weight = 1.0
+coat_roughness = 0.50
+coat_ior = 1.50
+coat_darkening = 1.0
+
+[CoatRough_80]
+base_color = [0.050, 0.200, 0.700]
+specular_roughness = 0.80
+coat_weight = 1.0
+coat_roughness = 0.80
+coat_ior = 1.50
+coat_darkening = 1.0

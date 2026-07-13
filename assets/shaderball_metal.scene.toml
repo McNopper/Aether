@@ -1,0 +1,95 @@
+# shaderball_metal.scene — OpenPBR metal layer showcase.
+# 10 shader_ball instances in 2 rows x 5, lit by the meadow IBL panorama.
+# Tests metal identity / base_color+specular_color F0-F82 (row 0) and
+# specular_roughness on a fixed gold base (row 1).
+# Materials from shaderball_metal.materials.toml.
+
+material_libraries = ["shaderball_metal.materials.toml", "floor.materials.toml"]
+
+[render]
+reference = "presets/meadow_64spp_6bounce.render.toml"
+
+[camera]
+reference = "presets/openpbr_studio_wide.camera.toml"
+translate = [0.0, 9.5, -17.5]
+rotate_x = -16.0000
+rotate_y = 180.0000
+
+# Ground plane
+[[geometry]]
+type = "box"
+half_extents = [14.0, 0.1, 10.0]
+material = "NeutralFloor"
+translate = [0.0, -0.1, 2.5]
+
+# ── Row 0  z = 0.0  metal identity sweep ─────────────────────────────────────
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "Chromium", BallInner = "NeutralBall", BallSurface = "Chromium" }
+translate = [-10.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "Iron", BallInner = "NeutralBall", BallSurface = "Iron" }
+translate = [-5.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "Silver", BallInner = "NeutralBall", BallSurface = "Silver" }
+translate = [0.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "Gold", BallInner = "NeutralBall", BallSurface = "Gold" }
+translate = [5.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "Copper", BallInner = "NeutralBall", BallSurface = "Copper" }
+translate = [10.0, -0.021, 0.095]
+rotate_y = 180.0000
+
+# ── Row 1  z = 5.0  specular_roughness sweep (gold) ──────────────────────────
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "GoldRough_100", BallInner = "NeutralBall", BallSurface = "GoldRough_100" }
+translate = [-10.0, -0.021, 5.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "GoldRough_075", BallInner = "NeutralBall", BallSurface = "GoldRough_075" }
+translate = [-5.0, -0.021, 5.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "GoldRough_050", BallInner = "NeutralBall", BallSurface = "GoldRough_050" }
+translate = [0.0, -0.021, 5.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "GoldRough_025", BallInner = "NeutralBall", BallSurface = "GoldRough_025" }
+translate = [5.0, -0.021, 5.095]
+rotate_y = 180.0000
+
+[[geometry]]
+type = "instance"
+mesh = "shader_ball.obj"
+materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "GoldRough_000", BallInner = "NeutralBall", BallSurface = "GoldRough_000" }
+translate = [10.0, -0.021, 5.095]
+rotate_y = 180.0000

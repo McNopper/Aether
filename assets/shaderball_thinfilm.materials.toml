@@ -1,0 +1,116 @@
+# OpenPBR thin-film iridescence material library — shader_ball demo
+#
+# Exercises the OpenPBR `thin_film` lobe (thin_film_weight / thin_film_thickness /
+# thin_film_ior) via the spec model — MaterialX `mx_fresnel_airy` (Belcour & Barla 2017).
+# Design: OPAQUE metal base so the iridescent reflection IS the appearance. A
+# thin-to-thick sweep walks the first-order interference rainbow (violet ->
+# blue -> cyan -> green -> yellow -> orange -> magenta). Film IOR 2.0 (TiO2-like)
+# maximises the air-film reflectance and thus the interference contrast.
+#
+# Color values are linear Rec.709.
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+# ── Neutral zones (shared by every shader_ball instance in the grid) ─────────
+
+[NeutralBall]
+base_color = [0.600, 0.600, 0.600]
+specular_roughness = 0.60
+
+[NeutralTop]
+base_color = [0.520, 0.520, 0.520]
+specular_roughness = 0.60
+
+[NeutralStem]
+base_color = [0.440, 0.440, 0.450]
+specular_roughness = 0.60
+
+# ── Row 0: anodized-metal thickness sweep, first half of the visible range ──
+
+[Anodized_100nm]
+base_color = [0.55, 0.56, 0.58]
+base_metalness = 1.0
+specular_roughness = 0.05
+thin_film_weight = 1.0
+thin_film_thickness = 100.0
+thin_film_ior = 2.00
+
+[Anodized_240nm]
+base_color = [0.55, 0.56, 0.58]
+base_metalness = 1.0
+specular_roughness = 0.05
+thin_film_weight = 1.0
+thin_film_thickness = 240.0
+thin_film_ior = 2.00
+
+[Anodized_380nm]
+base_color = [0.55, 0.56, 0.58]
+base_metalness = 1.0
+specular_roughness = 0.05
+thin_film_weight = 1.0
+thin_film_thickness = 380.0
+thin_film_ior = 2.00
+
+[Anodized_520nm]
+base_color = [0.55, 0.56, 0.58]
+base_metalness = 1.0
+specular_roughness = 0.05
+thin_film_weight = 1.0
+thin_film_thickness = 520.0
+thin_film_ior = 2.00
+
+[Anodized_660nm]
+base_color = [0.55, 0.56, 0.58]
+base_metalness = 1.0
+specular_roughness = 0.05
+thin_film_weight = 1.0
+thin_film_thickness = 660.0
+thin_film_ior = 2.00
+
+# ── Row 1: named real-world iridescent materials (opaque bases) ─────────────
+
+# Oil slick on wet asphalt -- thin hydrocarbon film (n~1.46) over a near-black base.
+[OilSlick]
+base_color = [0.02, 0.02, 0.02]
+base_metalness = 0.0
+specular_roughness = 0.06
+thin_film_weight = 1.0
+thin_film_thickness = 320.0
+thin_film_ior = 1.46
+
+# Peacock feather -- structural colour over a dark green keratin base.
+[PeacockFeather]
+base_color = [0.01, 0.05, 0.03]
+base_metalness = 0.0
+specular_roughness = 0.18
+thin_film_weight = 1.0
+thin_film_thickness = 280.0
+thin_film_ior = 1.55
+
+# Abalone shell -- multi-layer aragonite over a pale nacre base.
+[AbaloneShell]
+base_color = [0.45, 0.42, 0.40]
+base_metalness = 0.0
+specular_roughness = 0.12
+thin_film_weight = 1.0
+thin_film_thickness = 500.0
+thin_film_ior = 1.68
+
+# Jewel beetle elytra -- cuticle nanostructure over a metallic green base.
+[JewelBeetle]
+base_color = [0.05, 0.20, 0.04]
+base_metalness = 1.0
+specular_roughness = 0.10
+thin_film_weight = 1.0
+thin_film_thickness = 360.0
+thin_film_ior = 1.70
+
+# Bismuth crystal -- oxide film over a pinkish metal base; vivid stair-step iridescence.
+[BismuthOxide]
+base_color = [0.60, 0.55, 0.52]
+base_metalness = 1.0
+specular_roughness = 0.08
+thin_film_weight = 1.0
+thin_film_thickness = 430.0
+thin_film_ior = 2.00
