@@ -1,5 +1,0 @@
-# Alignment camera — two Suzannes on a floor with IBL.
-# Front Suzanne (FrontTest) at [0, 1, 1.5] partially occludes
-# Back Suzanne at [1.2, 1, 4.2]. Camera looks between them.
-vertical_field_of_view = 40
-ev100 = 13

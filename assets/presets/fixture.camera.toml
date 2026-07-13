@@ -1,5 +1,0 @@
-# Fixture camera — small synthetic scenes, unit-scale (~metres).
-# Eye at [0, 1.5, -4], looking at [0, 0.5, 0].
-# EV100=8 is appropriate for a small indoor rect light (~800 lux at receiver).
-vertical_field_of_view = 40
-ev100 = 8

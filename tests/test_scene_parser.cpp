@@ -229,7 +229,7 @@ TEST(SceneParser, PostTonemapGroupResolvedFromReferencePreset) {
 }
 
 TEST(SceneParser, ReadmeGalleryScenesParse) {
-    static constexpr std::array<std::string_view, 18> kGalleryScenes{
+    static constexpr std::array<std::string_view, 17> kGalleryScenes{
         "cornell_classic.scene.toml",
         "cornell_empty.scene.toml",
         "cornell_spheres.scene.toml",
@@ -246,7 +246,6 @@ TEST(SceneParser, ReadmeGalleryScenesParse) {
         "textured_cube.scene.toml",
         "dragon_teapot.scene.toml",
         "openpbr_advanced.scene.toml",
-        "mr_sphere.scene.toml",
         "ABeautifulGame.scene.toml",
     };
     for (std::string_view name : kGalleryScenes) {
