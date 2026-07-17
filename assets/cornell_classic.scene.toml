@@ -1,7 +1,7 @@
 # Cornell Box — Classic
 # Two white boxes as in the original Cornell Box reference image.
 # 
-# Syntax reference: see SceneLoader.hpp
+# Syntax reference: see SceneParser.hpp
 # 
 # Quaternions (x y z w):
 # short box  −18° around Y  →  0  −0.1564  0  0.9877
@@ -18,24 +18,40 @@ translate = [0.0, 2.73, -8.0]
 rotate_x = 0.0000
 rotate_y = 180.0000
 
-[[geometry]]
-type = "instance"
-mesh = "cornell.obj"
-materials = { Floor = "WhiteWall", Ceiling = "WhiteWall", AreaLight = "AreaLight", BackWall = "WhiteWall", LeftWall = "RedWall", RightWall = "GreenWall" }
-rotate_y = 180.0000  # compensates for the 180deg Y bake in cornell.obj
+# ── Meshes (declared once; object space) ──────────────────────────────────────
 
-# Short box  (82.5 × 82.5 × 82.5,  rotated −18° around Y)
-[[geometry]]
+[[mesh]]
+name = "cornell"
+path = "cornell.obj"
+
+[[mesh]]
+name = "box"
 type = "box"
 half_extents = [0.825, 0.825, 0.825]
+
+[[mesh]]
+name = "box_2"
+type = "box"
+half_extents = [0.825, 1.65, 0.825]
+
+# ── Instances (place a mesh with a transform + material) ──────────────────────
+
+[[instance]]
+mesh = "cornell"
+# rotate_y = 180 compensates for the 180° Y bake baked into cornell.obj
+materials = { "Floor" = "WhiteWall", "Ceiling" = "WhiteWall", "AreaLight" = "AreaLight", "BackWall" = "WhiteWall", "LeftWall" = "RedWall", "RightWall" = "GreenWall" }
+rotate_y = 180.0
+
+# Short box  (82.5 × 82.5 × 82.5,  rotated −18° around Y)
+[[instance]]
+mesh = "box"
 material = "WhiteWall"
 translate = [-0.93, 0.825, 1.69]
 rotate = [0.0, -0.1564, 0.0, 0.9877]
 
 # Tall box  (82.5 × 165.0 × 82.5,  rotated +15° around Y)
-[[geometry]]
-type = "box"
-half_extents = [0.825, 1.65, 0.825]
+[[instance]]
+mesh = "box_2"
 material = "WhiteWall"
-translate = [0.90, 1.65, 3.51]
+translate = [0.9, 1.65, 3.51]
 rotate = [0.0, 0.1305, 0.0, 0.9914]

@@ -15,132 +15,126 @@ rotate_x = -10.8501
 rotate_y = 180.0000
 
 # Ground plane
-[[geometry]]
+
+# ── Meshes (declared once; object space) ──────────────────────────────────────
+
+[[mesh]]
+name = "box"
 type = "box"
 half_extents = [12.0, 0.1, 12.0]
+
+[[mesh]]
+name = "sphere"
+type = "sphere"
+radius = 0.7
+
+# ── Instances (place a mesh with a transform + material) ──────────────────────
+
+[[instance]]
+mesh = "box"
 material = "NeutralFloor"
 translate = [0.0, -0.05, 0.0]
 
 # ── Row 0  z = -3.75 ──────────────────────────────────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Copper"
-translate = [-5.0, 0.70, -3.75]
+translate = [-5.0, 0.7, -3.75]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Gold"
-translate = [-2.5, 0.70, -3.75]
+translate = [-2.5, 0.7, -3.75]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Silver"
-translate = [0.0, 0.70, -3.75]
+translate = [0.0, 0.7, -3.75]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Platinum"
-translate = [2.5, 0.70, -3.75]
+translate = [2.5, 0.7, -3.75]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Iridium"
-translate = [5.0, 0.70, -3.75]
+translate = [5.0, 0.7, -3.75]
 
 # ── Row 1  z = -1.25 ──────────────────────────────────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "AluminumBrushed"
-translate = [-5.0, 0.70, -1.25]
+translate = [-5.0, 0.7, -1.25]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Iron"
-translate = [-2.5, 0.70, -1.25]
+translate = [-2.5, 0.7, -1.25]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Titanium"
-translate = [0.0, 0.70, -1.25]
+translate = [0.0, 0.7, -1.25]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "StainlessSteel"
-translate = [2.5, 0.70, -1.25]
+translate = [2.5, 0.7, -1.25]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Brass"
-translate = [5.0, 0.70, -1.25]
+translate = [5.0, 0.7, -1.25]
 
 # ── Row 2  z = +1.25 ──────────────────────────────────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Chromium"
-translate = [-5.0, 0.70, 1.25]
+translate = [-5.0, 0.7, 1.25]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Cobalt"
-translate = [-2.5, 0.70, 1.25]
+translate = [-2.5, 0.7, 1.25]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Nickel"
-translate = [0.0, 0.70, 1.25]
+translate = [0.0, 0.7, 1.25]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Zinc"
-translate = [2.5, 0.70, 1.25]
+translate = [2.5, 0.7, 1.25]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Palladium"
-translate = [5.0, 0.70, 1.25]
+translate = [5.0, 0.7, 1.25]
 
 # ── Row 3  z = +3.75 ──────────────────────────────────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Tungsten"
-translate = [-5.0, 0.70, 3.75]
+translate = [-5.0, 0.7, 3.75]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Lead"
-translate = [-2.5, 0.70, 3.75]
+translate = [-2.5, 0.7, 3.75]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Molybdenum"
-translate = [0.0, 0.70, 3.75]
+translate = [0.0, 0.7, 3.75]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Vanadium"
-translate = [2.5, 0.70, 3.75]
+translate = [2.5, 0.7, 3.75]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Silicon"
-translate = [5.0, 0.70, 3.75]
+translate = [5.0, 0.7, 3.75]

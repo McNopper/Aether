@@ -13,44 +13,58 @@ namespace aether {
 /// Camera parameters parsed from a `camera` block.
 ///
 /// The camera's placement is a plain TRS transform — exactly the same
-/// representation `GeometryBlock` uses (translate, rotate quaternion,
+/// representation an instance uses (translate, rotate quaternion,
 /// rotate_x/y/z Euler as shorthand, scale). SceneParser only records the raw
 /// transform; deriving a forward/look-at direction or view matrix from
-/// `rotation` is the consumer's job (mirrors how geometry's `rotation` isn't
+/// `rotation` is the consumer's job (mirrors how an instance's `rotation` isn't
 /// interpreted here either). `scale` is parsed for structural parity with
-/// geometry but has no defined meaning for a camera — consumers should ignore
+/// instances but has no defined meaning for a camera — consumers should ignore
 /// it.
 struct CameraDesc {
     std::optional<Vec3> translation;
     std::optional<Quat> rotation; ///< slang-math order (x, y, z, w)
-    std::optional<Vec3> scale;    ///< parsed for parity with GeometryBlock; unused by cameras
+    std::optional<Vec3> scale;    ///< parsed for parity with instances; unused by cameras
     std::optional<float> vfov;    ///< vertical field of view in degrees
     std::optional<float> ev100;   ///< physical camera EV100 override
 };
 
-/// A single geometry block from a `.scene.toml` file.
+/// A declared mesh — pure geometry, carrying **no transform and no material**.
 ///
-/// Geometry is described in object/local space; world placement is the TRS
-/// (glTF T × R × S convention). Material assignment is by *name* only —
-/// resolution against a material library is the consumer's job.
-struct GeometryBlock {
+/// A mesh is described in object/local space. World placement is the job of one
+/// or more `InstanceDesc` blocks that reference the mesh by name. Listing each
+/// unique mesh once (like `material_libraries`) lets the consumer import / upload
+/// / accelerate it a single time and instance it many times.
+///
+/// Material assignment lives on the instance, not the mesh: the same mesh can be
+/// placed twice with different materials (e.g. a parameter sweep).
+struct MeshDesc {
     enum class Kind : uint8_t {
-        Object, ///< instantiate a Wavefront OBJ (geometry only)
-        Sphere, ///< analytic sphere (radius; centre via translation)
-        Box,    ///< procedural box (half-extents; placed via TRS)
+        Object, ///< Wavefront OBJ (`objPath`)
+        Sphere, ///< analytic / procedural sphere (`sphereRadius`)
+        Box,    ///< procedural box (`boxHalf` half-extents)
     };
 
     Kind kind = Kind::Object;
-
-    std::string objPath;       ///< Object: path to the OBJ (relative to scene dir)
+    std::string name;        ///< unique name referenced by [[instance]] blocks
+    std::string objPath;     ///< Object: OBJ path (relative to scene dir)
     float sphereRadius = 0.0F; ///< Sphere: radius
-    Vec3 boxHalf{0.0F};        ///< Box: half-extents
+    Vec3 boxHalf{0.0F};      ///< Box: half-extents
+};
 
-    std::string materialName; ///< usemtl override (whole-object material name)
+/// A placed instance of a declared mesh.
+///
+/// `meshName` resolves against the `SceneDesc::meshes` list. The TRS places the
+/// mesh (glTF T × R × S convention). `materialName` overrides the whole mesh's
+/// material; `groupMaterials` overrides per OBJ group/object name (a multi-group
+/// OBJ splits into sub-meshes, each assigned via its group name).
+struct InstanceDesc {
+    std::string meshName; ///< references a MeshDesc::name
+
     Vec3 translation{0.0F};
     Quat rotation{0.0F, 0.0F, 0.0F, 1.0F}; ///< identity, slang-math order (x, y, z, w)
     Vec3 scale{1.0F};
 
+    std::string materialName; ///< whole-mesh material override (usemtl name)
     /// Per-group material overrides: OBJ group/object name → material name.
     std::unordered_map<std::string, std::string> groupMaterials;
 };
@@ -76,8 +90,9 @@ struct SceneDesc {
     /// absent means the consumer's default (rec2020).
     std::optional<std::string> workingColorSpace;
 
-    std::vector<std::string> mtllibs;    ///< referenced .materials.toml libraries (relative paths)
-    std::vector<GeometryBlock> geometry; ///< geometry blocks in declaration order
+    std::vector<std::string> mtllibs;       ///< referenced .materials.toml libraries (relative paths)
+    std::vector<MeshDesc> meshes;           ///< declared meshes, deduplicated by name
+    std::vector<InstanceDesc> instances;    ///< placed instances, in declaration order
 };
 
 } // namespace aether

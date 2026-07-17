@@ -1,7 +1,7 @@
 # Cornell Box — Empty
 # Walls and area light only.
 # 
-# Syntax reference: see SceneLoader.hpp
+# Syntax reference: see SceneParser.hpp
 
 material_libraries = ["cornell.materials.toml"]
 
@@ -14,8 +14,16 @@ translate = [0.0, 2.73, -8.0]
 rotate_x = 0.0000
 rotate_y = 180.0000
 
-[[geometry]]
-type = "instance"
-mesh = "cornell.obj"
-materials = { Floor = "WhiteWall", Ceiling = "WhiteWall", AreaLight = "AreaLight", BackWall = "WhiteWall", LeftWall = "RedWall", RightWall = "GreenWall" }
-rotate_y = 180.0000  # compensates for the 180deg Y bake in cornell.obj
+# ── Meshes (declared once; object space) ──────────────────────────────────────
+
+[[mesh]]
+name = "cornell"
+path = "cornell.obj"
+
+# ── Instances (place a mesh with a transform + material) ──────────────────────
+
+[[instance]]
+mesh = "cornell"
+# rotate_y = 180 compensates for the 180° Y bake baked into cornell.obj
+materials = { "Floor" = "WhiteWall", "Ceiling" = "WhiteWall", "AreaLight" = "AreaLight", "BackWall" = "WhiteWall", "LeftWall" = "RedWall", "RightWall" = "GreenWall" }
+rotate_y = 180.0

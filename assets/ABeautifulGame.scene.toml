@@ -17,7 +17,14 @@ rotate_y = 39.2894
 [tonemap]
 reference = "presets/aces.tonemap.toml"
 
-[[geometry]]
-type = "instance"
-mesh = "ABeautifulGame/ABeautifulGame.obj"
-materials = { King_Black = "King_Black", King_White = "King_White", Queen_Black = "Queen_Black", Queen_White = "Queen_White", Chessboard = "Chessboard", Pawn_Top_White = "Pawn_Top_White", Pawn_Body_White = "Pawn_Body_White", Pawn_Top_Black = "Pawn_Top_Black", Pawn_Body_Black = "Pawn_Body_Black", Castle_Black = "Castle_Black", Castle_White = "Castle_White", Knight_Black = "Knight_Black", Knight_White = "Knight_White", Bishop_Black = "Bishop_Black", Bishop_White = "Bishop_White" }
+# ── Meshes (declared once; object space) ──────────────────────────────────────
+
+[[mesh]]
+name = "ABeautifulGame"
+path = "ABeautifulGame/ABeautifulGame.obj"
+
+# ── Instances (place a mesh with a transform + material) ──────────────────────
+
+[[instance]]
+mesh = "ABeautifulGame"
+materials = { "King_Black" = "King_Black", "King_White" = "King_White", "Queen_Black" = "Queen_Black", "Queen_White" = "Queen_White", "Chessboard" = "Chessboard", "Pawn_Top_White" = "Pawn_Top_White", "Pawn_Body_White" = "Pawn_Body_White", "Pawn_Top_Black" = "Pawn_Top_Black", "Pawn_Body_Black" = "Pawn_Body_Black", "Castle_Black" = "Castle_Black", "Castle_White" = "Castle_White", "Knight_Black" = "Knight_Black", "Knight_White" = "Knight_White", "Bishop_Black" = "Bishop_Black", "Bishop_White" = "Bishop_White" }

@@ -77,21 +77,49 @@ TEST(SceneParser, RecordsMaterialLibrary) {
     EXPECT_EQ(scene->mtllibs.front(), "cornell.materials.toml");
 }
 
-TEST(SceneParser, ParsesGeometryBlocks) {
+TEST(SceneParser, ParsesMeshesAndInstances) {
     const auto scene = aether::SceneParser::parse(assetsDir() / "cornell_classic.scene.toml");
     ASSERT_TRUE(scene.has_value());
 
-    // One OBJ instance + two procedural boxes.
-    ASSERT_EQ(scene->geometry.size(), 3U);
+    // One OBJ mesh + two distinct procedural boxes (different half-extents).
+    ASSERT_EQ(scene->meshes.size(), 3U);
+    EXPECT_EQ(scene->meshes[0].kind, aether::MeshDesc::Kind::Object);
+    EXPECT_EQ(scene->meshes[0].name, "cornell");
+    EXPECT_EQ(scene->meshes[0].objPath, "cornell.obj");
+    EXPECT_EQ(scene->meshes[1].kind, aether::MeshDesc::Kind::Box);
+    EXPECT_EQ(scene->meshes[2].kind, aether::MeshDesc::Kind::Box);
 
-    const auto& instance = scene->geometry[0];
-    EXPECT_EQ(instance.kind, aether::GeometryBlock::Kind::Object);
-    EXPECT_EQ(instance.objPath, "cornell.obj");
-    EXPECT_EQ(instance.groupMaterials.at("LeftWall"), "RedWall");
-    EXPECT_EQ(instance.groupMaterials.at("RightWall"), "GreenWall");
+    // One instance per mesh, in declaration order.
+    ASSERT_EQ(scene->instances.size(), 3U);
+    const auto& cornell = scene->instances[0];
+    EXPECT_EQ(cornell.meshName, "cornell");
+    EXPECT_EQ(cornell.groupMaterials.at("LeftWall"), "RedWall");
+    EXPECT_EQ(cornell.groupMaterials.at("RightWall"), "GreenWall");
+    // The two boxes reference their distinct meshes.
+    EXPECT_EQ(scene->instances[1].meshName, "box");
+    EXPECT_EQ(scene->instances[2].meshName, "box_2");
+}
 
-    EXPECT_EQ(scene->geometry[1].kind, aether::GeometryBlock::Kind::Box);
-    EXPECT_EQ(scene->geometry[2].kind, aether::GeometryBlock::Kind::Box);
+TEST(SceneParser, DeduplicatesSharedMeshInstances) {
+    // shaderball_metal places one shader_ball OBJ 10 times + one box.
+    const auto scene = aether::SceneParser::parse(assetsDir() / "shaderball_metal.scene.toml");
+    ASSERT_TRUE(scene.has_value());
+
+    // The OBJ is declared exactly once despite 10 placements.
+    ASSERT_EQ(scene->meshes.size(), 2U);
+    EXPECT_EQ(scene->meshes[0].name, "box");
+    EXPECT_EQ(scene->meshes[1].name, "shader_ball");
+    EXPECT_EQ(scene->meshes[1].objPath, "shader_ball.obj");
+
+    // 10 shader_ball instances + 1 box instance.
+    EXPECT_EQ(scene->instances.size(), 11U);
+    std::size_t ballCount = 0;
+    for (const auto& inst : scene->instances) {
+        if (inst.meshName == "shader_ball") {
+            ++ballCount;
+        }
+    }
+    EXPECT_EQ(ballCount, 10U);
 }
 
 TEST(SceneParser, MissingFileReturnsNullopt) {

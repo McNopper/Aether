@@ -15,101 +15,100 @@ rotate_x = -9.2933
 rotate_y = 180.0000
 
 # Ground plane
-[[geometry]]
+
+# ── Meshes (declared once; object space) ──────────────────────────────────────
+
+[[mesh]]
+name = "box"
 type = "box"
 half_extents = [12.0, 0.1, 10.0]
+
+[[mesh]]
+name = "sphere"
+type = "sphere"
+radius = 0.7
+
+# ── Instances (place a mesh with a transform + material) ──────────────────────
+
+[[instance]]
+mesh = "box"
 material = "NeutralFloor"
 translate = [0.0, -0.05, 1.0]
 
 # ── Row 0  z = -2.0  coat_weight sweep ───────────────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "CoatWeight_0"
-translate = [-5.0, 0.70, -2.0]
+translate = [-5.0, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "CoatWeight_25"
-translate = [-2.5, 0.70, -2.0]
+translate = [-2.5, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "CoatWeight_50"
-translate = [0.0, 0.70, -2.0]
+translate = [0.0, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "CoatWeight_75"
-translate = [2.5, 0.70, -2.0]
+translate = [2.5, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "CoatWeight_100"
-translate = [5.0, 0.70, -2.0]
+translate = [5.0, 0.7, -2.0]
 
 # ── Row 1  z = +0.5  coat_roughness sweep ───────────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "CoatRough_0"
-translate = [-5.0, 0.70, 0.5]
+translate = [-5.0, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "CoatRough_15"
-translate = [-2.5, 0.70, 0.5]
+translate = [-2.5, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "CoatRough_30"
-translate = [0.0, 0.70, 0.5]
+translate = [0.0, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "CoatRough_50"
-translate = [2.5, 0.70, 0.5]
+translate = [2.5, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "CoatRough_80"
-translate = [5.0, 0.70, 0.5]
+translate = [5.0, 0.7, 0.5]
 
 # ── Row 2  z = +3.0  coat_darkening + real lacquered materials ───────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "CarLacquer"
-translate = [-5.0, 0.70, 3.0]
+translate = [-5.0, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Lacquer_DarkNone"
-translate = [-2.5, 0.70, 3.0]
+translate = [-2.5, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Lacquer_DarkHalf"
-translate = [0.0, 0.70, 3.0]
+translate = [0.0, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "CoatOnGold"
-translate = [2.5, 0.70, 3.0]
+translate = [2.5, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "VarnishedWood"
-translate = [5.0, 0.70, 3.0]
+translate = [5.0, 0.7, 3.0]

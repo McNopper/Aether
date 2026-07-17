@@ -18,101 +18,100 @@ rotate_x = -9.2933
 rotate_y = 180.0000
 
 # Ground plane
-[[geometry]]
+
+# ── Meshes (declared once; object space) ──────────────────────────────────────
+
+[[mesh]]
+name = "box"
 type = "box"
 half_extents = [12.0, 0.1, 10.0]
+
+[[mesh]]
+name = "sphere"
+type = "sphere"
+radius = 0.7
+
+# ── Instances (place a mesh with a transform + material) ──────────────────────
+
+[[instance]]
+mesh = "box"
 material = "NeutralFloor"
 translate = [0.0, -0.05, 1.0]
 
 # -- Row 0  z = -2.0  anodized sweep 100 -> 380 nm --------------------------------
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Anodized_100nm"
-translate = [-5.0, 0.70, -2.0]
+translate = [-5.0, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Anodized_170nm"
-translate = [-2.5, 0.70, -2.0]
+translate = [-2.5, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Anodized_240nm"
-translate = [0.0, 0.70, -2.0]
+translate = [0.0, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Anodized_310nm"
-translate = [2.5, 0.70, -2.0]
+translate = [2.5, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Anodized_380nm"
-translate = [5.0, 0.70, -2.0]
+translate = [5.0, 0.7, -2.0]
 
 # -- Row 1  z = +0.5  anodized sweep 450 -> 730 nm -------------------------------
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Anodized_450nm"
-translate = [-5.0, 0.70, 0.5]
+translate = [-5.0, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Anodized_520nm"
-translate = [-2.5, 0.70, 0.5]
+translate = [-2.5, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Anodized_590nm"
-translate = [0.0, 0.70, 0.5]
+translate = [0.0, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Anodized_660nm"
-translate = [2.5, 0.70, 0.5]
+translate = [2.5, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Anodized_730nm"
-translate = [5.0, 0.70, 0.5]
+translate = [5.0, 0.7, 0.5]
 
 # -- Row 2  z = +3.0  named iridescent materials ---------------------------------
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "OilSlick"
-translate = [-5.0, 0.70, 3.0]
+translate = [-5.0, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "PeacockFeather"
-translate = [-2.5, 0.70, 3.0]
+translate = [-2.5, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "AbaloneShell"
-translate = [0.0, 0.70, 3.0]
+translate = [0.0, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "JewelBeetle"
-translate = [2.5, 0.70, 3.0]
+translate = [2.5, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "BismuthOxide"
-translate = [5.0, 0.70, 3.0]
+translate = [5.0, 0.7, 3.0]

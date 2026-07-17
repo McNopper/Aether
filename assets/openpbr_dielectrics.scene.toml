@@ -14,95 +14,95 @@ rotate_x = -9.2933
 rotate_y = 180.0000
 
 # Ground plane
-[[geometry]]
+
+# ── Meshes (declared once; object space) ──────────────────────────────────────
+
+[[mesh]]
+name = "box"
 type = "box"
 half_extents = [12.0, 0.1, 10.0]
+
+[[mesh]]
+name = "sphere"
+type = "sphere"
+radius = 0.7
+
+# ── Instances (place a mesh with a transform + material) ──────────────────────
+
+[[instance]]
+mesh = "box"
 material = "NeutralFloor"
 translate = [0.0, -0.05, 1.0]
 
 # ── Row 0  z = -2.0 ───────────────────────────────────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Glass"
-translate = [-5.0, 0.70, -2.0]
+translate = [-5.0, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Diamond"
-translate = [-2.5, 0.70, -2.0]
+translate = [-2.5, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Water"
-translate = [0.0, 0.70, -2.0]
+translate = [0.0, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Ice"
-translate = [2.5, 0.70, -2.0]
+translate = [2.5, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Sapphire"
-translate = [5.0, 0.70, -2.0]
+translate = [5.0, 0.7, -2.0]
 
 # ── Row 1  z = +0.5 ───────────────────────────────────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Quartz"
-translate = [-5.0, 0.70, 0.5]
+translate = [-5.0, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "HoneyLiquid"
-translate = [-2.5, 0.70, 0.5]
+translate = [-2.5, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Salt"
-translate = [0.0, 0.70, 0.5]
+translate = [0.0, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "PlasticAcrylic"
-translate = [2.5, 0.70, 0.5]
+translate = [2.5, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "PlasticPC"
-translate = [5.0, 0.70, 0.5]
+translate = [5.0, 0.7, 0.5]
 
 # ── Row 2  z = +3.0 ───────────────────────────────────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "PlasticPET"
-translate = [-3.75, 0.70, 3.0]
+translate = [-3.75, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "PlasticPVC"
-translate = [-1.25, 0.70, 3.0]
+translate = [-1.25, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "PlasticPolyurethane"
-translate = [1.25, 0.70, 3.0]
+translate = [1.25, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "PlasticPP"
-translate = [3.75, 0.70, 3.0]
+translate = [3.75, 0.7, 3.0]

@@ -153,13 +153,12 @@ def _write_simple_toml(path: Path, lines: list[str]) -> None:
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
-def _scene_geometry_block(obj: bpy.types.Object, mesh_name: str) -> dict[str, object]:
+def _instance_block(obj: bpy.types.Object, mesh_name: str) -> dict[str, object]:
     # Conjugate the world transform by the axis swizzle so the exported TRS
     # places the (Y-up local) mesh correctly: T_aether = CONV @ T_blender @ CONV^-1.
     world = CONV @ obj.matrix_world @ CONV.inverted()
     location, rotation, scale = world.decompose()
     block: dict[str, object] = {
-        "type": "instance",
         "mesh": mesh_name,
         "translate": [location.x, location.y, location.z],
         "rotate": [rotation.x, rotation.y, rotation.z, rotation.w],
@@ -172,7 +171,8 @@ def _scene_geometry_block(obj: bpy.types.Object, mesh_name: str) -> dict[str, ob
 
 def _write_scene_toml(
     scene_path: Path,
-    geometry: list[dict[str, object]],
+    meshes: list[dict[str, object]],
+    instances: list[dict[str, object]],
     camera_reference: str | None,
     material_libraries: list[str],
     render_reference: str | None,
@@ -188,8 +188,13 @@ def _write_scene_toml(
         lines.extend(["[camera]", f"reference = {_quote(camera_reference)}", ""])
     if tonemap_reference:
         lines.extend(["[tonemap]", f"reference = {_quote(tonemap_reference)}", ""])
-    for block in geometry:
-        lines.append("[[geometry]]")
+    for mesh in meshes:
+        lines.append("[[mesh]]")
+        for key, value in mesh.items():
+            lines.append(f"{key} = {_format_value(value)}")
+        lines.append("")
+    for block in instances:
+        lines.append("[[instance]]")
         for key, value in block.items():
             lines.append(f"{key} = {_format_value(value)}")
         lines.append("")
@@ -261,12 +266,15 @@ class AetherSceneExporter(Operator, ExportHelper):
         )
 
         used_names: set[str] = set()
-        geometry: list[dict[str, object]] = []
+        meshes: list[dict[str, object]] = []
+        instances: list[dict[str, object]] = []
 
         for obj in objects:
             obj_path = _obj_export_path(export_dir, obj.name, used_names)
             _export_obj_file(obj, obj_path)
-            geometry.append(_scene_geometry_block(obj, obj_path.name))
+            mesh_name = obj_path.stem
+            meshes.append({"name": mesh_name, "path": obj_path.name})
+            instances.append(_instance_block(obj, mesh_name))
 
         camera_reference = None
         if self.include_camera and context.scene.camera:
@@ -280,14 +288,15 @@ class AetherSceneExporter(Operator, ExportHelper):
 
         _write_scene_toml(
             scene_path,
-            geometry,
+            meshes,
+            instances,
             camera_reference,
             material_libraries,
             render_reference,
             tonemap_reference,
         )
 
-        self.report({"INFO"}, f"Exported {len(geometry)} object(s) to {scene_path.name}")
+        self.report({"INFO"}, f"Exported {len(meshes)} object(s) to {scene_path.name}")
         return {"FINISHED"}
 
 

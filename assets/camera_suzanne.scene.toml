@@ -18,9 +18,16 @@ rotate_y = 46.6919
 [tonemap]
 reference = "presets/aces.tonemap.toml"
 
-[[geometry]]
-type = "instance"
-mesh = "suzanne.obj"
+# ── Meshes (declared once; object space) ──────────────────────────────────────
+
+[[mesh]]
+name = "suzanne"
+path = "suzanne.obj"
+
+# ── Instances (place a mesh with a transform + material) ──────────────────────
+
+[[instance]]
+mesh = "suzanne"
 material = "Suzanne"
 translate = [0.0, 0.0, 0.0]
 rotate = [-0.3826834559440613, 0.0, 0.0, 0.9238795638084412]

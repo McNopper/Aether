@@ -30,17 +30,29 @@ rotate_y = 180.0000
 reference = "presets/aces.tonemap.toml"
 
 # Studio pedestal — flush with y = 0.
-[[geometry]]
+
+# ── Meshes (declared once; object space) ──────────────────────────────────────
+
+[[mesh]]
+name = "box"
 type = "box"
 half_extents = [6.0, 0.1, 6.0]
+
+[[mesh]]
+name = "shader_ball"
+path = "shader_ball.obj"
+
+# ── Instances (place a mesh with a transform + material) ──────────────────────
+
+[[instance]]
+mesh = "box"
 material = "BaseTop"
 translate = [0.0, -0.1, 0.0]
 
 # ShaderBall — scaled to ~2.7 units tall, centred, seated on floor.
 # y_min (raw) = 0.206 → at scale 0.1: 0.021 above floor → subtract to seat exactly.
-[[geometry]]
-type = "instance"
-mesh = "shader_ball.obj"
-materials = { BaseTop = "BaseTop", BaseStem = "BaseStem", BaseFoot = "BaseFoot", BallInner = "BallInner", BallSurface = "BallSurface" }
+[[instance]]
+mesh = "shader_ball"
+materials = { "BaseTop" = "BaseTop", "BaseStem" = "BaseStem", "BaseFoot" = "BaseFoot", "BallInner" = "BallInner", "BallSurface" = "BallSurface" }
 translate = [0.0, -0.021, 0.095]
-rotate_y = 180.0000
+rotate_y = 180.0

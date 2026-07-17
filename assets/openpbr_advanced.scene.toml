@@ -14,46 +14,54 @@ rotate_x = -9.2299
 rotate_y = 180.0000
 
 # Ground plane
-[[geometry]]
+
+# ── Meshes (declared once; object space) ──────────────────────────────────────
+
+[[mesh]]
+name = "box"
 type = "box"
 half_extents = [10.0, 0.1, 8.0]
+
+[[mesh]]
+name = "sphere"
+type = "sphere"
+radius = 0.7
+
+# ── Instances (place a mesh with a transform + material) ──────────────────────
+
+[[instance]]
+mesh = "box"
 material = "NeutralFloor"
 translate = [0.0, -0.05, 0.0]
 
 # ── Row 0  z = -1.0 ───────────────────────────────────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "MilkyScatter"
-translate = [-2.5, 0.70, -1.0]
+translate = [-2.5, 0.7, -1.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "DispersiveDiamond"
-translate = [0.0, 0.70, -1.0]
+translate = [0.0, 0.7, -1.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "HoneyScatter"
-translate = [2.5, 0.70, -1.0]
+translate = [2.5, 0.7, -1.0]
 
 # ── Row 1  z = +1.5 ───────────────────────────────────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "ThinGlassSheet"
-translate = [-2.5, 0.70, 1.5]
+translate = [-2.5, 0.7, 1.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "TranslucentLeaf"
-translate = [0.0, 0.70, 1.5]
+translate = [0.0, 0.7, 1.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "WaxySubsurface"
-translate = [2.5, 0.70, 1.5]
+translate = [2.5, 0.7, 1.5]

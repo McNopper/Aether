@@ -162,41 +162,57 @@ void resolveSection(const toml::table& root,
     apply(*tbl, desc);
 }
 
-void parseGeometry(const toml::table& g, SceneDesc& desc) {
-    const std::string type = g["type"].value_or<std::string>("");
-
-    GeometryBlock blk{};
-    if (type == "instance") {
-        blk.kind = GeometryBlock::Kind::Object;
-        blk.objPath = g["mesh"].value_or<std::string>("");
-        if (const toml::table* mats = g["materials"].as_table()) {
-            for (auto&& [name, mat] : *mats) {
-                blk.groupMaterials.insert_or_assign(std::string{name.str()}, mat.value_or<std::string>(""));
-            }
-        }
-    } else if (type == "sphere") {
-        blk.kind = GeometryBlock::Kind::Sphere;
-        blk.sphereRadius = static_cast<float>(g["radius"].value_or<double>(0.0));
-    } else if (type == "box") {
-        blk.kind = GeometryBlock::Kind::Box;
-        if (const auto* h = g.get("half_extents")) {
-            blk.boxHalf = asVec3(*h).value_or(Vec3{0.0F, 0.0F, 0.0F});
-        }
-    } else {
-        return; // unknown geometry type — skip
+void parseMesh(const toml::table& m, SceneDesc& desc) {
+    MeshDesc mesh{};
+    mesh.name = m["name"].value_or<std::string>("");
+    if (mesh.name.empty()) {
+        return; // a mesh must be named so instances can reference it
     }
 
-    // Shared transform + whole-object material.
+    const std::string type = m["type"].value_or<std::string>("");
+    if (type == "box") {
+        mesh.kind = MeshDesc::Kind::Box;
+        if (const auto* h = m.get("half_extents")) {
+            mesh.boxHalf = asVec3(*h).value_or(Vec3{0.0F, 0.0F, 0.0F});
+        }
+    } else if (type == "sphere") {
+        mesh.kind = MeshDesc::Kind::Sphere;
+        mesh.sphereRadius = static_cast<float>(m["radius"].value_or<double>(0.0));
+    } else {
+        // Default: a Wavefront OBJ. `type` may be omitted (just `path`) or
+        // explicitly "object"/"obj".
+        mesh.kind = MeshDesc::Kind::Object;
+        mesh.objPath = m["path"].value_or<std::string>("");
+    }
+
+    desc.meshes.push_back(std::move(mesh));
+}
+
+void parseInstance(const toml::table& t, SceneDesc& desc) {
+    InstanceDesc inst{};
+    inst.meshName = t["mesh"].value_or<std::string>("");
+    if (inst.meshName.empty()) {
+        return; // an instance must reference a declared mesh
+    }
+
+    // Material assignment — either a single whole-mesh override or a per-group map.
+    if (const toml::table* mats = t["materials"].as_table()) {
+        for (auto&& [name, mat] : *mats) {
+            inst.groupMaterials.insert_or_assign(std::string{name.str()}, mat.value_or<std::string>(""));
+        }
+    }
+    inst.materialName = t["material"].value_or<std::string>("");
+
+    // Placement TRS (same shared keys / semantics as the camera block).
     std::optional<Vec3> translation;
     std::optional<Quat> rotation;
     std::optional<Vec3> scale;
-    parseTRS(g, translation, rotation, scale);
-    blk.translation = translation.value_or(Vec3{0.0F, 0.0F, 0.0F});
-    blk.rotation = rotation.value_or(Quat{0.0F, 0.0F, 0.0F, 1.0F});
-    blk.scale = scale.value_or(Vec3{1.0F, 1.0F, 1.0F});
-    blk.materialName = g["material"].value_or<std::string>("");
+    parseTRS(t, translation, rotation, scale);
+    inst.translation = translation.value_or(Vec3{0.0F, 0.0F, 0.0F});
+    inst.rotation = rotation.value_or(Quat{0.0F, 0.0F, 0.0F, 1.0F});
+    inst.scale = scale.value_or(Vec3{1.0F, 1.0F, 1.0F});
 
-    desc.geometry.push_back(std::move(blk));
+    desc.instances.push_back(std::move(inst));
 }
 
 } // namespace
@@ -231,11 +247,18 @@ std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFi
     resolveSection(root, "tonemap", baseDir, desc, applyTonemap);
     resolveSection(root, "post_tonemap", baseDir, desc, applyPostTonemap);
 
-    // ── Geometry (ordered) ──
-    if (const toml::array* geo = root["geometry"].as_array()) {
-        for (const auto& elem : *geo) {
-            if (const toml::table* g = elem.as_table()) {
-                parseGeometry(*g, desc);
+    // ── Meshes (unique declarations) + instances (placements) ──
+    if (const toml::array* meshes = root["mesh"].as_array()) {
+        for (const auto& elem : *meshes) {
+            if (const toml::table* m = elem.as_table()) {
+                parseMesh(*m, desc);
+            }
+        }
+    }
+    if (const toml::array* instances = root["instance"].as_array()) {
+        for (const auto& elem : *instances) {
+            if (const toml::table* t = elem.as_table()) {
+                parseInstance(*t, desc);
             }
         }
     }

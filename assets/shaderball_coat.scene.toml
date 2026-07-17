@@ -15,80 +15,83 @@ rotate_x = -16.0000
 rotate_y = 180.0000
 
 # Ground plane
-[[geometry]]
+
+# ── Meshes (declared once; object space) ──────────────────────────────────────
+
+[[mesh]]
+name = "box"
 type = "box"
 half_extents = [14.0, 0.1, 10.0]
+
+[[mesh]]
+name = "shader_ball"
+path = "shader_ball.obj"
+
+# ── Instances (place a mesh with a transform + material) ──────────────────────
+
+[[instance]]
+mesh = "box"
 material = "NeutralFloor"
 translate = [0.0, -0.1, 2.5]
 
 # ── Row 0  z = 0.0  coat_weight sweep ────────────────────────────────────────
-[[geometry]]
-type = "instance"
-mesh = "shader_ball.obj"
-materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatWeight_100", BallInner = "NeutralBall", BallSurface = "CoatWeight_100" }
+[[instance]]
+mesh = "shader_ball"
+materials = { "BaseTop" = "NeutralTop", "BaseStem" = "NeutralStem", "BaseFoot" = "CoatWeight_100", "BallInner" = "NeutralBall", "BallSurface" = "CoatWeight_100" }
 translate = [-10.0, -0.021, 0.095]
-rotate_y = 180.0000
+rotate_y = 180.0
 
-[[geometry]]
-type = "instance"
-mesh = "shader_ball.obj"
-materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatWeight_75", BallInner = "NeutralBall", BallSurface = "CoatWeight_75" }
+[[instance]]
+mesh = "shader_ball"
+materials = { "BaseTop" = "NeutralTop", "BaseStem" = "NeutralStem", "BaseFoot" = "CoatWeight_75", "BallInner" = "NeutralBall", "BallSurface" = "CoatWeight_75" }
 translate = [-5.0, -0.021, 0.095]
-rotate_y = 180.0000
+rotate_y = 180.0
 
-[[geometry]]
-type = "instance"
-mesh = "shader_ball.obj"
-materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatWeight_50", BallInner = "NeutralBall", BallSurface = "CoatWeight_50" }
+[[instance]]
+mesh = "shader_ball"
+materials = { "BaseTop" = "NeutralTop", "BaseStem" = "NeutralStem", "BaseFoot" = "CoatWeight_50", "BallInner" = "NeutralBall", "BallSurface" = "CoatWeight_50" }
 translate = [0.0, -0.021, 0.095]
-rotate_y = 180.0000
+rotate_y = 180.0
 
-[[geometry]]
-type = "instance"
-mesh = "shader_ball.obj"
-materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatWeight_25", BallInner = "NeutralBall", BallSurface = "CoatWeight_25" }
+[[instance]]
+mesh = "shader_ball"
+materials = { "BaseTop" = "NeutralTop", "BaseStem" = "NeutralStem", "BaseFoot" = "CoatWeight_25", "BallInner" = "NeutralBall", "BallSurface" = "CoatWeight_25" }
 translate = [5.0, -0.021, 0.095]
-rotate_y = 180.0000
+rotate_y = 180.0
 
-[[geometry]]
-type = "instance"
-mesh = "shader_ball.obj"
-materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatWeight_0", BallInner = "NeutralBall", BallSurface = "CoatWeight_0" }
+[[instance]]
+mesh = "shader_ball"
+materials = { "BaseTop" = "NeutralTop", "BaseStem" = "NeutralStem", "BaseFoot" = "CoatWeight_0", "BallInner" = "NeutralBall", "BallSurface" = "CoatWeight_0" }
 translate = [10.0, -0.021, 0.095]
-rotate_y = 180.0000
+rotate_y = 180.0
 
 # ── Row 1  z = 5.0  coat_roughness sweep ─────────────────────────────────────
-[[geometry]]
-type = "instance"
-mesh = "shader_ball.obj"
-materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatRough_80", BallInner = "NeutralBall", BallSurface = "CoatRough_80" }
+[[instance]]
+mesh = "shader_ball"
+materials = { "BaseTop" = "NeutralTop", "BaseStem" = "NeutralStem", "BaseFoot" = "CoatRough_80", "BallInner" = "NeutralBall", "BallSurface" = "CoatRough_80" }
 translate = [-10.0, -0.021, 5.095]
-rotate_y = 180.0000
+rotate_y = 180.0
 
-[[geometry]]
-type = "instance"
-mesh = "shader_ball.obj"
-materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatRough_50", BallInner = "NeutralBall", BallSurface = "CoatRough_50" }
+[[instance]]
+mesh = "shader_ball"
+materials = { "BaseTop" = "NeutralTop", "BaseStem" = "NeutralStem", "BaseFoot" = "CoatRough_50", "BallInner" = "NeutralBall", "BallSurface" = "CoatRough_50" }
 translate = [-5.0, -0.021, 5.095]
-rotate_y = 180.0000
+rotate_y = 180.0
 
-[[geometry]]
-type = "instance"
-mesh = "shader_ball.obj"
-materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatRough_30", BallInner = "NeutralBall", BallSurface = "CoatRough_30" }
+[[instance]]
+mesh = "shader_ball"
+materials = { "BaseTop" = "NeutralTop", "BaseStem" = "NeutralStem", "BaseFoot" = "CoatRough_30", "BallInner" = "NeutralBall", "BallSurface" = "CoatRough_30" }
 translate = [0.0, -0.021, 5.095]
-rotate_y = 180.0000
+rotate_y = 180.0
 
-[[geometry]]
-type = "instance"
-mesh = "shader_ball.obj"
-materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatRough_15", BallInner = "NeutralBall", BallSurface = "CoatRough_15" }
+[[instance]]
+mesh = "shader_ball"
+materials = { "BaseTop" = "NeutralTop", "BaseStem" = "NeutralStem", "BaseFoot" = "CoatRough_15", "BallInner" = "NeutralBall", "BallSurface" = "CoatRough_15" }
 translate = [5.0, -0.021, 5.095]
-rotate_y = 180.0000
+rotate_y = 180.0
 
-[[geometry]]
-type = "instance"
-mesh = "shader_ball.obj"
-materials = { BaseTop = "NeutralTop", BaseStem = "NeutralStem", BaseFoot = "CoatRough_0", BallInner = "NeutralBall", BallSurface = "CoatRough_0" }
+[[instance]]
+mesh = "shader_ball"
+materials = { "BaseTop" = "NeutralTop", "BaseStem" = "NeutralStem", "BaseFoot" = "CoatRough_0", "BallInner" = "NeutralBall", "BallSurface" = "CoatRough_0" }
 translate = [10.0, -0.021, 5.095]
-rotate_y = 180.0000
+rotate_y = 180.0

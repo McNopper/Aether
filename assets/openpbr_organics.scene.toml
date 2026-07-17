@@ -14,83 +14,85 @@ rotate_x = -9.2933
 rotate_y = 180.0000
 
 # Ground plane
-[[geometry]]
+
+# ── Meshes (declared once; object space) ──────────────────────────────────────
+
+[[mesh]]
+name = "box"
 type = "box"
 half_extents = [10.0, 0.1, 10.0]
+
+[[mesh]]
+name = "sphere"
+type = "sphere"
+radius = 0.7
+
+# ── Instances (place a mesh with a transform + material) ──────────────────────
+
+[[instance]]
+mesh = "box"
 material = "NeutralFloor"
 translate = [0.0, -0.05, 1.0]
 
 # ── Row 0  Skin I–IV  z = -2.0 ───────────────────────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "SkinI"
-translate = [-3.75, 0.70, -2.0]
+translate = [-3.75, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "SkinII"
-translate = [-1.25, 0.70, -2.0]
+translate = [-1.25, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "SkinIII"
-translate = [1.25, 0.70, -2.0]
+translate = [1.25, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "SkinIV"
-translate = [3.75, 0.70, -2.0]
+translate = [3.75, 0.7, -2.0]
 
 # ── Row 1  Skin V–VI + Pearl + Velvet  z = +0.5 ──────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "SkinV"
-translate = [-3.75, 0.70, 0.5]
+translate = [-3.75, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "SkinVI"
-translate = [-1.25, 0.70, 0.5]
+translate = [-1.25, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Pearl"
-translate = [1.25, 0.70, 0.5]
+translate = [1.25, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Velvet"
-translate = [3.75, 0.70, 0.5]
+translate = [3.75, 0.7, 0.5]
 
 # ── Row 2  Subsurface liquids  z = +3.0 ──────────────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Milk"
-translate = [-3.75, 0.70, 3.0]
+translate = [-3.75, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "HoneyCrystallized"
-translate = [-1.25, 0.70, 3.0]
+translate = [-1.25, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Snow"
-translate = [1.25, 0.70, 3.0]
+translate = [1.25, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "EggShell"
-translate = [3.75, 0.70, 3.0]
+translate = [3.75, 0.7, 3.0]

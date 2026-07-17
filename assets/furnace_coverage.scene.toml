@@ -13,8 +13,16 @@ rotate_y = 180.0000
 [tonemap]
 tonemapper = "agx"
 
-[[geometry]]
+# ── Meshes (declared once; object space) ──────────────────────────────────────
+
+[[mesh]]
+name = "sphere"
 type = "sphere"
 radius = 0.3
+
+# ── Instances (place a mesh with a transform + material) ──────────────────────
+
+[[instance]]
+mesh = "sphere"
+materials = { "Material" = "WhiteCoverage" }
 translate = [0.0, 0.0, 0.0]
-materials = { Material = "WhiteCoverage" }

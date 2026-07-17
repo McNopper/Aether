@@ -15,101 +15,100 @@ rotate_x = -9.2933
 rotate_y = 180.0000
 
 # Ground plane
-[[geometry]]
+
+# ── Meshes (declared once; object space) ──────────────────────────────────────
+
+[[mesh]]
+name = "box"
 type = "box"
 half_extents = [12.0, 0.1, 10.0]
+
+[[mesh]]
+name = "sphere"
+type = "sphere"
+radius = 0.7
+
+# ── Instances (place a mesh with a transform + material) ──────────────────────
+
+[[instance]]
+mesh = "box"
 material = "NeutralFloor"
 translate = [0.0, -0.05, 1.0]
 
 # ── Row 0  z = -2.0  fuzz_weight sweep ──────────────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "FuzzWeight_0"
-translate = [-5.0, 0.70, -2.0]
+translate = [-5.0, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "FuzzWeight_20"
-translate = [-2.5, 0.70, -2.0]
+translate = [-2.5, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "FuzzWeight_40"
-translate = [0.0, 0.70, -2.0]
+translate = [0.0, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "FuzzWeight_70"
-translate = [2.5, 0.70, -2.0]
+translate = [2.5, 0.7, -2.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "FuzzWeight_100"
-translate = [5.0, 0.70, -2.0]
+translate = [5.0, 0.7, -2.0]
 
 # ── Row 1  z = +0.5  fuzz_roughness sweep ───────────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "FuzzRough_10"
-translate = [-5.0, 0.70, 0.5]
+translate = [-5.0, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "FuzzRough_25"
-translate = [-2.5, 0.70, 0.5]
+translate = [-2.5, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "FuzzRough_50"
-translate = [0.0, 0.70, 0.5]
+translate = [0.0, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "FuzzRough_75"
-translate = [2.5, 0.70, 0.5]
+translate = [2.5, 0.7, 0.5]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "FuzzRough_100"
-translate = [5.0, 0.70, 0.5]
+translate = [5.0, 0.7, 0.5]
 
 # ── Row 2  z = +3.0  named fabric archetypes ────────────────────────────────
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Cotton"
-translate = [-5.0, 0.70, 3.0]
+translate = [-5.0, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Silk"
-translate = [-2.5, 0.70, 3.0]
+translate = [-2.5, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Suede"
-translate = [0.0, 0.70, 3.0]
+translate = [0.0, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Denim"
-translate = [2.5, 0.70, 3.0]
+translate = [2.5, 0.7, 3.0]
 
-[[geometry]]
-type = "sphere"
-radius = 0.70
+[[instance]]
+mesh = "sphere"
 material = "Velour"
-translate = [5.0, 0.70, 3.0]
+translate = [5.0, 0.7, 3.0]

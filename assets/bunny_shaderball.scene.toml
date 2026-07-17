@@ -20,23 +20,40 @@ rotate_y = 180.0000
 reference = "presets/aces.tonemap.toml"
 
 # Shared studio floor — wide enough to seat both objects.
-[[geometry]]
+
+# ── Meshes (declared once; object space) ──────────────────────────────────────
+
+[[mesh]]
+name = "box"
 type = "box"
 half_extents = [7.0, 0.1, 4.0]
+
+[[mesh]]
+name = "bunny"
+path = "bunny.obj"
+
+[[mesh]]
+name = "shader_ball"
+path = "shader_ball.obj"
+
+# ── Instances (place a mesh with a transform + material) ──────────────────────
+
+[[instance]]
+mesh = "box"
 material = "Floor"
 translate = [0.0, -0.1, 0.0]
 
 # Stanford bunny — left, scaled ~1.5x (~2.3 units tall), seated on the floor.
-[[geometry]]
-type = "instance"
-mesh = "bunny.obj"
+[[instance]]
+mesh = "bunny"
 material = "Bunny"
-scale = 1.5
 translate = [-2.627, 0.023, 0.144]
+scale = 1.5
+rotate_y = 180.0
 
 # ShaderBall — right, scale 0.1 (~2.7 units tall), seated on the floor.
-[[geometry]]
-type = "instance"
-mesh = "shader_ball.obj"
-materials = { BaseTop = "BaseTop", BaseStem = "BaseStem", BaseFoot = "BaseFoot", BallInner = "BallInner", BallSurface = "BallSurface" }
+[[instance]]
+mesh = "shader_ball"
+materials = { "BaseTop" = "BaseTop", "BaseStem" = "BaseStem", "BaseFoot" = "BaseFoot", "BallInner" = "BallInner", "BallSurface" = "BallSurface" }
 translate = [2.5, -0.021, 0.095]
+rotate_y = 180.0
