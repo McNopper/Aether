@@ -63,7 +63,7 @@ Path-traced references are only clean at high spp. Two presets in `assets/preset
 
 Comparing Theia (noise-free) against a **16 spp** IBL reference inflates `mean_diff`
 with Monte-Carlo **noise**, not a real discrepancy. For any IBL parity check, render the
-Hyperion reference at high spp (`hyperion --spp 512`) before drawing conclusions.
+Hyperion reference at high spp (`hyperion --spp 256`) before drawing conclusions.
 
 ## Build & test
 
