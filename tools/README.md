@@ -106,5 +106,3 @@ python mtlx_to_toml.py examples/shader_ball.mtlx examples/shader_ball_openpbr.ma
 * **MaterialX** specification and node library (OpenPBR node
   `open_pbr_surface`, `libraries/bxdf/open_pbr_surface.mtlx`).
   <https://materialx.org/> · <https://github.com/AcademySoftwareFoundation/MaterialX>
-* **Autodesk Standard Surface** (predecessor superseded by OpenPBR).
-  <https://autodesk.github.io/standard-surface/>
