@@ -22,7 +22,7 @@ coat_ior = 1.5
 base_color = [1.000, 1.000, 1.000]
 transmission_weight = 1.0
 transmission_color = [0.300, 0.900, 0.600]
-transmission_depth = 1.0
+transmission_depth = 0.35
 specular_ior = 1.8
 specular_roughness = 0.0
 
