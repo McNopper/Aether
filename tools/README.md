@@ -1,7 +1,7 @@
 # Aether authoring tools
 
-Helper tools for producing Aether scene and material files. Both are plain
-Python (standard library only) and have **no build step**.
+Helper tools for authoring and preparing Aether assets — scenes, materials and
+geometry. All are plain Python (standard library only) and have **no build step**.
 
 Because Blender does not yet author OpenPBR natively, the intended workflow is:
 
@@ -11,14 +11,15 @@ Because Blender does not yet author OpenPBR natively, the intended workflow is:
 
 ---
 
-## 1. Blender scene exporter (`aether_blender_exporter`)
+## 1. Blender scene exporter (`blender_to_aether`)
 
 A Blender addon (File → Export → **Aether Scene (.scene.toml)**) that writes:
 
-1. `<name>.scene.toml` — one `[[geometry]]` `instance` block per mesh object
-   (TRS from the object's world transform), an optional `material_libraries`
-   list, and `[render]` / `[camera]` / `[tonemap]` references.
-2. `<name>.camera.toml` — a camera preset (`translate`, `look_at`,
+1. `<name>.scene.toml` — a `[[mesh]]` block (name + `.obj` path) and a matching
+   `[[instance]]` block (TRS from the object's world transform, plus material)
+   per mesh object, an optional `material_libraries` list, and `[render]` /
+   `[camera]` / `[tonemap]` references.
+2. `<name>.camera.toml` — a camera preset (`translate`, `rotate`,
    `vertical_field_of_view`, `ev100`) referenced from the scene's `[camera]`
    section.
 3. One `.obj` per mesh object (geometry only; **materials are not exported**).
@@ -27,12 +28,12 @@ It deliberately does **not** convert Blender materials to OpenPBR — Blender ha
 no OpenPBR surface yet, so materials are authored in TOML (by hand or via the
 converter below) and referenced from the scene file.
 
-**Install:** copy `aether_blender_exporter/` into your Blender addons folder and
+**Install:** copy `blender_to_aether/` into your Blender addons folder and
 enable *Aether Scene Exporter*, or run it headless:
 
 ```bash
 blender --background --python-expr "import sys; sys.path.append('tools'); \
-  import aether_blender_exporter as a; a.register(); \
+  import blender_to_aether as a; a.register(); \
   import bpy; bpy.ops.export.aether_scene(filepath='out/scene.scene.toml')"
 ```
 
@@ -41,7 +42,7 @@ blender --background --python-expr "import sys; sys.path.append('tools'); \
 
 ---
 
-## 2. MaterialX → TOML converter (`mtlx_to_toml_converter`)
+## 2. MaterialX → TOML converter (`mtlx_to_aether`)
 
 Converts an OpenPBR MaterialX (`.mtlx`) file into an Aether
 `<name>.materials.toml`.
@@ -51,8 +52,8 @@ MaterialX documents are plain XML, so the converter **parses the XML directly**
 bindings** or any native library.
 
 ```bash
-python tools/mtlx_to_toml_converter/mtlx_to_toml.py input.mtlx output.materials.toml
-python tools/mtlx_to_toml_converter/mtlx_to_toml.py input.mtlx out/ --colorspace lin_rec2020_scene
+python tools/mtlx_to_aether/mtlx_to_toml.py input.mtlx output.materials.toml
+python tools/mtlx_to_aether/mtlx_to_toml.py input.mtlx out/ --colorspace lin_rec2020_scene
 ```
 
 It preserves the Aether material-library contract (see
@@ -77,7 +78,7 @@ library and the OpenPBR reference repository (see references).
 Golden-file tests (no framework required):
 
 ```bash
-python tools/mtlx_to_toml_converter/tests/run_tests.py
+python tools/mtlx_to_aether/tests/run_tests.py
 ```
 
 Fixtures live in `tests/fixtures/` (diffuse, metal, glass, coat, emissive,
@@ -93,6 +94,34 @@ material names match the `shader_ball.obj` (5 zones) and `bunny.obj` scenes in
 
 ```bash
 python mtlx_to_toml.py examples/shader_ball.mtlx examples/shader_ball_openpbr.materials.toml
+```
+
+---
+
+## 3. OBJ transform tools (`translate_obj_*`, `rotate_obj_*`, `scale_obj`)
+
+Per-axis Wavefront OBJ transform scripts (standard library only). Each reads an
+OBJ and writes a transformed copy, operating on the `v` (vertex) and, for
+rotations, `vn` (normal) lines. They preserve file encoding, line endings and
+numeric precision, and are **safe for in-place edits** — when `input.obj` and
+`output.obj` resolve to the same file, the result is written through a temp file
+in the same directory and atomically `os.replace`d, so the source is never
+truncated mid-read.
+
+* `translate_obj_x.py` / `_y.py` / `_z.py` — add a numeric offset to one axis
+  of every vertex.
+* `scale_obj.py` — multiply every vertex by a uniform factor (normals, UVs and
+  faces are left untouched).
+* `rotate_obj_x.py` / `_y.py` / `_z.py` — rotate by **90, 180 or 270°** about an
+  axis using exact coordinate swizzling (no trig): axes are only swapped and
+  signs flipped on the original string tokens, so each value is preserved
+  byte-for-byte and a 4×90° round-trip is an exact identity.
+
+```bash
+python tools/translate_obj_y.py input.obj -0.21 output.obj   # offset Y by -0.21
+python tools/scale_obj.py        input.obj 0.1   output.obj   # uniform scale x0.1
+python tools/rotate_obj_y.py     input.obj 90    output.obj   # +90 deg about Y
+python tools/rotate_obj_y.py     input.obj 90    input.obj    # in-place (safe)
 ```
 
 ---

@@ -21,7 +21,7 @@ import bpy
 from bpy.props import BoolProperty, FloatProperty, StringProperty
 from bpy.types import Operator
 from bpy_extras.io_utils import ExportHelper
-from mathutils import Matrix, Vector
+from mathutils import Matrix
 
 # Blender is Z-up / -Y-forward; Aether (like glTF) is Y-up / -Z-forward.
 # CONV is the axis swizzle (x, y, z)_blender -> (x, z, -y)_aether, i.e. a -90°
@@ -134,15 +134,17 @@ def _export_obj_file(obj: bpy.types.Object, obj_path: Path) -> None:
 
 
 def _camera_block(camera: bpy.types.Object, ev100: float) -> list[str]:
-    # Camera world position/direction mapped Blender Z-up -> Aether Y-up.
+    # Camera world transform mapped Blender Z-up -> Aether Y-up. A camera's
+    # placement is a plain TRS (identical keys to a mesh instance): translate +
+    # rotate. The scene format accepts rotate (quat [qx,qy,qz,qw]) or
+    # rotate_x/y/z (Euler); the quaternion is emitted for a lossless export.
     world = CONV @ camera.matrix_world
     location = world.translation
-    forward = world.to_quaternion() @ Vector((0.0, 0.0, -1.0))
-    look_at = location + forward
+    rotation = world.to_quaternion()
     vfov = math.degrees(getattr(camera.data, "angle_y", camera.data.angle))
     lines = [
         f"translate = [{location.x}, {location.y}, {location.z}]",
-        f"look_at = [{look_at.x}, {look_at.y}, {look_at.z}]",
+        f"rotate = [{rotation.x}, {rotation.y}, {rotation.z}, {rotation.w}]",
         f"vertical_field_of_view = {vfov}",
         f"ev100 = {ev100}",
     ]

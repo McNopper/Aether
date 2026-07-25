@@ -55,14 +55,15 @@ unless you do one of:
 
 Symptom when you forget: two "different" renders produce **byte-identical** metrics.
 
-### Render presets & sample counts (the 16-vs-512 spp trap)
+### Render presets & sample counts (the low-spp reference trap)
 
-Path-traced references are only clean at high spp. Two presets in `assets/presets/`:
-- `comparison_ibl_512spp.render.toml` — **512 spp**, clean IBL reference (e.g. `fixture_ibl`).
-- `alignment_16spp_8bounce.render.toml` — **16 spp**, fast *preview* (e.g. `alignment_suzanne`).
+Path-traced references are only clean at high spp. The IBL scenes (openpbr_*,
+shaderball_*, dragon_teapot) reference the meadow/relax presets up to **256 spp**;
+`preview.render.toml` is a fast **64 spp** direct-light-only preset (no IBL, used by the
+cornell scenes).
 
-Comparing Theia (noise-free) against a **16 spp** IBL reference inflates `mean_diff`
-with Monte-Carlo **noise**, not a real discrepancy. For any IBL parity check, render the
+Comparing Theia (noise-free) against a low-spp IBL reference inflates `mean_diff` with
+Monte-Carlo **noise**, not a real discrepancy. For any IBL parity check, render the
 Hyperion reference at high spp (`hyperion --spp 256`) before drawing conclusions.
 
 ## Build & test

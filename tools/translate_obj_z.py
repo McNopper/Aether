@@ -8,7 +8,9 @@ copied unchanged. Preserves file encoding, line endings, and numeric precision.
 Usage:
     python translate_obj_z.py <input.obj> <offset> <output.obj>
 """
+import os
 import sys
+import tempfile
 
 
 def fmt(value):
@@ -56,15 +58,44 @@ def transform_v_line(line_bytes, offset):
     return out.encode("ascii") + eol
 
 
+def resolve_output(input_path, output_path):
+    """Return (write_path, finalize). In-place (output == input) writes to a temp
+    file in the same directory and atomically replaces it on finalize(); otherwise
+    writes the output directly. Prevents truncating the input mid-read during an
+    in-place overwrite (output_path opened 'wb' would zero the file before the
+    read loop finishes)."""
+    try:
+        same = os.path.samefile(input_path, output_path)
+    except OSError:
+        same = os.path.abspath(input_path) == os.path.abspath(output_path)
+    if not same:
+        return output_path, lambda: None
+    directory = os.path.dirname(os.path.abspath(output_path)) or "."
+    fd, tmp = tempfile.mkstemp(suffix=".tmp", dir=directory)
+    os.close(fd)
+
+    def finalize():
+        os.replace(tmp, output_path)
+
+    return tmp, finalize
+
+
 def process(input_path, offset, output_path):
-    with open(input_path, "rb") as fin, open(output_path, "wb") as fout:
-        for line in fin:
-            head = line.lstrip()
-            # Only 'v ' (positions). Deliberately NOT vn/vt (they start 'vn'/'vt').
-            if head.startswith(b"v ") or head.startswith(b"v\t"):
-                fout.write(transform_v_line(line, offset))
-            else:
-                fout.write(line)
+    write_path, finalize = resolve_output(input_path, output_path)
+    try:
+        with open(input_path, "rb") as fin, open(write_path, "wb") as fout:
+            for line in fin:
+                head = line.lstrip()
+                # Only 'v ' (positions). Deliberately NOT vn/vt (they start 'vn'/'vt').
+                if head.startswith(b"v ") or head.startswith(b"v\t"):
+                    fout.write(transform_v_line(line, offset))
+                else:
+                    fout.write(line)
+    except BaseException:
+        if write_path != output_path and os.path.exists(write_path):
+            os.remove(write_path)
+        raise
+    finalize()
 
 
 def main(argv):

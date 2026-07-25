@@ -78,8 +78,9 @@ faithful to OpenPBR — the sweet spot glTF and USD each sit to one side of.
   "lin_rec709_scene"` (absent → consumer default, Rec.2020); consumers convert all
   assets to it on load.
 * **Camera preset** (`<name>.camera.toml`): a small standalone preset file with
-  `translate`, `look_at`, `vertical_field_of_view` and `ev100` keys. It is meant to
-  be referenced from the scene file's `[camera]` section.
+  `translate`, rotation (`rotate` quaternion or `rotate_x`/`rotate_y`/`rotate_z`
+  Euler), `vertical_field_of_view` and `ev100` keys. It is meant to be referenced
+  from the scene file's `[camera]` section.
 * **Setting presets** (`presets/<name>.<group>.toml`): the `[render]`, `[camera]` and
   `[tonemap]` and `[post_tonemap]` sections may carry a `reference = "presets/…"` key pointing at a standalone
   preset file (top-level keys, same shape as the inline section). The referenced file is

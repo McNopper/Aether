@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Rotate a Wavefront OBJ file around the Y axis by 90, 180, or 270 degrees.
+"""Rotate a Wavefront OBJ file around the X axis by 90, 180, or 270 degrees.
 
 Uses exact coordinate swizzling (no trig). Because these angles only swap
 axes and flip signs, we operate directly on the ORIGINAL string tokens
 (negating by toggling a leading '-') so numeric precision/formatting of each
 value is preserved byte-for-byte.
 
-Right-handed Y-axis rotation swizzle table (applied to the token slots):
-    90:  (x, y, z) -> ( z, y, -x)
-    180: (x, y, z) -> (-x, y, -z)
-    270: (x, y, z) -> (-z, y,  x)
+Right-handed X-axis rotation swizzle table (applied to the token slots):
+    90:  (x, y, z) -> (x, -z,  y)
+    180: (x, y, z) -> (x, -y, -z)
+    270: (x, y, z) -> (x,  z, -y)
 
 Usage:
-    python rotate_obj_y.py <input.obj> <90|180|270> <output.obj>
+    python rotate_obj_x.py <input.obj> <90|180|270> <output.obj>
 """
 import os
 import sys
@@ -43,11 +43,11 @@ def negate_token(tok):
 def make_swizzle(angle):
     """Return a function mapping (x_tok, y_tok, z_tok) -> (a, b, c) tokens."""
     if angle == 90:
-        return lambda x, y, z: (z, y, negate_token(x))
+        return lambda x, y, z: (x, negate_token(z), y)
     if angle == 180:
-        return lambda x, y, z: (negate_token(x), y, negate_token(z))
+        return lambda x, y, z: (x, negate_token(y), negate_token(z))
     if angle == 270:
-        return lambda x, y, z: (negate_token(z), y, x)
+        return lambda x, y, z: (x, z, negate_token(y))
     raise ValueError("angle must be 90, 180, or 270")
 
 
@@ -126,7 +126,7 @@ def process(input_path, angle, output_path):
 def main(argv):
     if len(argv) != 4:
         sys.stderr.write(
-            "Usage: python rotate_obj_y.py <input.obj> <90|180|270> <output.obj>\n"
+            "Usage: python rotate_obj_x.py <input.obj> <90|180|270> <output.obj>\n"
         )
         return 2
     input_path = argv[1]
