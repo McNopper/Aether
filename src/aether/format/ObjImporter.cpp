@@ -41,6 +41,8 @@ struct VertexHash {
 
 struct VertexEqual {
     [[nodiscard]] bool operator()(const Vertex& a, const Vertex& b) const noexcept {
+        // Safe: MeshData.hpp static_asserts that Vertex is 8 tightly packed floats (no padding).
+        // NOLINTNEXTLINE(bugprone-suspicious-memory-comparison)
         return std::memcmp(&a, &b, sizeof(Vertex)) == 0;
     }
 };

@@ -16,10 +16,21 @@
 #   * modernize-use-default-member-init      - unsatisfiable on anonymous-union
 #                                              colour aliases (x/y/z, r/g/b);
 #                                              explicit ctors already init
+#   * modernize-use-designated-initializers  - high churn across existing
+#                                              aggregate-initialisation-heavy
+#                                              graphics/scene code; style choice
 #   * bugprone-easily-swappable-parameters   - noisy, subjective
 #   * bugprone-exception-escape              - pervasive false positive
 #                                              (iostreams in main() may
 #                                              "throw" from the platform STL)
+#   * clang-analyzer-security.ArrayBound     - flags slang-math's intentional
+#                                              `(&x)[i]` contiguous-member
+#                                              indexing (documented, works on
+#                                              every target toolchain) in every
+#                                              consumer; high false-positive,
+#                                              low yield in this Vulkan codebase.
+#                                              All other clang-analyzer checks
+#                                              stay on.
 #
 # Headers use traditional include guards (not #pragma once), so
 # portability-avoid-pragma-once is left ENABLED as a warning.
@@ -30,6 +41,7 @@ Checks: >
   -*,
   clang-diagnostic-*,
   clang-analyzer-*,
+  -clang-analyzer-security.ArrayBound,
   bugprone-*,
   performance-*,
   portability-*,
@@ -37,6 +49,7 @@ Checks: >
   -modernize-use-trailing-return-type,
   -modernize-avoid-c-arrays,
   -modernize-use-default-member-init,
+  -modernize-use-designated-initializers,
   -bugprone-easily-swappable-parameters,
   -bugprone-exception-escape
 

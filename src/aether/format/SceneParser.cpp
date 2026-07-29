@@ -45,7 +45,7 @@ namespace {
 /// Resolve a `scale` value: a single number (uniform) or a 3-element array.
 [[nodiscard]] std::optional<Vec3> asScale(const toml::node& n) {
     if (const auto s = n.value<double>()) {
-        const float scale = static_cast<float>(*s);
+        const auto scale = static_cast<float>(*s);
         return Vec3{scale, scale, scale};
     }
     return asVec3(n);
@@ -154,7 +154,7 @@ void resolveSection(const toml::table& root,
         try {
             const toml::table ext = toml::parse_file((baseDir / *ref).string());
             apply(ext, desc);
-        } catch (const toml::parse_error&) {
+        } catch (const toml::parse_error&) { // NOLINT(bugprone-empty-catch)
             // Missing / malformed reference: fall back to inline keys only.
         }
     }

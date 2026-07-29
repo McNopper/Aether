@@ -20,6 +20,12 @@ struct Vertex {
     Vec2 uv{0.0F};
 };
 
+// Vertex is 8 tightly packed floats (position, normal, uv) with no padding.
+// ObjImporter hashes/compares it byte-wise, which is only well-defined while
+// this invariant holds, so enforce it at compile time.
+static_assert(sizeof(Vertex) == 8 * sizeof(float),
+              "Vertex must stay 8 tightly packed floats for byte-wise hashing/comparison.");
+
 /// Indexed triangle mesh: deduplicated vertices + a flat index buffer.
 struct MeshData {
     std::vector<Vertex> vertices;
