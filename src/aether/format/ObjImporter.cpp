@@ -13,9 +13,9 @@ namespace aether {
 namespace {
 
 struct ObjIndex {
-    int m_position = 0;
-    int m_texcoord = 0;
-    int m_normal = 0;
+    std::int32_t m_position = 0;
+    std::int32_t m_texcoord = 0;
+    std::int32_t m_normal = 0;
 };
 
 struct PendingMesh {
@@ -65,12 +65,12 @@ struct VertexEqual {
     return static_cast<bool>(s >> v.x >> v.y);
 }
 
-[[nodiscard]] int resolveIndex(int idx, std::size_t count) noexcept {
+[[nodiscard]] std::int32_t resolveIndex(std::int32_t idx, std::size_t count) noexcept {
     if (idx > 0) {
         return idx - 1;
     }
     if (idx < 0) {
-        return static_cast<int>(count) + idx;
+        return static_cast<std::int32_t>(count) + idx;
     }
     return -1;
 }
@@ -116,9 +116,9 @@ struct VertexEqual {
     mesh.indices.reserve(pending.m_indices.size());
 
     for (const ObjIndex& oi : pending.m_indices) {
-        const int p = resolveIndex(oi.m_position, positions.size());
-        const int n = resolveIndex(oi.m_normal, normals.size());
-        const int t = resolveIndex(oi.m_texcoord, texcoords.size());
+        const std::int32_t p = resolveIndex(oi.m_position, positions.size());
+        const std::int32_t n = resolveIndex(oi.m_normal, normals.size());
+        const std::int32_t t = resolveIndex(oi.m_texcoord, texcoords.size());
 
         if (p < 0 || std::cmp_greater_equal(p, positions.size())) {
             return false;
