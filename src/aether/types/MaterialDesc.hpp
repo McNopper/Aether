@@ -1,6 +1,7 @@
 #ifndef AETHER_TYPES_MATERIALDESC_HPP
 #define AETHER_TYPES_MATERIALDESC_HPP
 
+#include <cstdint>
 #include <string>
 
 #include "aether/types/Math.hpp"

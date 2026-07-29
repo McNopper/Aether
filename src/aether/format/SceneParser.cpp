@@ -1,11 +1,14 @@
 #include "aether/format/SceneParser.hpp"
 
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <slang-math/slang-math.hpp>
 #include <string>
 #include <string_view>
 #include <toml++/toml.hpp>
+
+#include "aether/format/SceneParser.hpp"
 
 namespace aether {
 namespace {
