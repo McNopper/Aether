@@ -39,7 +39,7 @@ struct CameraDesc {
 /// Material assignment lives on the instance, not the mesh: the same mesh can be
 /// placed twice with different materials (e.g. a parameter sweep).
 struct MeshDesc {
-    enum class Kind : uint8_t {
+    enum class Kind : std::uint8_t {
         Object, ///< Wavefront OBJ (`objPath`)
         Sphere, ///< analytic / procedural sphere (`sphereRadius`)
         Box,    ///< procedural box (`boxHalf` half-extents)
@@ -79,8 +79,8 @@ struct InstanceDesc {
 struct SceneDesc {
     CameraDesc camera;
 
-    std::optional<uint32_t> spp;                    ///< samples per pixel
-    std::optional<uint32_t> maxDepth;               ///< maximum ray bounce depth
+    std::optional<std::uint32_t> spp;               ///< samples per pixel
+    std::optional<std::uint32_t> maxDepth;          ///< maximum ray bounce depth
     std::optional<float> envUnitNits;               ///< cd/m² per unit EXR value
     std::optional<std::string> envMapFile;          ///< equirect EXR IBL path (relative)
     std::optional<std::string> tonemapper;          ///< raw `tonemapper` token (e.g. "agx")

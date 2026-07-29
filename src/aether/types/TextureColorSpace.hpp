@@ -15,7 +15,7 @@ namespace aether {
 /// declared color space; the renderer / Harmonia converts to its (always
 /// linear) working color space: decode transfer function, then primaries.
 /// Non-color maps (normal, ORM, roughness) use Data — no conversion applies.
-enum class TextureColorSpace : uint8_t {
+enum class TextureColorSpace : std::uint8_t {
     Data = 0,        ///< "data"              — uninterpreted; no conversion (normal, ORM, …)
     SrgbRec709Scene, ///< "srgb_rec709_scene" — sRGB OETF, Rec.709 primaries
     LinRec709Scene,  ///< "lin_rec709_scene"  — linear, Rec.709 primaries

@@ -19,7 +19,7 @@ namespace aether {
 /// of a material share the primaries declared here. Mixing gamuts within a
 /// material is invalid (texture encodings like sRGB OETF are fine — only the
 /// primaries must match). Data maps carry no primaries and are exempt.
-enum class MaterialColorSpace : uint8_t {
+enum class MaterialColorSpace : std::uint8_t {
     LinRec709 = 0, ///< "lin_rec709_scene"  — default, convert on load
     LinRec2020,    ///< "lin_rec2020_scene"
 };

@@ -107,11 +107,11 @@ void applyCamera(const toml::table& cam, SceneDesc& desc) {
 }
 
 void applyRender(const toml::table& render, SceneDesc& desc) {
-    if (const auto v = render["samples_per_pixel"].value<int64_t>()) {
-        desc.spp = static_cast<uint32_t>(*v);
+    if (const auto v = render["samples_per_pixel"].value<std::int64_t>()) {
+        desc.spp = static_cast<std::uint32_t>(*v);
     }
-    if (const auto v = render["max_depth"].value<int64_t>()) {
-        desc.maxDepth = static_cast<uint32_t>(*v);
+    if (const auto v = render["max_depth"].value<std::int64_t>()) {
+        desc.maxDepth = static_cast<std::uint32_t>(*v);
     }
     if (const auto v = render["environment_unit_nits"].value<double>()) {
         desc.envUnitNits = static_cast<float>(*v);

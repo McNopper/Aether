@@ -29,7 +29,7 @@ static_assert(sizeof(Vertex) == 8 * sizeof(float),
 /// Indexed triangle mesh: deduplicated vertices + a flat index buffer.
 struct MeshData {
     std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
+    std::vector<std::uint32_t> indices;
 
     [[nodiscard]] bool empty() const noexcept { return indices.empty(); }
 };
