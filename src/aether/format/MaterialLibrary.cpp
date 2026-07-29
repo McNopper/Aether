@@ -49,125 +49,52 @@ namespace {
 void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
     const std::string_view kw = normalise(rawKw);
 
+    using TextureSlot = TextureRef MaterialDesc::*;
+    using ScalarSetter = void (*)(MaterialDesc&, float);
+    using ColorSetter = void (*)(MaterialDesc&, const Vec3&);
+    using BoolSetter = void (*)(MaterialDesc&, const toml::node&);
+
     // ── Texture map paths (string values) ────────────────────────────────
-    if (kw == "map_base_color") {
-        p.map_base_color.path = value.value_or<std::string>("");
-        return;
-    }
-    if (kw == "map_normal") {
-        p.map_normal.path = value.value_or<std::string>("");
-        return;
-    }
-    if (kw == "map_orm") {
-        p.map_orm.path = value.value_or<std::string>("");
-        return;
-    }
-    if (kw == "map_roughness") {
-        p.map_roughness.path = value.value_or<std::string>("");
-        return;
-    }
-    if (kw == "map_metalness") {
-        p.map_metalness.path = value.value_or<std::string>("");
-        return;
-    }
-    if (kw == "map_emission_color") {
-        p.map_emission_color.path = value.value_or<std::string>("");
-        return;
-    }
-    if (kw == "map_coat_normal") {
-        p.map_coat_normal.path = value.value_or<std::string>("");
-        return;
-    }
-    if (kw == "map_tangent") {
-        p.map_tangent.path = value.value_or<std::string>("");
-        return;
-    }
-    if (kw == "map_coat_tangent") {
-        p.map_coat_tangent.path = value.value_or<std::string>("");
+    static const std::unordered_map<std::string_view, TextureSlot> texturePathSetters = {
+        {"map_base_color", &MaterialDesc::map_base_color},
+        {"map_normal", &MaterialDesc::map_normal},
+        {"map_orm", &MaterialDesc::map_orm},
+        {"map_roughness", &MaterialDesc::map_roughness},
+        {"map_metalness", &MaterialDesc::map_metalness},
+        {"map_emission_color", &MaterialDesc::map_emission_color},
+        {"map_coat_normal", &MaterialDesc::map_coat_normal},
+        {"map_tangent", &MaterialDesc::map_tangent},
+        {"map_coat_tangent", &MaterialDesc::map_coat_tangent},
+    };
+    if (const auto it = texturePathSetters.find(kw); it != texturePathSetters.end()) {
+        (p.*(it->second)).path = value.value_or<std::string>("");
         return;
     }
 
     // ── Texture map color spaces (ColorInterop interop IDs) ──────────────
     // Unknown tokens keep the slot's default and warn — silently treating a
     // wrong color space as data would render wrong colors.
-    if (kw == "map_base_color_colorspace") {
+    struct ColorSpaceSetter {
+        TextureSlot slot{};
+        std::string_view label{};
+    };
+    static const std::unordered_map<std::string_view, ColorSpaceSetter> colorspaceSetters = {
+        {"map_base_color_colorspace", {&MaterialDesc::map_base_color, "map_base_color"}},
+        {"map_normal_colorspace", {&MaterialDesc::map_normal, "map_normal"}},
+        {"map_orm_colorspace", {&MaterialDesc::map_orm, "map_orm"}},
+        {"map_roughness_colorspace", {&MaterialDesc::map_roughness, "map_roughness"}},
+        {"map_metalness_colorspace", {&MaterialDesc::map_metalness, "map_metalness"}},
+        {"map_emission_color_colorspace", {&MaterialDesc::map_emission_color, "map_emission_color"}},
+        {"map_coat_normal_colorspace", {&MaterialDesc::map_coat_normal, "map_coat_normal"}},
+        {"map_tangent_colorspace", {&MaterialDesc::map_tangent, "map_tangent"}},
+        {"map_coat_tangent_colorspace", {&MaterialDesc::map_coat_tangent, "map_coat_tangent"}},
+    };
+    if (const auto it = colorspaceSetters.find(kw); it != colorspaceSetters.end()) {
         const std::string token = value.value_or<std::string>("");
         if (const auto cs = parseTextureColorSpace(token)) {
-            p.map_base_color.colorSpace = *cs;
+            (p.*(it->second.slot)).colorSpace = *cs;
         } else {
-            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_base_color\n";
-        }
-        return;
-    }
-    if (kw == "map_normal_colorspace") {
-        const std::string token = value.value_or<std::string>("");
-        if (const auto cs = parseTextureColorSpace(token)) {
-            p.map_normal.colorSpace = *cs;
-        } else {
-            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_normal\n";
-        }
-        return;
-    }
-    if (kw == "map_orm_colorspace") {
-        const std::string token = value.value_or<std::string>("");
-        if (const auto cs = parseTextureColorSpace(token)) {
-            p.map_orm.colorSpace = *cs;
-        } else {
-            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_orm\n";
-        }
-        return;
-    }
-    if (kw == "map_roughness_colorspace") {
-        const std::string token = value.value_or<std::string>("");
-        if (const auto cs = parseTextureColorSpace(token)) {
-            p.map_roughness.colorSpace = *cs;
-        } else {
-            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_roughness\n";
-        }
-        return;
-    }
-    if (kw == "map_metalness_colorspace") {
-        const std::string token = value.value_or<std::string>("");
-        if (const auto cs = parseTextureColorSpace(token)) {
-            p.map_metalness.colorSpace = *cs;
-        } else {
-            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_metalness\n";
-        }
-        return;
-    }
-    if (kw == "map_emission_color_colorspace") {
-        const std::string token = value.value_or<std::string>("");
-        if (const auto cs = parseTextureColorSpace(token)) {
-            p.map_emission_color.colorSpace = *cs;
-        } else {
-            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_emission_color\n";
-        }
-        return;
-    }
-    if (kw == "map_coat_normal_colorspace") {
-        const std::string token = value.value_or<std::string>("");
-        if (const auto cs = parseTextureColorSpace(token)) {
-            p.map_coat_normal.colorSpace = *cs;
-        } else {
-            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_coat_normal\n";
-        }
-        return;
-    }
-    if (kw == "map_tangent_colorspace") {
-        const std::string token = value.value_or<std::string>("");
-        if (const auto cs = parseTextureColorSpace(token)) {
-            p.map_tangent.colorSpace = *cs;
-        } else {
-            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_tangent\n";
-        }
-        return;
-    }
-    if (kw == "map_coat_tangent_colorspace") {
-        const std::string token = value.value_or<std::string>("");
-        if (const auto cs = parseTextureColorSpace(token)) {
-            p.map_coat_tangent.colorSpace = *cs;
-        } else {
-            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for map_coat_tangent\n";
+            std::cerr << "[aether] unsupported texture colorspace \"" << token << "\" for " << it->second.label << "\n";
         }
         return;
     }
@@ -176,113 +103,89 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
     // NOTE: Aether records colors verbatim in the declared input color space
     // (p.inputColorSpace); the consumer performs any conversion. Non-color data
     // (subsurface_radius_scale, transmission_scatter) is never color-converted.
-    if (kw == "base_color" || kw == "specular_color" || kw == "transmission_color" || kw == "coat_color" ||
-        kw == "fuzz_color" || kw == "emission_color" || kw == "subsurface_color" || kw == "subsurface_radius_scale" ||
-        kw == "transmission_scatter") {
-        const auto c = asVec3(value);
-        if (!c) {
-            return;
-        }
-        if (kw == "base_color") {
-            p.base_color = *c;
-        } else if (kw == "specular_color") {
-            p.specular_color = *c;
-        } else if (kw == "transmission_color") {
-            p.transmission_color = *c;
-        } else if (kw == "transmission_scatter") {
-            p.transmission_scatter = *c;
-        } else if (kw == "coat_color") {
-            p.coat_color = *c;
-        } else if (kw == "fuzz_color") {
-            p.fuzz_color = *c;
-        } else if (kw == "emission_color") {
-            p.emission_color = *c;
-        } else if (kw == "subsurface_color") {
-            p.subsurface_color = *c;
-        } else if (kw == "subsurface_radius_scale") {
-            p.subsurface_radius_scale = *c;
+    static const std::unordered_map<std::string_view, ColorSetter> colorSetters = {
+        {"base_color", [](MaterialDesc& d, const Vec3& v) { d.base_color = v; }},
+        {"specular_color", [](MaterialDesc& d, const Vec3& v) { d.specular_color = v; }},
+        {"transmission_color", [](MaterialDesc& d, const Vec3& v) { d.transmission_color = v; }},
+        {"transmission_scatter", [](MaterialDesc& d, const Vec3& v) { d.transmission_scatter = v; }},
+        {"coat_color", [](MaterialDesc& d, const Vec3& v) { d.coat_color = v; }},
+        {"fuzz_color", [](MaterialDesc& d, const Vec3& v) { d.fuzz_color = v; }},
+        {"emission_color", [](MaterialDesc& d, const Vec3& v) { d.emission_color = v; }},
+        {"subsurface_color", [](MaterialDesc& d, const Vec3& v) { d.subsurface_color = v; }},
+        {"subsurface_radius_scale", [](MaterialDesc& d, const Vec3& v) { d.subsurface_radius_scale = v; }},
+    };
+    if (const auto it = colorSetters.find(kw); it != colorSetters.end()) {
+        if (const auto c = asVec3(value)) {
+            it->second(p, *c);
         }
         return;
     }
 
-    // ── Boolean keyword ───────────────────────────────────────────────────
-    if (kw == "geometry_thin_walled") {
-        if (const auto b = value.value<bool>()) {
-            p.geometry_thin_walled = *b;
-        } else if (const auto f = asFloat(value)) {
-            p.geometry_thin_walled = (*f != 0.0F);
-        }
-        return;
-    }
-    if (kw == "emission_as_light_source") {
-        if (const auto b = value.value<bool>()) {
-            p.emission_as_light_source = *b;
-        } else if (const auto f = asFloat(value)) {
-            p.emission_as_light_source = (*f != 0.0F);
-        }
+    // ── Boolean keywords ──────────────────────────────────────────────────
+    static const std::unordered_map<std::string_view, BoolSetter> boolSetters = {
+        {"geometry_thin_walled",
+         [](MaterialDesc& d, const toml::node& v) {
+             if (const auto b = v.value<bool>()) {
+                 d.geometry_thin_walled = *b;
+             } else if (const auto f = asFloat(v)) {
+                 d.geometry_thin_walled = (*f != 0.0F);
+             }
+         }},
+        {"emission_as_light_source",
+         [](MaterialDesc& d, const toml::node& v) {
+             if (const auto b = v.value<bool>()) {
+                 d.emission_as_light_source = *b;
+             } else if (const auto f = asFloat(v)) {
+                 d.emission_as_light_source = (*f != 0.0F);
+             }
+         }},
+    };
+    if (const auto it = boolSetters.find(kw); it != boolSetters.end()) {
+        it->second(p, value);
         return;
     }
 
     // ── Scalar keywords ───────────────────────────────────────────────────
-    const auto opt = asFloat(value);
-    if (!opt) {
+    static const std::unordered_map<std::string_view, ScalarSetter> scalarSetters = {
+        {"base_weight", [](MaterialDesc& d, float f) { d.base_weight = std::clamp(f, 0.0F, 1.0F); }},
+        {"base_metalness", [](MaterialDesc& d, float f) { d.base_metalness = f; }},
+        {"base_diffuse_roughness", [](MaterialDesc& d, float f) { d.base_diffuse_roughness = f; }},
+        {"specular_weight", [](MaterialDesc& d, float f) { d.specular_weight = std::clamp(f, 0.0F, 1.0F); }},
+        {"specular_roughness", [](MaterialDesc& d, float f) { d.specular_roughness = std::clamp(f, 0.0F, 1.0F); }},
+        {"specular_roughness_anisotropy",
+         [](MaterialDesc& d, float f) { d.specular_roughness_anisotropy = std::clamp(f, 0.0F, 1.0F); }},
+        {"specular_ior", [](MaterialDesc& d, float f) { d.specular_ior = std::max(f, 1.0F); }},
+        {"transmission_weight", [](MaterialDesc& d, float f) { d.transmission_weight = std::clamp(f, 0.0F, 1.0F); }},
+        {"transmission_depth", [](MaterialDesc& d, float f) { d.transmission_depth = f; }},
+        {"transmission_scatter_anisotropy",
+         [](MaterialDesc& d, float f) { d.transmission_scatter_anisotropy = std::clamp(f, -1.0F, 1.0F); }},
+        {"transmission_dispersion_scale",
+         [](MaterialDesc& d, float f) { d.transmission_dispersion_scale = std::max(f, 0.0F); }},
+        {"transmission_dispersion_abbe_number",
+         [](MaterialDesc& d, float f) { d.transmission_dispersion_abbe_number = f; }},
+        {"thin_film_weight", [](MaterialDesc& d, float f) { d.thin_film_weight = std::clamp(f, 0.0F, 1.0F); }},
+        {"thin_film_thickness", [](MaterialDesc& d, float f) { d.thin_film_thickness = std::max(f, 0.0F); }},
+        {"thin_film_ior", [](MaterialDesc& d, float f) { d.thin_film_ior = std::max(f, 1.0F); }},
+        {"coat_weight", [](MaterialDesc& d, float f) { d.coat_weight = std::clamp(f, 0.0F, 1.0F); }},
+        {"coat_roughness", [](MaterialDesc& d, float f) { d.coat_roughness = std::clamp(f, 0.0F, 1.0F); }},
+        {"coat_roughness_anisotropy",
+         [](MaterialDesc& d, float f) { d.coat_roughness_anisotropy = std::clamp(f, 0.0F, 1.0F); }},
+        {"coat_ior", [](MaterialDesc& d, float f) { d.coat_ior = std::max(f, 1.0F); }},
+        {"coat_darkening", [](MaterialDesc& d, float f) { d.coat_darkening = f; }},
+        {"fuzz_weight", [](MaterialDesc& d, float f) { d.fuzz_weight = std::clamp(f, 0.0F, 1.0F); }},
+        {"fuzz_roughness", [](MaterialDesc& d, float f) { d.fuzz_roughness = f; }},
+        {"emission_luminance", [](MaterialDesc& d, float f) { d.emission_luminance = f; }},
+        {"subsurface_weight", [](MaterialDesc& d, float f) { d.subsurface_weight = std::clamp(f, 0.0F, 1.0F); }},
+        {"subsurface_radius", [](MaterialDesc& d, float f) { d.subsurface_radius = f; }},
+        {"subsurface_scatter_anisotropy",
+         [](MaterialDesc& d, float f) { d.subsurface_scatter_anisotropy = std::clamp(f, -1.0F, 1.0F); }},
+        {"geometry_opacity", [](MaterialDesc& d, float f) { d.geometry_opacity = std::clamp(f, 0.0F, 1.0F); }},
+    };
+    if (const auto it = scalarSetters.find(kw); it != scalarSetters.end()) {
+        if (const auto f = asFloat(value)) {
+            it->second(p, *f);
+        }
         return;
-    }
-    const float f = *opt;
-    if (kw == "base_weight") {
-        p.base_weight = std::clamp(f, 0.0F, 1.0F);
-    } else if (kw == "base_metalness") {
-        p.base_metalness = f;
-    } else if (kw == "base_diffuse_roughness") {
-        p.base_diffuse_roughness = f;
-    } else if (kw == "specular_weight") {
-        p.specular_weight = std::clamp(f, 0.0F, 1.0F);
-    } else if (kw == "specular_roughness") {
-        p.specular_roughness = std::clamp(f, 0.0F, 1.0F);
-    } else if (kw == "specular_roughness_anisotropy") {
-        p.specular_roughness_anisotropy = std::clamp(f, 0.0F, 1.0F);
-    } else if (kw == "specular_ior") {
-        p.specular_ior = std::max(f, 1.0F);
-    } else if (kw == "transmission_weight") {
-        p.transmission_weight = std::clamp(f, 0.0F, 1.0F);
-    } else if (kw == "transmission_depth") {
-        p.transmission_depth = f;
-    } else if (kw == "transmission_scatter_anisotropy") {
-        p.transmission_scatter_anisotropy = std::clamp(f, -1.0F, 1.0F);
-    } else if (kw == "transmission_dispersion_scale") {
-        p.transmission_dispersion_scale = std::max(f, 0.0F);
-    } else if (kw == "transmission_dispersion_abbe_number") {
-        p.transmission_dispersion_abbe_number = f;
-    } else if (kw == "thin_film_weight") {
-        p.thin_film_weight = std::clamp(f, 0.0F, 1.0F);
-    } else if (kw == "thin_film_thickness") {
-        p.thin_film_thickness = std::max(f, 0.0F);
-    } else if (kw == "thin_film_ior") {
-        p.thin_film_ior = std::max(f, 1.0F);
-    } else if (kw == "coat_weight") {
-        p.coat_weight = std::clamp(f, 0.0F, 1.0F);
-    } else if (kw == "coat_roughness") {
-        p.coat_roughness = std::clamp(f, 0.0F, 1.0F);
-    } else if (kw == "coat_roughness_anisotropy") {
-        p.coat_roughness_anisotropy = std::clamp(f, 0.0F, 1.0F);
-    } else if (kw == "coat_ior") {
-        p.coat_ior = std::max(f, 1.0F);
-    } else if (kw == "coat_darkening") {
-        p.coat_darkening = f;
-    } else if (kw == "fuzz_weight") {
-        p.fuzz_weight = std::clamp(f, 0.0F, 1.0F);
-    } else if (kw == "fuzz_roughness") {
-        p.fuzz_roughness = f;
-    } else if (kw == "emission_luminance") {
-        p.emission_luminance = f;
-    } else if (kw == "subsurface_weight") {
-        p.subsurface_weight = std::clamp(f, 0.0F, 1.0F);
-    } else if (kw == "subsurface_radius") {
-        p.subsurface_radius = f;
-    } else if (kw == "subsurface_scatter_anisotropy") {
-        p.subsurface_scatter_anisotropy = std::clamp(f, -1.0F, 1.0F);
-    } else if (kw == "geometry_opacity") {
-        p.geometry_opacity = std::clamp(f, 0.0F, 1.0F);
     }
 }
 
