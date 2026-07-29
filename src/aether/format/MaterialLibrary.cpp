@@ -7,6 +7,8 @@
 #include <string_view>
 #include <toml++/toml.hpp>
 
+#include "aether/format/toml_readers.hpp"
+
 namespace aether {
 namespace {
 
@@ -40,20 +42,6 @@ namespace {
         return static_cast<float>(*v);
     }
     return std::nullopt;
-}
-
-[[nodiscard]] std::optional<Vec3> asVec3(const toml::node& n) {
-    const toml::array* arr = n.as_array();
-    if (arr == nullptr || arr->size() != 3) {
-        return std::nullopt;
-    }
-    const auto x = (*arr)[0].value<double>();
-    const auto y = (*arr)[1].value<double>();
-    const auto z = (*arr)[2].value<double>();
-    if (!x || !y || !z) {
-        return std::nullopt;
-    }
-    return Vec3{static_cast<float>(*x), static_cast<float>(*y), static_cast<float>(*z)};
 }
 
 // ── Parameter dispatch ────────────────────────────────────────────────────
@@ -242,21 +230,21 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
     }
     const float f = *opt;
     if (kw == "base_weight") {
-        p.base_weight = f;
+        p.base_weight = std::clamp(f, 0.0F, 1.0F);
     } else if (kw == "base_metalness") {
         p.base_metalness = f;
     } else if (kw == "base_diffuse_roughness") {
         p.base_diffuse_roughness = f;
     } else if (kw == "specular_weight") {
-        p.specular_weight = f;
+        p.specular_weight = std::clamp(f, 0.0F, 1.0F);
     } else if (kw == "specular_roughness") {
-        p.specular_roughness = f;
+        p.specular_roughness = std::clamp(f, 0.0F, 1.0F);
     } else if (kw == "specular_roughness_anisotropy") {
-        p.specular_roughness_anisotropy = f;
+        p.specular_roughness_anisotropy = std::clamp(f, 0.0F, 1.0F);
     } else if (kw == "specular_ior") {
-        p.specular_ior = f;
+        p.specular_ior = std::max(f, 1.0F);
     } else if (kw == "transmission_weight") {
-        p.transmission_weight = f;
+        p.transmission_weight = std::clamp(f, 0.0F, 1.0F);
     } else if (kw == "transmission_depth") {
         p.transmission_depth = f;
     } else if (kw == "transmission_scatter_anisotropy") {
@@ -266,35 +254,35 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
     } else if (kw == "transmission_dispersion_abbe_number") {
         p.transmission_dispersion_abbe_number = f;
     } else if (kw == "thin_film_weight") {
-        p.thin_film_weight = f;
+        p.thin_film_weight = std::clamp(f, 0.0F, 1.0F);
     } else if (kw == "thin_film_thickness") {
-        p.thin_film_thickness = f;
+        p.thin_film_thickness = std::max(f, 0.0F);
     } else if (kw == "thin_film_ior") {
-        p.thin_film_ior = f;
+        p.thin_film_ior = std::max(f, 1.0F);
     } else if (kw == "coat_weight") {
-        p.coat_weight = f;
+        p.coat_weight = std::clamp(f, 0.0F, 1.0F);
     } else if (kw == "coat_roughness") {
-        p.coat_roughness = f;
+        p.coat_roughness = std::clamp(f, 0.0F, 1.0F);
     } else if (kw == "coat_roughness_anisotropy") {
-        p.coat_roughness_anisotropy = f;
+        p.coat_roughness_anisotropy = std::clamp(f, 0.0F, 1.0F);
     } else if (kw == "coat_ior") {
-        p.coat_ior = f;
+        p.coat_ior = std::max(f, 1.0F);
     } else if (kw == "coat_darkening") {
         p.coat_darkening = f;
     } else if (kw == "fuzz_weight") {
-        p.fuzz_weight = f;
+        p.fuzz_weight = std::clamp(f, 0.0F, 1.0F);
     } else if (kw == "fuzz_roughness") {
         p.fuzz_roughness = f;
     } else if (kw == "emission_luminance") {
         p.emission_luminance = f;
     } else if (kw == "subsurface_weight") {
-        p.subsurface_weight = f;
+        p.subsurface_weight = std::clamp(f, 0.0F, 1.0F);
     } else if (kw == "subsurface_radius") {
         p.subsurface_radius = f;
     } else if (kw == "subsurface_scatter_anisotropy") {
         p.subsurface_scatter_anisotropy = std::clamp(f, -1.0F, 1.0F);
     } else if (kw == "geometry_opacity") {
-        p.geometry_opacity = f;
+        p.geometry_opacity = std::clamp(f, 0.0F, 1.0F);
     }
 }
 

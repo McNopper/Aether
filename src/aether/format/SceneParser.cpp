@@ -8,26 +8,12 @@
 #include <string_view>
 #include <toml++/toml.hpp>
 
-#include "aether/format/SceneParser.hpp"
+#include "aether/format/toml_readers.hpp"
 
 namespace aether {
 namespace {
 
 // ── TOML value readers ─────────────────────────────────────────────────────
-
-[[nodiscard]] std::optional<Vec3> asVec3(const toml::node& n) {
-    const toml::array* arr = n.as_array();
-    if (arr == nullptr || arr->size() != 3) {
-        return std::nullopt;
-    }
-    const auto x = (*arr)[0].value<double>();
-    const auto y = (*arr)[1].value<double>();
-    const auto z = (*arr)[2].value<double>();
-    if (!x || !y || !z) {
-        return std::nullopt;
-    }
-    return Vec3{static_cast<float>(*x), static_cast<float>(*y), static_cast<float>(*z)};
-}
 
 /// Read a quaternion stored on disk as [qx, qy, qz, qw] into a slang-math (x,y,z,w) quat.
 [[nodiscard]] std::optional<Quat> asQuat(const toml::node& n) {

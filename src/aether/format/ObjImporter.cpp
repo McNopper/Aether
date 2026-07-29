@@ -1,11 +1,14 @@
 #include "aether/format/ObjImporter.hpp"
 
+#include <charconv>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <unordered_map>
 #include <utility>
 
@@ -75,26 +78,55 @@ struct VertexEqual {
     return -1;
 }
 
-[[nodiscard]] ObjIndex parseFaceVertex(std::string_view token) {
+[[nodiscard]] std::optional<std::int32_t> parseInt(std::string_view sv) noexcept {
+    std::int32_t value = 0;
+    const auto res = std::from_chars(sv.data(), sv.data() + sv.size(), value);
+    if (res.ec != std::errc{} || res.ptr != sv.data() + sv.size()) {
+        return std::nullopt;
+    }
+    return value;
+}
+
+[[nodiscard]] std::optional<ObjIndex> parseFaceVertex(std::string_view token) noexcept {
     ObjIndex idx{};
     const std::size_t s0 = token.find('/');
     if (s0 == std::string_view::npos) {
-        idx.m_position = std::stoi(std::string(token));
+        const auto pos = parseInt(token);
+        if (!pos) {
+            return std::nullopt;
+        }
+        idx.m_position = *pos;
         return idx;
     }
     const std::size_t s1 = token.find('/', s0 + 1);
-    idx.m_position = std::stoi(std::string(token.substr(0, s0)));
+    const auto pos = parseInt(token.substr(0, s0));
+    if (!pos) {
+        return std::nullopt;
+    }
+    idx.m_position = *pos;
     if (s1 == std::string_view::npos) {
         if (s0 + 1 < token.size()) {
-            idx.m_texcoord = std::stoi(std::string(token.substr(s0 + 1)));
+            const auto tc = parseInt(token.substr(s0 + 1));
+            if (!tc) {
+                return std::nullopt;
+            }
+            idx.m_texcoord = *tc;
         }
         return idx;
     }
     if (s1 > s0 + 1) {
-        idx.m_texcoord = std::stoi(std::string(token.substr(s0 + 1, s1 - s0 - 1)));
+        const auto tc = parseInt(token.substr(s0 + 1, s1 - s0 - 1));
+        if (!tc) {
+            return std::nullopt;
+        }
+        idx.m_texcoord = *tc;
     }
     if (s1 + 1 < token.size()) {
-        idx.m_normal = std::stoi(std::string(token.substr(s1 + 1)));
+        const auto nm = parseInt(token.substr(s1 + 1));
+        if (!nm) {
+            return std::nullopt;
+        }
+        idx.m_normal = *nm;
     }
     return idx;
 }
@@ -213,9 +245,15 @@ std::optional<std::vector<MeshGroup>> ObjImporter::parse(const std::filesystem::
             if (ss >> extra) {
                 continue;
             }
-            pending.m_indices.push_back(parseFaceVertex(t0));
-            pending.m_indices.push_back(parseFaceVertex(t1));
-            pending.m_indices.push_back(parseFaceVertex(t2));
+            const auto v0 = parseFaceVertex(t0);
+            const auto v1 = parseFaceVertex(t1);
+            const auto v2 = parseFaceVertex(t2);
+            if (!v0 || !v1 || !v2) {
+                return std::nullopt;
+            }
+            pending.m_indices.push_back(*v0);
+            pending.m_indices.push_back(*v1);
+            pending.m_indices.push_back(*v2);
         }
     }
 
