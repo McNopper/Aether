@@ -1,4 +1,5 @@
-#pragma once
+#ifndef AETHER_TYPES_SCENEDESC_HPP
+#define AETHER_TYPES_SCENEDESC_HPP
 
 #include <cstdint>
 #include <optional>
@@ -45,10 +46,10 @@ struct MeshDesc {
     };
 
     Kind kind = Kind::Object;
-    std::string name;        ///< unique name referenced by [[instance]] blocks
-    std::string objPath;     ///< Object: OBJ path (relative to scene dir)
+    std::string name;          ///< unique name referenced by [[instance]] blocks
+    std::string objPath;       ///< Object: OBJ path (relative to scene dir)
     float sphereRadius = 0.0F; ///< Sphere: radius
-    Vec3 boxHalf{0.0F};      ///< Box: half-extents
+    Vec3 boxHalf{0.0F};        ///< Box: half-extents
 };
 
 /// A placed instance of a declared mesh.
@@ -78,11 +79,11 @@ struct InstanceDesc {
 struct SceneDesc {
     CameraDesc camera;
 
-    std::optional<uint32_t> spp;           ///< samples per pixel
-    std::optional<uint32_t> maxDepth;      ///< maximum ray bounce depth
-    std::optional<float> envUnitNits;      ///< cd/m² per unit EXR value
-    std::optional<std::string> envMapFile; ///< equirect EXR IBL path (relative)
-    std::optional<std::string> tonemapper; ///< raw `tonemapper` token (e.g. "agx")
+    std::optional<uint32_t> spp;                    ///< samples per pixel
+    std::optional<uint32_t> maxDepth;               ///< maximum ray bounce depth
+    std::optional<float> envUnitNits;               ///< cd/m² per unit EXR value
+    std::optional<std::string> envMapFile;          ///< equirect EXR IBL path (relative)
+    std::optional<std::string> tonemapper;          ///< raw `tonemapper` token (e.g. "agx")
     std::optional<std::string> postTonemapRenderer; ///< raw `renderer` token (e.g. "green_screen")
     /// Raw `working_color_space` token from [render]
     /// ("lin_rec2020_scene" | "lin_rec709_scene" — always linear).
@@ -90,9 +91,10 @@ struct SceneDesc {
     /// absent means the consumer's default (rec2020).
     std::optional<std::string> workingColorSpace;
 
-    std::vector<std::string> mtllibs;       ///< referenced .materials.toml libraries (relative paths)
-    std::vector<MeshDesc> meshes;           ///< declared meshes, deduplicated by name
-    std::vector<InstanceDesc> instances;    ///< placed instances, in declaration order
+    std::vector<std::string> mtllibs;    ///< referenced .materials.toml libraries (relative paths)
+    std::vector<MeshDesc> meshes;        ///< declared meshes, deduplicated by name
+    std::vector<InstanceDesc> instances; ///< placed instances, in declaration order
 };
 
 } // namespace aether
+#endif // AETHER_TYPES_SCENEDESC_HPP

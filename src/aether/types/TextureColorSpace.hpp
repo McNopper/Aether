@@ -1,4 +1,5 @@
-#pragma once
+#ifndef AETHER_TYPES_TEXTURECOLORSPACE_HPP
+#define AETHER_TYPES_TEXTURECOLORSPACE_HPP
 
 #include <cstdint>
 #include <optional>
@@ -36,3 +37,4 @@ enum class TextureColorSpace : uint8_t {
 }
 
 } // namespace aether
+#endif // AETHER_TYPES_TEXTURECOLORSPACE_HPP

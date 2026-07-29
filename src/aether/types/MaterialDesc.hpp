@@ -1,4 +1,5 @@
-#pragma once
+#ifndef AETHER_TYPES_MATERIALDESC_HPP
+#define AETHER_TYPES_MATERIALDESC_HPP
 
 #include <string>
 
@@ -92,7 +93,7 @@ struct MaterialDesc {
     Vec3 subsurface_color{0.8F, 0.8F, 0.8F};
     float subsurface_radius = 1.0F;                  ///< scalar mean-free-path length (OpenPBR float, default 1.0)
     Vec3 subsurface_radius_scale{1.0F, 0.5F, 0.25F}; ///< per-channel RGB MFP multiplier (OpenPBR color3)
-    float subsurface_scatter_anisotropy = 0.0F; ///< HG mean cosine g ∈ [-1,1]
+    float subsurface_scatter_anisotropy = 0.0F;      ///< HG mean cosine g ∈ [-1,1]
 
     // ── geometry (OpenPBR Surface 1.1.1 names) ─────────────────────────────
     float geometry_opacity = 1.0F;
@@ -124,3 +125,4 @@ struct MaterialDesc {
 };
 
 } // namespace aether
+#endif // AETHER_TYPES_MATERIALDESC_HPP

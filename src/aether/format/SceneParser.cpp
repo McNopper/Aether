@@ -1,9 +1,8 @@
 #include "aether/format/SceneParser.hpp"
 
-#include <slang-math/slang-math.hpp>
-
 #include <filesystem>
 #include <optional>
+#include <slang-math/slang-math.hpp>
 #include <string>
 #include <string_view>
 #include <toml++/toml.hpp>

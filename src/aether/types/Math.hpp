@@ -1,4 +1,5 @@
-#pragma once
+#ifndef AETHER_TYPES_MATH_HPP
+#define AETHER_TYPES_MATH_HPP
 #include <slang-math/slang-math.hpp>
 
 /// Math type aliases for the Aether file-format library.
@@ -14,3 +15,4 @@ using Vec4 = sm::float4;
 using Quat = sm::quaternion; ///< stored as (x, y, z, w)
 
 } // namespace aether
+#endif // AETHER_TYPES_MATH_HPP

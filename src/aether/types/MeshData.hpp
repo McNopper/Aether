@@ -1,4 +1,5 @@
-#pragma once
+#ifndef AETHER_TYPES_MESHDATA_HPP
+#define AETHER_TYPES_MESHDATA_HPP
 
 #include <cstdint>
 #include <string>
@@ -38,3 +39,4 @@ struct MeshGroup {
 };
 
 } // namespace aether
+#endif // AETHER_TYPES_MESHDATA_HPP

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef AETHER_AETHER_HPP
+#define AETHER_AETHER_HPP
 
 /// Aether — renderer-agnostic scene & material file-format library.
 ///
@@ -14,3 +15,4 @@
 #include "aether/types/MeshData.hpp"
 #include "aether/types/SceneDesc.hpp"
 #include "aether/types/TextureColorSpace.hpp"
+#endif // AETHER_AETHER_HPP

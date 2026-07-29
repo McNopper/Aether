@@ -1,4 +1,5 @@
-#pragma once
+#ifndef AETHER_FORMAT_MATERIALLIBRARY_HPP
+#define AETHER_FORMAT_MATERIALLIBRARY_HPP
 
 #include <filesystem>
 #include <optional>
@@ -81,3 +82,4 @@ class MaterialLibrary {
 };
 
 } // namespace aether
+#endif // AETHER_FORMAT_MATERIALLIBRARY_HPP

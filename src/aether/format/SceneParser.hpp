@@ -1,4 +1,5 @@
-#pragma once
+#ifndef AETHER_FORMAT_SCENEPARSER_HPP
+#define AETHER_FORMAT_SCENEPARSER_HPP
 
 #include <filesystem>
 #include <optional>
@@ -79,3 +80,4 @@ class SceneParser {
 };
 
 } // namespace aether
+#endif // AETHER_FORMAT_SCENEPARSER_HPP

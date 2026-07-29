@@ -1,4 +1,5 @@
-#pragma once
+#ifndef AETHER_FORMAT_OBJIMPORTER_HPP
+#define AETHER_FORMAT_OBJIMPORTER_HPP
 
 #include <filesystem>
 #include <optional>
@@ -26,3 +27,4 @@ class ObjImporter {
 };
 
 } // namespace aether
+#endif // AETHER_FORMAT_OBJIMPORTER_HPP
