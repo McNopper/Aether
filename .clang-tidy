@@ -19,6 +19,18 @@
 #   * modernize-use-designated-initializers  - high churn across existing
 #                                              aggregate-initialisation-heavy
 #                                              graphics/scene code; style choice
+#   * modernize-use-auto                     - subjective readability
+#   * modernize-use-ranges                   - opinionated C++20 ranges refactor
+#   * modernize-avoid-c-style-cast           - Vulkan C API is cast-heavy; high
+#                                              churn, low value here
+#   * performance-enum-size                  - changing enum underlying type can
+#                                              deserialise GPU buffers / change
+#                                              ABI; risky in this codebase
+#   * bugprone-invalid-enum-default-initialization - Vulkan structs are often
+#                                              value-initialised with {} and
+#                                              contain non-zero-enum members
+#                                              (e.g. currentTransform); the 0
+#                                              is transient / overwritten.
 #   * bugprone-easily-swappable-parameters   - noisy, subjective
 #   * bugprone-exception-escape              - pervasive false positive
 #                                              (iostreams in main() may
@@ -43,13 +55,20 @@ Checks: >
   clang-analyzer-*,
   -clang-analyzer-security.ArrayBound,
   bugprone-*,
+  -bugprone-invalid-enum-default-initialization,
   performance-*,
+  -performance-enum-size,
   portability-*,
   modernize-*,
   -modernize-use-trailing-return-type,
   -modernize-avoid-c-arrays,
   -modernize-use-default-member-init,
   -modernize-use-designated-initializers,
+  -modernize-use-auto,
+  -modernize-use-ranges,
+  -modernize-avoid-c-style-cast,
+  -modernize-use-nodiscard,
+  -modernize-use-std-numbers,
   -bugprone-easily-swappable-parameters,
   -bugprone-exception-escape
 
