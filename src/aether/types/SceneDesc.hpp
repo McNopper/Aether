@@ -11,6 +11,19 @@
 
 namespace aether {
 
+/// An axis-aligned bounding box in object space, authored on a `MeshDesc`.
+///
+/// `min`/`max` are the tight corner positions of the mesh's vertex set. For OBJ
+/// meshes this is produced by `tools/obj_bounds.py` from the `v` lines; for
+/// analytic kinds (`Sphere`/`Box`) the consumer derives it (`[-r,r]³` /
+/// `[-half,half]`) when this field is `std::nullopt`. Carried verbatim to the
+/// renderers, which transform it to world space per instance (8 corners →
+/// re-bound, non-uniform-scale safe) for culling and ray-reject tests.
+struct Aabb {
+    Vec3 min{0.0F};
+    Vec3 max{0.0F};
+};
+
 /// Camera parameters parsed from a `camera` block.
 ///
 /// The camera's placement is a plain TRS transform — exactly the same
@@ -50,6 +63,11 @@ struct MeshDesc {
     std::string objPath;       ///< Object: OBJ path (relative to scene dir)
     float sphereRadius = 0.0F; ///< Sphere: radius
     Vec3 boxHalf{0.0F};        ///< Box: half-extents
+    /// Object-space AABB. Optional: when absent the renderer derives it from the
+    /// geometry (vertex scan for OBJ; trivially for Sphere/Box). Authoring it
+    /// (via `tools/obj_bounds.py`) avoids the load-time vertex scan and lets the
+    /// scene declare a hand-tuned coarse volume.
+    std::optional<Aabb> bounds;
 };
 
 /// A placed instance of a declared mesh.

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <fstream>
@@ -98,6 +99,55 @@ TEST(SceneParser, ParsesMeshesAndInstances) {
     // The two boxes reference their distinct meshes.
     EXPECT_EQ(scene->instances[1].meshName, "box");
     EXPECT_EQ(scene->instances[2].meshName, "box_2");
+}
+
+TEST(SceneParser, ParsesAuthoredMeshBounds) {
+    // shader_ball.scene.toml ships an authored object-space AABB on its OBJ mesh.
+    const auto scene = aether::SceneParser::parse(assetsDir() / "shader_ball.scene.toml");
+    ASSERT_TRUE(scene.has_value());
+    const auto ball = std::find_if(scene->meshes.cbegin(), scene->meshes.cend(), [](const aether::MeshDesc& m) {
+        return m.name == "shader_ball";
+    });
+    ASSERT_NE(ball, scene->meshes.cend());
+    ASSERT_TRUE(ball->bounds.has_value());
+    EXPECT_FLOAT_EQ(ball->bounds->min.x, -1.3456983F);
+    EXPECT_FLOAT_EQ(ball->bounds->max.y, 2.6776464F);
+    EXPECT_FLOAT_EQ(ball->bounds->max.z, 1.1554182F);
+}
+
+TEST(SceneParser, ParsesInlineBoundsTable) {
+    // An inline `bounds = { min=[...], max=[...] }` on an OBJ mesh must round-trip,
+    // and meshes that don't declare bounds keep std::nullopt (renderer derives them).
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "aether_bounds_test";
+    fs::create_directories(dir);
+    {
+        std::ofstream scn(dir / "b.scene.toml");
+        scn << R"toml([[mesh]]
+name = "a"
+path = "a.obj"
+bounds = { min = [-1.0, -2.0, -3.0], max = [4.0, 5.0, 6.0] }
+
+[[mesh]]
+name = "b"
+type = "sphere"
+radius = 0.7
+
+[[instance]]
+mesh = "a"
+[[instance]]
+mesh = "b"
+)toml";
+    }
+    const auto scene = aether::SceneParser::parse(dir / "b.scene.toml");
+    ASSERT_TRUE(scene.has_value());
+    ASSERT_EQ(scene->meshes.size(), 2U);
+    ASSERT_TRUE(scene->meshes[0].bounds.has_value());
+    EXPECT_FLOAT_EQ(scene->meshes[0].bounds->min.z, -3.0F);
+    EXPECT_FLOAT_EQ(scene->meshes[0].bounds->max.x, 4.0F);
+    // The sphere has no authored bounds → renderer derives from radius.
+    EXPECT_FALSE(scene->meshes[1].bounds.has_value());
+    fs::remove_all(dir);
 }
 
 TEST(SceneParser, DeduplicatesSharedMeshInstances) {
