@@ -1,0 +1,76 @@
+# shaderball_checker.scene — OpenPBR textured-opacity mask vs Vulkan OMM acceleration.
+#
+# Both shaderballs carry the SAME hero material, CheckerBall, which declares a
+# checkerboard opacity texture on the **material** (`map_opacity =
+# checker_opacity.png`). The opacity mask is an OpenPBR Surface 1.1.1 geometry
+# feature (`geometry_opacity` connected to an image) — it works on its own in
+# every renderer, and the Vulkan opacity micromap is only an ACCELERATION of the
+# same decision:
+#
+#   LEFT  (x = +3, mesh shader_ball_plain) — the OpenPBR opacity mask with NO
+#          opacity micromap. Resolved per-hit by the path integrator's stochastic
+#          pass-through gate sampling map_opacity (Hyperion) and by the rasterizer
+#          alpha-test (Theia). Tests whether OpenPBR opacity works at all.
+#   RIGHT (x = -3, mesh shader_ball_omm) — the SAME mask, accelerated by a
+#          VkMicromapEXT baked onto BallSurface + BaseFoot (RT traversal resolves
+#          the cutout in hardware instead of sampling the texture per hit).
+#
+# Both must look identical in both renderers. The two meshes reference the same
+# shader_ball.obj but only the right one declares opacity_micromaps — the OMM
+# attaches to a BLAS and is shared across a mesh's instances, so the unmasked
+# ball needs its own (OMM-free) BLAS.
+
+material_libraries = ["shaderball_checker.materials.toml"]
+
+[render]
+reference = "presets/relax_256spp_16bounce.render.toml"
+
+[camera]
+reference = "presets/openpbr_studio_wide.camera.toml"
+translate = [0.0, 3.5, -11.0]
+rotate_x = -11.0
+rotate_y = 180.0
+
+[tonemap]
+reference = "presets/aces.tonemap.toml"
+
+# ── Meshes (declared once; object space) ──────────────────────────────────────
+
+[[mesh]]
+name = "box"
+type = "box"
+half_extents = [10.0, 0.1, 8.0]
+
+# LEFT ball: checker mask via OpenPBR only — no opacity micromap (own BLAS).
+[[mesh]]
+name = "shader_ball_plain"
+path = "shader_ball.obj"
+bounds = { min = [-1.3456983, 0.0205609, -1.3456983], max = [1.3456983, 2.6776464, 1.1554182] }
+
+# RIGHT ball: the SAME mask, accelerated by an opacity micromap on the hero zones.
+[[mesh]]
+name = "shader_ball_omm"
+path = "shader_ball.obj"
+bounds = { min = [-1.3456983, 0.0205609, -1.3456983], max = [1.3456983, 2.6776464, 1.1554182] }
+opacity_micromaps = { "BallSurface" = "shaderball_checker_omm.micromap.toml", "BaseFoot" = "shaderball_checker_omm.micromap.toml" }
+
+# ── Instances (place a mesh with a transform + material) ──────────────────────
+
+[[instance]]
+mesh = "box"
+material = "NeutralFloor"
+translate = [0.0, -0.1, 0.0]
+
+# LEFT — OpenPBR opacity mask, no Vulkan OMM.
+[[instance]]
+mesh = "shader_ball_plain"
+materials = { "BaseTop" = "NeutralTop", "BaseStem" = "NeutralStem", "BaseFoot" = "CheckerBall", "BallInner" = "NeutralBall", "BallSurface" = "CheckerBall" }
+translate = [3.0, -0.021, 0.095]
+rotate_y = 180.0
+
+# RIGHT — OpenPBR opacity mask, accelerated by the Vulkan opacity micromap.
+[[instance]]
+mesh = "shader_ball_omm"
+materials = { "BaseTop" = "NeutralTop", "BaseStem" = "NeutralStem", "BaseFoot" = "CheckerBall", "BallInner" = "NeutralBall", "BallSurface" = "CheckerBall" }
+translate = [-3.0, -0.021, 0.095]
+rotate_y = 180.0

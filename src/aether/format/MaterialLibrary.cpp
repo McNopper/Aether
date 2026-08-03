@@ -65,6 +65,7 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
         {"map_coat_normal", &MaterialDesc::map_coat_normal},
         {"map_tangent", &MaterialDesc::map_tangent},
         {"map_coat_tangent", &MaterialDesc::map_coat_tangent},
+        {"map_opacity", &MaterialDesc::map_opacity},
     };
     if (const auto it = texturePathSetters.find(kw); it != texturePathSetters.end()) {
         (p.*(it->second)).path = value.value_or<std::string>("");
@@ -88,6 +89,7 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
         {"map_coat_normal_colorspace", {&MaterialDesc::map_coat_normal, "map_coat_normal"}},
         {"map_tangent_colorspace", {&MaterialDesc::map_tangent, "map_tangent"}},
         {"map_coat_tangent_colorspace", {&MaterialDesc::map_coat_tangent, "map_coat_tangent"}},
+        {"map_opacity_colorspace", {&MaterialDesc::map_opacity, "map_opacity"}},
     };
     if (const auto it = colorspaceSetters.find(kw); it != colorspaceSetters.end()) {
         const std::string token = value.value_or<std::string>("");

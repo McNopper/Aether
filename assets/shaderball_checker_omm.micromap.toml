@@ -1,0 +1,27 @@
+# opacity micromap descriptor (Aether omm-text/v1).
+# The baked OMM = (mesh UVs) x (material map_opacity); both sources are
+# recorded below so 'omm_bake.py --check' can re-bake and detect drift.
+format = "omm-text/v1"
+source_obj = "shader_ball.obj"
+source_scene = "shaderball_checker.scene.toml"
+source_material_library = "shaderball_checker.materials.toml"
+source_texture = "checker_opacity.png"
+default_subdivision_level = 2
+default_format = 2
+
+[data]
+file = "shaderball_checker_omm.omm"
+
+[[group]]
+name = "BaseFoot"
+source_material = "CheckerBall"
+triangle_count = 10024  # base triangles (T + S)
+record_count = 3505  # T records (special = 6519)
+usage = [{ count = 3505, subdivision_level = 2, format = 2 }]
+
+[[group]]
+name = "BallSurface"
+source_material = "CheckerBall"
+triangle_count = 17520  # base triangles (T + S)
+record_count = 6244  # T records (special = 11276)
+usage = [{ count = 6244, subdivision_level = 2, format = 2 }]

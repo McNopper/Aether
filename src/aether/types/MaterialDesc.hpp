@@ -123,6 +123,11 @@ struct MaterialDesc {
     TextureRef map_coat_normal{"", TextureColorSpace::Data};
     TextureRef map_tangent{"", TextureColorSpace::Data};
     TextureRef map_coat_tangent{"", TextureColorSpace::Data};
+    /// Textured opacity: OpenPBR's presence weight `geometry_opacity` driven by an
+    /// image, so the effective α is `geometry_opacity * map_opacity.a`. A data-space
+    /// texture — it carries no colour primaries. There is no separate alpha-test
+    /// threshold: α *is* the coverage, resolved stochastically by the renderers.
+    TextureRef map_opacity{"", TextureColorSpace::Data};
 };
 
 } // namespace aether

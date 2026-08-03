@@ -187,6 +187,15 @@ void parseMesh(const toml::table& m, SceneDesc& desc) {
         }
     }
 
+    // Optional per-group opacity-micromap references: `opacity_micromaps =
+    // { "<group>" = "<file>.micromap.toml", ... }` (group name → path, relative
+    // to the scene dir). Mirrors the instance `materials` map.
+    if (const toml::table* omm = m["opacity_micromaps"].as_table()) {
+        for (auto&& [name, path] : *omm) {
+            mesh.opacityMicromaps.insert_or_assign(std::string{name.str()}, path.value_or<std::string>(""));
+        }
+    }
+
     desc.meshes.push_back(std::move(mesh));
 }
 

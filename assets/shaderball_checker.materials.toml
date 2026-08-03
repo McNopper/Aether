@@ -1,0 +1,55 @@
+# shaderball_checker.materials — OpenPBR library for the opacity-micromap showcase.
+#
+# The hero material (CheckerBall) is applied to the BallSurface + BaseFoot zones
+# of shader_ball.obj. It carries a textured opacity input (map_opacity) that
+# drives two consumers:
+#   * the offline OMM bake (tools/omm_bake.py samples checker_opacity.png over
+#     the mesh UVs -> the .omm/.micromap.toml that Harmonia builds into a
+#     VkMicromapEXT attached to those zones' BLAS);
+#   * Theia's rasterizer alpha cutout (forward_render.frag.slang).
+# geometry_opacity stays 1.0 so the path integrator's stochastic pass-through
+# gate (path_integrator.slang) is a no-op for this material: the cutout lives
+# entirely in the acceleration structure (RT) / the alpha test (raster), never
+# in the estimator. The three zones not shown by the hero are neutral grey.
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+# Hero — classic shaderball red, with a checkerboard opacity cutout.
+[CheckerBall]
+base_color = [0.720, 0.040, 0.020]
+specular_roughness = 0.55
+coat_weight = 1.0
+coat_roughness = 0.04
+coat_ior = 1.5
+map_opacity = "checker_opacity.png"
+map_opacity_colorspace = "data"
+geometry_opacity = 1.0
+
+# Hero look without a texture — scalar geometry_opacity only (stochastic
+# pass-through gate, no OMM / no rasterizer alpha-test). Same red finish so the
+# two balls differ only in how their opacity is driven (textured cutout vs
+# scalar), making cross-renderer drift easy to spot.
+[ScalarOpacity]
+base_color = [0.720, 0.040, 0.020]
+specular_roughness = 0.55
+coat_weight = 1.0
+coat_roughness = 0.04
+coat_ior = 1.5
+geometry_opacity = 0.5
+
+[NeutralBall]
+base_color = [0.600, 0.600, 0.600]
+specular_roughness = 0.60
+
+[NeutralTop]
+base_color = [0.520, 0.520, 0.520]
+specular_roughness = 0.60
+
+[NeutralStem]
+base_color = [0.440, 0.440, 0.450]
+specular_roughness = 0.60
+
+[NeutralFloor]
+base_color = [0.520, 0.520, 0.520]
+specular_roughness = 0.60

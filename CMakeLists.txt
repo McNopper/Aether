@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(aether VERSION 0.7.2 LANGUAGES CXX)
+project(aether VERSION 0.7.3 LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -202,6 +202,7 @@ find_package(tomlplusplus CONFIG REQUIRED)
 set(AETHER_SOURCES
     src/aether/format/MaterialLibrary.cpp
     src/aether/format/ObjImporter.cpp
+    src/aether/format/OmmImporter.cpp
     src/aether/format/SceneParser.cpp
 )
 

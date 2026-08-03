@@ -165,6 +165,90 @@ ignored, empty-OBJ rejection, Ritter sphere enclosure, and `--write` injection.
 
 ---
 
+---
+
+## 5. Opacity micromap baker (`omm_bake.py`)
+
+Bakes a Vulkan `VK_EXT_opacity_micromap` (OMM) from a Wavefront OBJ plus a
+material's opacity texture, producing the Aether OMM asset pair consumed
+downstream by Harmonia (which builds a `VkMicromapEXT` and chains it into the
+per-group BLAS). Standard library only (`zlib` + `struct` + `tomllib`).
+
+**Dependency model.** The micromap is the bake product of `(mesh UVs) ×
+(material map_opacity)` — the same implicit coupling every textured material
+already carries (its textures are authored against the mesh's UV layout). The
+opacity input lives on the **material** (`map_opacity`, multiplied by the scalar
+`geometry_opacity`, mirroring the `map_base_color` / scalar-`base_color` pattern);
+the baked OMM cache is referenced per-group on the **mesh**
+(`opacity_micromaps`, since a BLAS is built once per mesh, not per instance).
+There is no alpha-test threshold anywhere in the chain — OpenPBR's α is a
+presence weight, and the bake only ever records where it is provably 0 or 1.
+
+**Outputs (OBJ-companion style — TOML describes structure, a text sidecar holds
+the per-triangle records):**
+
+* `<name>.omm` — OBJ-style text sidecar. One `G <group>` section per baked
+  group; within, `T <level> <format> <hex>` is one base triangle's micromap
+  record (the hex is the dump of the packed-state bytes, LSB-first in the
+  recursive space-filling-curve order defined by the Vulkan/glTF reference
+  `BarycentricsToSpaceFillingCurveIndex`), and `S <special>` collapses a
+  fully-uniform triangle (`-1` transparent / `-2` opaque / `-3` unknown-transparent
+  / `-4` unknown-opaque) to no record.
+* `<name>.micromap.toml` — descriptor: parameters, the `[data]` sidecar
+  reference, recorded sources (`source_obj` + `source_material_library` +
+  `source_texture`) for staleness `--check`, and one `[[group]]` table with the
+  `VkMicromapUsageEXT` usage histogram per group.
+
+```bash
+# scene-driven (recommended): auto-discovers the hero groups whose material
+# declares map_opacity, bakes them, and injects the reference into the scene.
+python tools/omm_bake.py --scene assets/shaderball_checker.scene.toml \
+    --mesh shader_ball --write
+
+# explicit: bake given groups from a named material's map_opacity
+python tools/omm_bake.py assets/shader_ball.obj \
+    --material-lib assets/shaderball_checker.materials.toml \
+    --material CheckerBall --groups BallSurface,BaseFoot
+
+# emit an NxM-cell RGBA checkerboard opacity PNG
+python tools/omm_bake.py --emit-checker 256 256 8 8 assets/checker_opacity.png
+
+# re-bake from the recorded sources and diff (mesh x material drift check)
+python tools/omm_bake.py --check assets/shaderball_checker_omm.micromap.toml
+
+# dump one triangle's per-microtriangle states with their SFC indices
+python tools/omm_bake.py --inspect assets/shaderball_checker_omm.micromap.toml \
+    --group BallSurface --triangle 0
+```
+
+Defaults: `--level 2` (4² = 16 microtriangles/triangle), `--format 2` (4-state,
+2 bits/microtriangle). Four-state is the default because it carries the two
+*unknown* states — "traversal cannot decide, ask the shader" — which is what
+makes the micromap an accelerator rather than a second, coarser definition of
+the cutout: microtriangles that straddle a cut-out edge are handed back to the
+renderer's exact per-hit `geometry_opacity * map_opacity` test (any-hit in
+Hyperion, RayQuery candidate in Theia). Each microtriangle is classified from
+the **range** of opacity over its whole UV footprint (bounding box grown by the
+bilinear tap, matching the renderer's `VK_FILTER_LINEAR` / `REPEAT` sampler and
+its no-V-flip UV convention), so a micromapped mesh renders identically to the
+same mesh without one.
+
+### Tests
+
+```bash
+python tools/test_omm_bake.py
+```
+
+Golden tests (stdlib only): PNG encode/decode round-trip, checker pattern, the
+SFC-index bijection (every microtriangle index hit exactly once per level),
+LSB-first hex packing (with hand-computed golden bytes), special-index
+collapse, a full synthetic bake with a popcount invariant that is independent of
+the SFC mapping, the `.omm` parse round-trip, OBJ group attribution /
+fan-triangulation, the scene `--write` injection (adds + replaces, TOML-valid),
+and the failure modes (material without `map_opacity`, malformed hex length).
+
+---
+
 ## References
 
 * **OpenPBR Surface v1.1.1** — Academy Software Foundation.

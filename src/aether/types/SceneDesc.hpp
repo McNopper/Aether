@@ -68,6 +68,14 @@ struct MeshDesc {
     /// (via `tools/obj_bounds.py`) avoids the load-time vertex scan and lets the
     /// scene declare a hand-tuned coarse volume.
     std::optional<Aabb> bounds;
+    /// Per-group opacity-micromap references: OBJ group name → `.micromap.toml`
+    /// path (relative to the scene dir). A BLAS is built once per group, so the
+    /// baked OMM (itself the product of the group's UVs × a material's
+    /// `map_opacity`) attaches at mesh scope, not per instance. Groups without an
+    /// entry have no OMM (treated fully opaque by the RT traversal). Consumers
+    /// fail fast if a referenced OMM cannot be built (no opaque fallback — a
+    /// cutout is not an image-identical absent-branch).
+    std::unordered_map<std::string, std::string> opacityMicromaps;
 };
 
 /// A placed instance of a declared mesh.
