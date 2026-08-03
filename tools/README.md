@@ -126,6 +126,45 @@ python tools/rotate_obj_y.py     input.obj 90    input.obj    # in-place (safe)
 
 ---
 
+## 4. OBJ bounds generator (`obj_bounds.py`)
+
+Computes the object-space axis-aligned bounding box (AABB) of a Wavefront OBJ's
+vertices and emits it as an Aether `bounds` block, which can be baked onto a
+`[[mesh]]` entry so the renderer has an authorable bounding volume (used by
+Theia's GPU-driven frustum cull and, in future, the wavefront ray-generation
+phase). Standard library only.
+
+Streams the OBJ as bytes and dispatches on the `v` line prefix (matching
+`_obj_transform.py`'s reader); `vn`/`vt`/`f` lines are ignored — the vertex
+set's bounds are the mesh's bounds. Numbers are emitted with `%.10g` to stay
+free of floating-point noise.
+
+```bash
+# print the AABB as a TOML block to stdout (pipeable)
+python tools/obj_bounds.py assets/shader_ball.obj
+
+# inject/replace the [bounds] under the matching [[mesh]] entry in-place
+python tools/obj_bounds.py assets/shader_ball.obj --write assets/shader_ball.scene.toml
+
+# also compute a Ritter bounding sphere
+python tools/obj_bounds.py assets/shader_ball.obj --sphere
+```
+
+The bounding volume of the vertex set equals the bounding volume of the mesh,
+so faces are irrelevant — and OBJ winding (which matters for rendering) is not
+read here either.
+
+### Tests
+
+```bash
+python tools/test_obj_bounds.py
+```
+
+Golden-file tests (stdlib only): basic AABB, TOML block round-trip, `vn`/`vt`/`f`
+ignored, empty-OBJ rejection, Ritter sphere enclosure, and `--write` injection.
+
+---
+
 ## References
 
 * **OpenPBR Surface v1.1.1** — Academy Software Foundation.

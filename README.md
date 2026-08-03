@@ -70,13 +70,17 @@ faithful to OpenPBR — the sweet spot glTF and USD each sit to one side of.
 ### File-format notes
 
 * **Scene** (`<name>.scene.toml`): top-level `material_libraries` array; `[render]`,
-  `[camera]`, `[tonemap]` and `[post_tonemap]` tables; an ordered `[[geometry]]` array whose entries have
-  `type = "instance" | "box" | "sphere"`. Keys are spelled in full words for clarity
-  (`samples_per_pixel`, `environment_map`, `vertical_field_of_view`, `mesh`,
-  `half_extents`, `material`, …). The `[render]` table may select the scene-referred
-  **working color space** via `working_color_space = "lin_rec2020_scene" |
-  "lin_rec709_scene"` (absent → consumer default, Rec.2020); consumers convert all
-  assets to it on load.
+  `[camera]`, `[tonemap]` and `[post_tonemap]` tables; a `[[mesh]]` array of unique
+  geometry declarations and an ordered `[[instance]]` array that places a mesh by name
+  with a TRS and material. A `[[mesh]]` entry uses `type = "box"` (`half_extents`) or
+  `type = "sphere"` (`radius`), or is omitted / `"object"` for an OBJ `path`; an optional
+  `bounds = { min=[...], max=[...] }` table authors the object-space AABB (otherwise the
+  renderer derives it from the vertices; generate it with `tools/obj_bounds.py`). Keys
+  are spelled in full words for clarity (`samples_per_pixel`, `environment_map`,
+  `vertical_field_of_view`, `mesh`, `half_extents`, `material`, …). The `[render]` table
+  may select the scene-referred **working color space** via `working_color_space =
+  "lin_rec2020_scene" | "lin_rec709_scene"` (absent → consumer default, Rec.2020);
+  consumers convert all assets to it on load.
 * **Camera preset** (`<name>.camera.toml`): a small standalone preset file with
   `translate`, rotation (`rotate` quaternion or `rotate_x`/`rotate_y`/`rotate_z`
   Euler), `vertical_field_of_view` and `ev100` keys. It is meant to be referenced
