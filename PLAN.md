@@ -46,7 +46,7 @@ Harmonia/PLAN.md).
 
 | ID | Task | Deps | Status |
 |----|------|------|--------|
-| NH1 | **Node graph in Aether** — extend the scene TOML + `SceneParser`: parent/child nodes with compounded TRS; instances reference a node path. Today `InstanceDesc` (`src/aether/types/SceneDesc.hpp:61`) is flat with no parent field. | — | backlog |
+| NH1 | **Node graph in Aether** — extend the scene TOML + `SceneParser`: parent/child nodes with compounded TRS; instances reference a node path. Today `InstanceDesc` (`src/aether/types/SceneDesc.hpp:87`) is flat with no parent field. | — | backlog |
 | NH4 | **DCC round-trip** — `blender_to_aether` / `mtlx_to_aether` emit the hierarchy (Blender collections/parents → Aether nodes). Standing constraint: Blender authors no OpenPBR, and the MaterialX path rejects non-OpenPBR sources (`tools/README.md`) — hierarchy export does not change that. | NH1 | backlog |
 
 ### Animation track (ANI) — Aether slice
@@ -59,7 +59,7 @@ Harmonia/PLAN.md).
 
 | ID | Task | Deps | Status |
 |----|------|------|--------|
-| SM6-Aether | **slang-math v0.3.0 migration slice** — replace the 12 hand-rolled `std::clamp(x,0,1)` lambdas in `src/aether/material/MaterialLibrary.cpp` with `sm::saturate`; bump the FetchContent pin to slang-math v0.3.0 in this repo's release commit. Track origin: slang-math/PLAN.md SM6. | slang-math v0.3.0 tag | backlog |
+| SM6-Aether | **slang-math v0.3.0 migration slice** — replace the 12 hand-rolled `std::clamp(x,0,1)` lambdas in `src/aether/format/MaterialLibrary.cpp` with `sm::saturate`; bump the FetchContent pin to slang-math v0.3.0 in this repo's release commit. Track origin: slang-math/PLAN.md SM6. | slang-math v0.3.0 tag | backlog |
 
 ## Governance
 
