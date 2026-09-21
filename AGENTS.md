@@ -2,6 +2,9 @@
 
 Quick-start context for AI agents so basic facts don't have to be rediscovered each session.
 
+**Outstanding work, governance (definition of done + guardrails) and release history: see
+[`PLAN.md`](PLAN.md).**
+
 ## What this repo is
 
 **Aether** is the abstract **file-format library** for a four-repo rendering pipeline.
@@ -13,13 +16,15 @@ Pipeline (dependency direction):
 
 ```mermaid
 flowchart LR
-    A["<b>Aether</b><br/>file format (this repo)"] --> H["Harmonia<br/>shared Vulkan lib"]
+    SM["slang-math<br/>math"] --> A["<b>Aether</b><br/>file format (this repo)"]
+    SM --> H
+    A --> H["Harmonia<br/>shared Vulkan lib"]
     H --> Hy["Hyperion<br/>path tracer · ground truth"]
     H --> T["Theia<br/>real-time renderer"]
 ```
 
-- **Hyperion** = path tracer, the **ground-truth** reference renderer.
-- **Theia** = real-time mesh-shader rasterizer, being aligned to Hyperion.
+- **Hyperion** = offline path tracer, the **ground-truth** reference renderer.
+- **Theia** = real-time accumulation path tracer, **converging to Hyperion**.
 - Harmonia/Hyperion/Theia consume Aether via CMake **FetchContent**.
 
 Aether must never reference the renderers. Renderer-aware tooling (e.g.
@@ -46,10 +51,10 @@ so future material models can coexist.
 Hyperion and Theia do **NOT** read assets from this working tree. They read from their
 own FetchContent clone at `<Renderer>/build/_deps/aether-src/assets/`.
 
-So **editing `C:\Development\GitHub\Aether\assets\*.toml` has NO effect on a render**
+So **editing `assets/*.toml` in this working tree has NO effect on a render**
 unless you do one of:
 - edit the copy under `<Renderer>/build/_deps/aether-src/assets/` directly, or
-- configure the renderer build with `-DFETCHCONTENT_SOURCE_DIR_AETHER=C:/Development/GitHub/Aether`
+- configure the renderer build with `-DFETCHCONTENT_SOURCE_DIR_AETHER=<path-to-aether>`
   (then `aether-src` points at this working tree), or
 - copy the edited file into the `_deps` copy before rendering.
 

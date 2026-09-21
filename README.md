@@ -11,7 +11,9 @@ library that parses TOML scene/material files and OBJ geometry into plain CPU da
 
 ```mermaid
 flowchart LR
-    A["<b>Aether</b><br/>file format"] --> H["Harmonia<br/>shared Vulkan lib"]
+    SM["slang-math<br/>math"] --> A["<b>Aether</b><br/>file format"]
+    SM --> H
+    A --> H["Harmonia<br/>shared Vulkan lib"]
     H --> Hy["Hyperion<br/>path tracer · ground truth"]
     H --> T["Theia<br/>real-time renderer"]
 ```
