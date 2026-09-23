@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(aether VERSION 0.7.3 LANGUAGES CXX)
+project(aether VERSION 0.7.4 LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -55,6 +55,17 @@ if(PROJECT_IS_TOP_LEVEL)
     option(ENABLE_CLANG_FORMAT "Enable clang-format targets" ON)
     option(ENABLE_CPPCHECK "Enable cppcheck static analysis target" ON)
     option(ENABLE_CPPCHECK_IN_BUILD "Run cppcheck alongside the compiler" OFF)
+
+    # Sanitizer lane (Clang/GCC only):
+    #   cmake -DAETHER_SANITIZER=address|undefined|thread ...
+    set(AETHER_SANITIZER "" CACHE STRING "Sanitizer: address, undefined, or thread (Clang/GCC only)")
+    if(AETHER_SANITIZER)
+        if(MSVC)
+            message(FATAL_ERROR "AETHER_SANITIZER requires Clang/GCC (use a Ninja+clang or WSL configure)")
+        endif()
+        add_compile_options("-fsanitize=${AETHER_SANITIZER}" -fno-omit-frame-pointer)
+        add_link_options("-fsanitize=${AETHER_SANITIZER}")
+    endif()
 
     # All first-party C/C++ sources (clang-format); compiled translation units
     # only (clang-tidy) — headers are analysed transitively via HeaderFilterRegex.
@@ -232,6 +243,18 @@ if(PROJECT_IS_TOP_LEVEL)
     if(BUILD_TESTING)
         enable_testing()
         add_subdirectory(tests)
+    endif()
+endif()
+
+# Static-analysis ctest lane: parallel clang-tidy over
+# build/compile_commands.json, classified per the .clang-tidy WarningsAsErrors
+# contract. Skips (77) when clang-tidy / Python3 / the database is unavailable.
+if(PROJECT_IS_TOP_LEVEL)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME test_tidy
+                 COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_tidy.py)
+        set_tests_properties(test_tidy PROPERTIES SKIP_RETURN_CODE 77 LABELS analysis)
     endif()
 endif()
 

@@ -29,10 +29,11 @@ tools — never renderer code, never Vulkan. Sibling plans: `Harmonia/PLAN.md`,
 
 ## At a glance
 
-- **Release:** v0.7.3 (tag-synced with GitHub); consumed via FetchContent pins by
+- **Release:** v0.7.4 (tag-synced with GitHub); consumed via FetchContent pins by
   Harmonia → Hyperion/Theia.
-- **Last shipped (v0.7.3):** the opacity-micromap asset format (see Baseline) — part of the
-  family's C14/VK2 release (real OpenPBR `geometry_opacity` cutout, Harmonia/PLAN.md).
+- **Last shipped (v0.7.4):** OpenPBR 1.1.1 spec-default conformance (coat_ior 1.6,
+  thin_film_ior 1.4, thin_film_thickness 500 nm) + `specular_weight` > 1 parser acceptance
+  (see Baseline).
 - **Next:** NH1 (node graph) — it unblocks the animation track (ANI) across the family.
 
 ## How to continue
@@ -86,7 +87,18 @@ above plus `verify-full` (verify + format-check + clang-tidy + cppcheck).
 
 ## Baseline
 
-- **v0.7.3** (current; shipped alongside the family v0.7.7): the **opacity-micromap asset
+- **v0.7.4** (current; ships alongside the family v0.7.8): **OpenPBR 1.1.1 spec-default
+  conformance** — `coat_ior` default 1.6 (was 1.5), `thin_film_ior` default 1.4 (was 1.5),
+  `thin_film_thickness` default 500 nm (spec 0.5 µm; was 0) — inert for all shipped assets
+  (every coated/thin-film material sets the parameters explicitly) — and the parser now
+  accepts `specular_weight` > 1 (spec range [0,∞); the mandated ξ_s·F_s ≤ 1 clamp lives in
+  the shader, Harmonia v0.7.8). **Tooling**: `CMakePresets.json`
+  (`win` = Ninja + Release + clang-cl + `$env{VCPKG_ROOT}` toolchain),
+  `tools/check_tidy.py` (parallel classified clang-tidy lane) + ctest `test_tidy` (label
+  `analysis`), `AETHER_SANITIZER` option (Clang/GCC), deterministic host FP
+  (`/fp:strict` / `-ffp-contract=off -fno-fast-math`). 43 ctest green at ship time (incl.
+  the tidy lane).
+- **v0.7.3** (shipped alongside the family v0.7.7): the **opacity-micromap asset
   format** — `aether::OpacityMicromapData`/`OpacityMicromapGroup`
   (`src/aether/types/OpacityMicromap.hpp`), the `.omm` text-sidecar + `.micromap.toml`
   descriptor importer (`OmmImporter`), `MaterialDesc::map_opacity` (data-space texture),
