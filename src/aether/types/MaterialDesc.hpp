@@ -71,7 +71,7 @@ struct MaterialDesc {
     Vec3 coat_color{1.0F, 1.0F, 1.0F};
     float coat_roughness = 0.3F;
     float coat_roughness_anisotropy = 0.0F;
-    float coat_ior = 1.5F;
+    float coat_ior = 1.6F;       ///< OpenPBR v1.1.1 §coat default (1.6)
     float coat_darkening = 1.0F; ///< energy darkening at base/coat interface
 
     // ── fuzz / sheen ───────────────────────────────────────────────────────
@@ -81,8 +81,8 @@ struct MaterialDesc {
 
     // ── thin film ──────────────────────────────────────────────────────────
     float thin_film_weight = 0.0F;
-    float thin_film_thickness = 0.0F; ///< nm; 0–2000 typical range
-    float thin_film_ior = 1.5F;
+    float thin_film_thickness = 500.0F; ///< nm; OpenPBR v1.1.1 §thin_film default 0.5 µm ///< nm; 0–2000 typical range
+    float thin_film_ior = 1.4F;         ///< OpenPBR v1.1.1 §thin_film default (1.4)
 
     // ── emission ───────────────────────────────────────────────────────────
     Vec3 emission_color{1.0F, 1.0F, 1.0F};

@@ -152,7 +152,7 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
         {"base_weight", [](MaterialDesc& d, float f) { d.base_weight = std::clamp(f, 0.0F, 1.0F); }},
         {"base_metalness", [](MaterialDesc& d, float f) { d.base_metalness = f; }},
         {"base_diffuse_roughness", [](MaterialDesc& d, float f) { d.base_diffuse_roughness = f; }},
-        {"specular_weight", [](MaterialDesc& d, float f) { d.specular_weight = std::clamp(f, 0.0F, 1.0F); }},
+        {"specular_weight", [](MaterialDesc& d, float f) { d.specular_weight = std::max(f, 0.0F); }},
         {"specular_roughness", [](MaterialDesc& d, float f) { d.specular_roughness = std::clamp(f, 0.0F, 1.0F); }},
         {"specular_roughness_anisotropy",
          [](MaterialDesc& d, float f) { d.specular_roughness_anisotropy = std::clamp(f, 0.0F, 1.0F); }},
