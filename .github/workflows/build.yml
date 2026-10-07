@@ -1,0 +1,151 @@
+﻿name: Build
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      # Windows/clang-cl/Ninja and Linux/g++/Ninja - the toolchains the
+      # sibling renderer repos build on (both proven locally). macOS is
+      # absent on purpose: Platform.cmake rejects it outright.
+      matrix:
+        os: [windows-latest, ubuntu-26.04]
+
+    env:
+      # Content-addressed vcpkg binary cache, persisted across runs by the
+      # cache step below (tomlplusplus only here - a cold build is cheap).
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-binary-cache,readwrite"
+
+    steps:
+      # Sibling checkout: build slang-math HEAD, the way the local dev flow
+      # does via the FETCHCONTENT_SOURCE_DIR_* override, instead of the
+      # pinned FetchContent tag. lfs: true for family uniformity (no LFS
+      # objects here, but every checkout fetches LFS content the same way).
+      - uses: actions/checkout@v4
+        with:
+          path: Aether
+          lfs: true
+      - uses: actions/checkout@v4
+        with:
+          repository: McNopper/slang-math
+          path: slang-math
+          lfs: true
+
+      # The runner images' preinstalled vcpkg is a shallow clone: the version
+      # database entries our builtin-baseline needs (per-port git trees from
+      # older commits) sit outside its window - CI rounds 3/4: "no version
+      # database entry for libpng at 1.6.59 / openexr at 3.5.2". Complete the
+      # clone with observable fetch results, then verify the EXACT
+      # port@version trees that broke (DIAG lines carry the ground truth).
+      - name: Ensure vcpkg registry
+        shell: bash
+        run: |
+          # Regression tripwires: versions this repo's dependency graph needs at
+          # ITS baseline (Aether pins the older d59510da deliberately - empty).
+          CHECKS=()
+          bl=$(grep -o '"builtin-baseline": "[0-9a-f]*"' Aether/vcpkg.json | head -1 | grep -oE '[0-9a-f]{40}')
+          vk="${VCPKG_INSTALLATION_ROOT:-C:/vcpkg}"
+          vk="$(printf '%s' "$vk" | tr '\\' '/')"
+          echo "DIAG: baseline=$bl vcpkg=$vk"
+          if [ "$(git -C "$vk" rev-parse --is-shallow-repository)" = "true" ]; then
+            git -C "$vk" fetch --unshallow origin || git -C "$vk" fetch --depth 10000000 origin || { echo "error: DIAG every vcpkg fetch attempt failed"; exit 1; }
+          else
+            git -C "$vk" fetch origin master || echo "DIAG: master fetch failed (continuing)"
+          fi
+          git -C "$vk" cat-file -e "$bl" 2>/dev/null || { echo "error: baseline commit absent: $bl"; exit 1; }
+          # Align HEAD AND the working tree with the baseline: `git fetch` only
+          # moves origin/master, while vcpkg reads the version index from the
+          # checked-out files - leaving HEAD at the image-vintage commit mixed a
+          # new baseline.json with an old versions index (the libpng 1.6.59 /
+          # openexr 3.5.2 "no version database entry" failures).
+          # Align HEAD + worktree ONLY when the baseline is ahead of the checkout
+          # (resetting backwards desyncs vcpkg's scripts from its binary -
+          # observed: "vcpkg-tools.json schema version 1 is not supported").
+          if git -C "$vk" merge-base --is-ancestor HEAD "$bl" 2>/dev/null; then
+            git -C "$vk" reset --hard "$bl"
+            echo "DIAG: HEAD reset to $(git -C "$vk" rev-parse --short HEAD) (baseline ahead of checkout)"
+          else
+            echo "DIAG: reset skipped - checkout is not behind baseline (HEAD=$(git -C "$vk" rev-parse --short HEAD))"
+          fi
+          git -C "$vk" show "$bl:versions/baseline.json" | jq -e . > /dev/null || { echo "error: baseline.json unreadable at $bl"; exit 1; }
+          fail=0
+          check() {
+            pv="$1"; p="${pv%@*}"; v="${pv##*@}"
+            t=$(git -C "$vk" show "$bl:versions/$p.json" | jq -r --arg v "$v" '.versions[] | select((.version // .["version-semver"] // .["version-date"]) == $v) | ."git-tree"' | head -1)
+            if [ -z "$t" ] || [ "$t" = "null" ]; then echo "error: DIAG no index entry for $pv at baseline"; fail=1; return; fi
+            if ! git -C "$vk" cat-file -e "$t" 2>/dev/null; then echo "error: DIAG git-tree object missing for $pv ($t)"; fail=1; return; fi
+            echo "DIAG: ok $pv -> $t"
+          }
+          for pv in ${CHECKS[@]+"${CHECKS[@]}"}; do check "$pv"; done
+          if [ "$fail" -ne 0 ]; then echo "error: vcpkg registry incomplete for baseline $bl"; exit 1; fi
+          echo "vcpkg registry complete for baseline $bl (HEAD aligned)"
+
+      # clang-cl may or may not ship on the runner image; like any choco
+      # PATH change, it is not inherited by later steps. (Linux uses the
+      # image's g++, proven in WSL - no install needed.)
+      - name: Ensure clang-cl
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Get-Command clang-cl -ErrorAction SilentlyContinue) {
+            Write-Output 'clang-cl present on image'
+          } else {
+            choco install -y llvm
+            "PATH=C:\Program Files\LLVM\bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          }
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg-binary-cache
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('Aether/vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
+
+      # Aether has no Vulkan/GPU deps (CMakeLists.txt) - no SDK needed here.
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $root = if ($env:VCPKG_INSTALLATION_ROOT) { $env:VCPKG_INSTALLATION_ROOT } else { 'C:\vcpkg' }
+          $tc = Join-Path $root 'scripts/buildsystems/vcpkg.cmake'
+          if (-not (Test-Path $tc)) { throw "vcpkg toolchain not found at $tc" }
+          $ws = ($PWD.Path -replace '\\', '/')
+          cmake -S Aether -B Aether/build -G Ninja -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
+            "-DCMAKE_TOOLCHAIN_FILE=$tc" `
+            -DFETCHCONTENT_SOURCE_DIR_SLANG_MATH="$ws/slang-math"
+
+      - name: Configure (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          tc="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          [ -e "$tc" ] || { echo "vcpkg toolchain not found at $tc"; exit 1; }
+          ws="$PWD"
+          cmake -S Aether -B Aether/build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
+            -DCMAKE_TOOLCHAIN_FILE="$tc" \
+            -DFETCHCONTENT_SOURCE_DIR_SLANG_MATH="$ws/slang-math"
+
+      - name: Build
+        run: cmake --build Aether/build
+
+      # Aether is the dependency base for the renderer repos, so its suite
+      # runs in CI: scene parser / OBJ importer / material library / opacity
+      # micromap are all CPU-only (no Vulkan anywhere in this repo). ctest is
+      # serial without -j, matching the family's one-test-at-a-time rule.
+      # test_tidy skips itself (exit 77) when clang-tidy is absent.
+      - name: Test
+        run: ctest --test-dir Aether/build --output-on-failure
