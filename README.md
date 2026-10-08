@@ -1,5 +1,7 @@
 # Aether
 
+[![Build](https://github.com/McNopper/Aether/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/McNopper/Aether/actions/workflows/build.yml)
+
 The scene & material file format for the [Hyperion](https://github.com/McNopper/Hyperion)
 and [Theia](https://github.com/McNopper/Theia) renderers — a small C++23
 library that parses TOML scene/material files and OBJ geometry into plain CPU data structures.
