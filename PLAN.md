@@ -87,7 +87,13 @@ above plus `verify-full` (verify + format-check + clang-tidy + cppcheck).
 
 ## Baseline
 
-- **v0.7.4** (current; ships alongside the family v0.7.8): **OpenPBR 1.1.1 spec-default
+- **v0.7.5** (current; ships with the family 2026-10-09 wave): **dual-OS CI + badge; test
+  registration for the CI ctest lane.** `.github/workflows/build.yml` on `windows-latest` +
+  `ubuntu-26.04` with the Git LFS asset checkout (Aether owns the family's LFS content); the
+  CPU suite runs in CI (43/43 on both OSes); `tests/CMakeLists.txt` registers the CI ctest
+  lane. **No library code changes since v0.7.4** — the parser and format are identical, so
+  downstream pins may remain at v0.7.4 until the next wave.
+- **v0.7.4** (ships alongside the family v0.7.8): **OpenPBR 1.1.1 spec-default
   conformance** — `coat_ior` default 1.6 (was 1.5), `thin_film_ior` default 1.4 (was 1.5),
   `thin_film_thickness` default 500 nm (spec 0.5 µm; was 0) — inert for all shipped assets
   (every coated/thin-film material sets the parameters explicitly) — and the parser now
