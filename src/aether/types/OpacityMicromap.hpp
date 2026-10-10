@@ -62,7 +62,8 @@ struct OpacityMicromapGroup {
 
 /// Fully parsed Aether opacity-micromap asset (a `.micromap.toml` + its `.omm`
 /// text sidecar). GPU-agnostic — pure CPU buffers the consumer uploads, one
-/// `OpacityMicromapGroup` (one future `VkMicromapEXT`) per baked OBJ group.
+/// `OpacityMicromapGroup` (one built micromap per baked OBJ group — an
+/// `VkAccelerationStructureKHR` under VK_KHR_opacity_micromap) per baked OBJ group.
 struct OpacityMicromapData {
     std::vector<OpacityMicromapGroup> groups;
     std::uint16_t defaultSubdivisionLevel = 2;

@@ -169,7 +169,7 @@ ignored, empty-OBJ rejection, Ritter sphere enclosure, and `--write` injection.
 
 ## 5. Opacity micromap baker (`omm_bake.py`)
 
-Bakes a Vulkan `VK_EXT_opacity_micromap` (OMM) from a Wavefront OBJ plus a
+Bakes a Vulkan `VK_KHR_opacity_micromap` (OMM) from a Wavefront OBJ plus a
 material's opacity texture, producing the Aether OMM asset pair consumed
 downstream by Harmonia (which builds a `VkMicromapEXT` and chains it into the
 per-group BLAS). Standard library only (`zlib` + `struct` + `tomllib`).
