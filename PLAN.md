@@ -38,6 +38,43 @@ tools — never renderer code, never Vulkan. Sibling plans: `Harmonia/PLAN.md`,
 
 ## How to continue
 
+### Metadata track (META) — agent-legible format
+
+**Goal:** when an agent reads an Aether TOML it *understands* the scene without further
+reading — and, crucially, can **skip opening linked files** because their essentials are
+summarised inline (what the thing is, its bounds incl. orientation, and enough content
+summary to reason about it). Unblocked and independent of AR1/NH1.
+
+| ID | Task | Deps | Status |
+|----|------|------|--------|
+| META1 | **`[meta]` block in the scene/material TOML** — optional, backward compatible (existing scenes parse unchanged; unknown tables already ignored). `[meta]`: `schema`/`version`, `model = "openpbr"`, `title`, `description` (agent-readable prose), `units`, `generator`. **`[meta.link."<path>"]` per linked file** — `kind` (`material-library` \| `mesh` \| `env` \| `micromap` \| `scene`), `description` (e.g. *"Suzanne the monkey — glossy ceramic, this is the snow-scene hero"*), plus the skip-the-file summary: `bounds` = AABB **with frame/orientation** (`{ min, max, frame = "object", orientation = [x,y,z,w] }` — object-space AABB + the instance TRS already in the scene makes the world AABB derivable), content counts (`triangles`, `groups`, `materials = [...]`), and per-material one-liners where useful. Parser stores it (`SceneDesc.meta` / `LinkMeta` in `src/aether/types/`); generators populate it (`blender_to_aether`, `mtlx_to_aether`, `omm_bake`); nothing consumes it yet — the consumer is the agent. | — | **next** |
+| META2 | **Generator population + docs** — emit `[meta]` from the tooling (descriptions templated, overridable via a `--meta-description` flag or a `.meta.toml` sidecar), document the block in `tools/README.md` + `AGENTS.md`; tests assert parse round-trip and that summaries match the linked files (bounds/counts verified against the real assets). | META1 | backlog |
+
+Schema sketch (scene TOML):
+
+```toml
+[meta]
+schema = "aether-scene"
+version = 1
+model = "openpbr"
+title = "Suzanne in the snow"
+description = "Snow scene: Suzanne (glossy ceramic) on a snowy ground; sun IBL, falling snow via opacity masks."
+units = { length = "m", luminance = "nits" }
+generator = "blender_to_aether"
+
+[meta.link."materials/snow.toml"]
+kind = "material-library"
+description = "Physically based OpenPBR materials for the snow scene."
+materials = ["snow", "ceramic_white"]
+
+[meta.link."meshes/suzanne.obj"]
+kind = "mesh"
+description = "Suzanne the monkey - glossy ceramic, the snow-scene hero."
+bounds = { min = [-0.50, -0.31, -0.42], max = [0.50, 0.48, 0.31], frame = "object", orientation = [0, 0, 0, 1] }
+triangles = 2904
+groups = ["default"]
+```
+
 ### Node hierarchy track (NH) — Aether slice
 
 Aether today carries flat instances with per-instance TRS (`parseTRS`). A parent/child node
