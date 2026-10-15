@@ -124,7 +124,14 @@ above plus `verify-full` (verify + format-check + clang-tidy + cppcheck).
 
 ## Baseline
 
-- **v0.7.5** (current; ships with the family 2026-10-09 wave): **dual-OS CI + badge; test
+- **v0.7.6** (current): **code-health wave: dead surface removed + architecture gate.**
+  The `Aether.hpp` umbrella header had zero consumers in all five repos (no include, no
+  CMake reference) — deleted per the only-latest-and-greatest rule. `tools/check_layers.py`
+  (ctest `test_layers`, label `analysis`): the module DAG `aether/types` ← `aether/format`
+  ← root, file-level cycle detection, and any `harmonia/`/`theia/`/`hyperion/` include
+  fails (Aether sits below Harmonia; the sibling renderers are out of reach). 44/44 ctest
+  on Windows; Linux suite green.
+- **v0.7.5** (ships with the family 2026-10-09 wave): **dual-OS CI + badge; test
   registration for the CI ctest lane.** `.github/workflows/build.yml` on `windows-latest` +
   `ubuntu-26.04` with the Git LFS asset checkout (Aether owns the family's LFS content); the
   CPU suite runs in CI (43/43 on both OSes); `tests/CMakeLists.txt` registers the CI ctest
