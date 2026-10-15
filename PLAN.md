@@ -38,6 +38,9 @@ tools — never renderer code, never Vulkan. Sibling plans: `Harmonia/PLAN.md`,
 
 ## How to continue
 
+Batching: the Aether items below sit in front 1 (scene description & representation) of the
+family categorization - see Harmonia PLAN for the front sequence and the shared review.
+
 ### Metadata track (META) — agent-legible format
 
 **Goal:** when an agent reads an Aether TOML it *understands* the scene without further
