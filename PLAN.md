@@ -97,7 +97,7 @@ Harmonia/PLAN.md).
 
 | ID | Task | Deps | Status |
 |----|------|------|--------|
-| SM6-Aether | **slang-math v0.3.0 migration slice** — replace the 12 hand-rolled `std::clamp(x,0,1)` lambdas in `src/aether/format/MaterialLibrary.cpp` with `sm::saturate`; bump the FetchContent pin to slang-math v0.3.0 in this repo's release commit. Track origin: slang-math/PLAN.md SM6. | slang-math v0.3.0 tag | backlog |
+| SM6-Aether | **slang-math v0.3.0 migration slice** — replace the 12 hand-rolled `std::clamp(x,0,1)` lambdas in `src/aether/format/MaterialLibrary.cpp` with `sm::saturate`; the FetchContent pin bump to slang-math v0.3.1 is DONE (2026-10-15, verified 44/44) in this repo's release commit. Track origin: slang-math/PLAN.md SM6. | slang-math v0.3.0 tag | backlog |
 
 ## Governance
 

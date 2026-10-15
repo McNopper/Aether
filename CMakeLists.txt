@@ -205,7 +205,7 @@ include(FetchContent)
 FetchContent_Declare(
     slang_math
     GIT_REPOSITORY https://github.com/McNopper/slang-math.git
-    GIT_TAG v0.2.1
+    GIT_TAG v0.3.1
 )
 FetchContent_MakeAvailable(slang_math)
 find_package(tomlplusplus CONFIG REQUIRED)
