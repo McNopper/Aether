@@ -88,7 +88,11 @@ Equivalent preset flow (Ninja + Release + clang-cl + `$env:VCPKG_ROOT` toolchain
 `build/compile_commands.json`, classified per `.clang-tidy`'s WarningsAsErrors contract
 (clang-diagnostic/clang-analyzer/bugprone fail the run; modernize/performance/portability
 are report-only). Also registered as ctest `test_tidy` (label `analysis`; the fast test loop is `ctest -LE analysis`; skips when
-clang-tidy, Python3 or the database is missing). Sanitizer lane (Clang/GCC configures only):
+clang-tidy, Python3 or the database is missing).
+**Architecture gate:** `python tools/check_layers.py` (ctest `test_layers`, label
+`analysis`) — `aether/types` is the leaf, `aether/format` consumes it, the root `aether`
+vocabulary consumes both; includes may only go **down** that order and there must be **no
+include cycles** (file-level SCC detection). Sanitizer lane (Clang/GCC configures only):
 `-DAETHER_SANITIZER=address|undefined|thread`. Host-side FP is deterministic
 (`/fp:strict` / `-ffp-contract=off -fno-fast-math`).
 
