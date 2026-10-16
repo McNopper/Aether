@@ -127,6 +127,15 @@ above plus `verify-full` (verify + format-check + clang-tidy + cppcheck).
 
 ## Baseline
 
+## Baseline
+
+- **v0.7.7** (current): **cleanup + quality.** A-01 dedup (the identical transform
+  functions in `_obj_transform` -> one parameterized `transform_vec3_line` + thin aliases),
+  A-03 guard-clause flattening of the `parseMesh` bounds nesting, the Q1 coverage lane
+  (`AETHER_COVERAGE` + `tools/coverage.py`, verified 83.48% lines), the architecture gate
+  (check-arch vendored engine, orphan-free), and the front-1 batching pointer
+  (Harmonia PLAN categorization v2). 44/44 ctest, gate clean.
+
 - **v0.7.6** (current): **code-health wave: dead surface removed + architecture gate.**
   The `Aether.hpp` umbrella header had zero consumers in all five repos (no include, no
   CMake reference) — deleted per the only-latest-and-greatest rule. `tools/check_layers.py`
