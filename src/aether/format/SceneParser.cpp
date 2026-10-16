@@ -176,14 +176,12 @@ void parseMesh(const toml::table& m, SceneDesc& desc) {
     // Optional object-space AABB (inline table `bounds = { min=[...], max=[...] }`
     // or a `[mesh.bounds]` sub-table). When absent the renderer derives it.
     if (const toml::table* b = m["bounds"].as_table()) {
-        if (const auto* mn = b->get("min")) {
-            if (const auto mnVec = asVec3(*mn)) {
-                if (const auto* mx = b->get("max")) {
-                    if (const auto mxVec = asVec3(*mx)) {
-                        mesh.bounds = Aabb{*mnVec, *mxVec};
-                    }
-                }
-            }
+        const auto* mn = b->get("min");
+        const auto* mx = b->get("max");
+        const auto mnVec = mn ? asVec3(*mn) : std::nullopt;
+        const auto mxVec = mx ? asVec3(*mx) : std::nullopt;
+        if (mnVec && mxVec) {
+            mesh.bounds = Aabb{*mnVec, *mxVec};
         }
     }
 

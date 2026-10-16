@@ -42,40 +42,12 @@ def fmt(value):
     return "%.10g" % value
 
 
-def transform_xyz_line(line_bytes, swizzle):
-    """Swizzle the first 3 numeric tokens of a v/vn line, preserving the rest.
+def transform_vec3_line(line_bytes, modify):
+    """Apply `modify(x, y, z)` to the first 3 numeric tokens of a v/vn line.
 
+    `modify` receives the 3 string tokens and returns 3 new string tokens.
     Preserves the leading keyword, any extra trailing columns (e.g. vertex
     colors), and the exact trailing line-ending bytes.
-    """
-    stripped = line_bytes
-    eol = b""
-    while stripped.endswith(b"\n") or stripped.endswith(b"\r"):
-        eol = stripped[-1:] + eol
-        stripped = stripped[:-1]
-
-    text = stripped.decode("utf-8")
-    parts = text.split()
-    keyword = parts[0]
-    coords = parts[1:]
-
-    if len(coords) < 3:
-        return line_bytes
-
-    nx, ny, nz = swizzle(coords[0], coords[1], coords[2])
-
-    new_parts = [keyword, nx, ny, nz]
-    new_parts.extend(coords[3:])
-    out = " ".join(new_parts)
-    return out.encode("utf-8") + eol
-
-
-def transform_v_line(line_bytes, modify):
-    """Apply `modify` to the first 3 numeric tokens of a v line.
-
-    `modify(x, y, z)` receives the 3 string tokens and returns 3 new string
-    tokens. Preserves the leading keyword, any extra trailing columns (e.g.
-    vertex colors), and the exact trailing line-ending bytes.
     """
     stripped = line_bytes
     eol = b""
@@ -97,6 +69,22 @@ def transform_v_line(line_bytes, modify):
     new_parts.extend(coords[3:])
     out = " ".join(new_parts)
     return out.encode("utf-8") + eol
+
+
+def transform_xyz_line(line_bytes, swizzle):
+    """Swizzle the first 3 numeric tokens of a v/vn line, preserving the rest.
+
+    Thin alias over `transform_vec3_line` kept for the swizzle-style wrappers.
+    """
+    return transform_vec3_line(line_bytes, swizzle)
+
+
+def transform_v_line(line_bytes, modify):
+    """Apply `modify` to the first 3 numeric tokens of a v line.
+
+    Thin alias over `transform_vec3_line` kept for the modify-style wrappers.
+    """
+    return transform_vec3_line(line_bytes, modify)
 
 
 def resolve_output(input_path, output_path):
