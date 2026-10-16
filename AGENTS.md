@@ -96,6 +96,12 @@ against it). ctest `test_arch` runs the vendored `tools/check_arch.py` engine (l
 `aether/types` is the leaf, `aether/format` consumes it, the root `aether`
 vocabulary consumes both; includes may only go **down** that order and there must be **no
 include cycles** (file-level SCC detection), declared edges only. Sanitizer lane (Clang/GCC configures only):
+**Coverage lane (Clang/GCC configures only):** configure a separate build with
+`-DAETHER_COVERAGE=ON` (e.g. `-B build/coverage`), then run `python tools/coverage.py` - it
+builds the instrumented tree, runs the tests with `LLVM_PROFILE_FILE` set, merges the
+profiles and prints the llvm-cov report for `src/` (gcc builds report via gcov; exit 77
+when the LLVM tools are missing). Not wired into CI yet.
+
 `-DAETHER_SANITIZER=address|undefined|thread`. Host-side FP is deterministic
 (`/fp:strict` / `-ffp-contract=off -fno-fast-math`).
 
