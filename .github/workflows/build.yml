@@ -196,3 +196,75 @@ jobs:
       # test_tidy skips itself (exit 77) when clang-tidy is absent.
       - name: Test
         run: ctest --test-dir Aether/build --output-on-failure
+
+  # Q1 coverage lane in CI: the CPU suite runs here, so the llvm-cov report
+  # measures real test coverage (locally proven: 83.48% lines). clang (not the
+  # matrix's g++) because the lane consumes llvm-profdata/llvm-cov; the `llvm`
+  # package provides the unversioned tool symlinks next to /usr/bin/clang.
+  # Report-only while the lane stabilizes in CI (same pattern as the lint job).
+  coverage:
+    name: coverage (Q1)
+    runs-on: ubuntu-26.04
+    continue-on-error: true
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-binary-cache,readwrite"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: Aether
+          lfs: true
+      - uses: actions/checkout@v4
+        with:
+          repository: McNopper/slang-math
+          path: slang-math
+          lfs: true
+
+      # Same shallow-clone defect as the build job's step (the full DIAG
+      # rationale lives there): unshallow vcpkg and align HEAD + worktree to
+      # the manifest baseline, or configure fails with "no version database
+      # entry for tomlplusplus".
+      - name: Ensure vcpkg registry
+        shell: bash
+        run: |
+          bl=$(grep -o '"builtin-baseline": "[0-9a-f]*"' Aether/vcpkg.json | head -1 | grep -oE '[0-9a-f]{40}')
+          vk="${VCPKG_INSTALLATION_ROOT:-C:/vcpkg}"
+          vk="$(printf '%s' "$vk" | tr '\\' '/')"
+          if [ "$(git -C "$vk" rev-parse --is-shallow-repository)" = "true" ]; then
+            git -C "$vk" fetch --unshallow origin || git -C "$vk" fetch --depth 10000000 origin
+          else
+            git -C "$vk" fetch origin master || true
+          fi
+          git -C "$vk" cat-file -e "$bl" 2>/dev/null || { echo "error: baseline commit absent: $bl"; exit 1; }
+          if git -C "$vk" merge-base --is-ancestor HEAD "$bl" 2>/dev/null; then
+            git -C "$vk" reset --hard "$bl"
+          fi
+          echo "vcpkg registry ready for baseline $bl"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg-binary-cache
+          key: vcpkg-coverage-Linux-${{ hashFiles('Aether/vcpkg.json') }}
+          restore-keys: |
+            vcpkg-coverage-Linux-
+
+      - name: Install toolchain (clang + LLVM coverage tools + ninja)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm ninja-build
+
+      - name: Configure (instrumented)
+        run: >
+          cmake -S Aether -B Aether/build/coverage -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_TOOLCHAIN_FILE="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DFETCHCONTENT_SOURCE_DIR_SLANG_MATH="$PWD/slang-math"
+          -DAETHER_COVERAGE=ON
+
+      - name: Build (instrumented)
+        run: cmake --build Aether/build/coverage
+
+      # Runs the suite with LLVM_PROFILE_FILE set, merges the profiles and
+      # prints the llvm-cov report for src/ (exit 77 = LLVM tools missing;
+      # both outcomes stay non-blocking via continue-on-error).
+      - name: Coverage report
+        run: python Aether/tools/coverage.py --skip-build
