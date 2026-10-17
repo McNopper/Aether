@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <slang-math/slang-math.hpp>
 #include <string_view>
 #include <toml++/toml.hpp>
 #include <unordered_map>
@@ -119,15 +120,15 @@ inline const std::unordered_map<std::string_view, BoolSetter> boolSetters = {
 
 /// Scalar keywords (floats; per-field clamping lives in the setters).
 inline const std::unordered_map<std::string_view, ScalarSetter> scalarSetters = {
-    {"base_weight", [](MaterialDesc& d, float f) { d.base_weight = std::clamp(f, 0.0F, 1.0F); }},
+    {"base_weight", [](MaterialDesc& d, float f) { d.base_weight = sm::saturate(f); }},
     {"base_metalness", [](MaterialDesc& d, float f) { d.base_metalness = f; }},
     {"base_diffuse_roughness", [](MaterialDesc& d, float f) { d.base_diffuse_roughness = f; }},
     {"specular_weight", [](MaterialDesc& d, float f) { d.specular_weight = std::max(f, 0.0F); }},
-    {"specular_roughness", [](MaterialDesc& d, float f) { d.specular_roughness = std::clamp(f, 0.0F, 1.0F); }},
+    {"specular_roughness", [](MaterialDesc& d, float f) { d.specular_roughness = sm::saturate(f); }},
     {"specular_roughness_anisotropy",
-     [](MaterialDesc& d, float f) { d.specular_roughness_anisotropy = std::clamp(f, 0.0F, 1.0F); }},
+     [](MaterialDesc& d, float f) { d.specular_roughness_anisotropy = sm::saturate(f); }},
     {"specular_ior", [](MaterialDesc& d, float f) { d.specular_ior = std::max(f, 1.0F); }},
-    {"transmission_weight", [](MaterialDesc& d, float f) { d.transmission_weight = std::clamp(f, 0.0F, 1.0F); }},
+    {"transmission_weight", [](MaterialDesc& d, float f) { d.transmission_weight = sm::saturate(f); }},
     {"transmission_depth", [](MaterialDesc& d, float f) { d.transmission_depth = f; }},
     {"transmission_scatter_anisotropy",
      [](MaterialDesc& d, float f) { d.transmission_scatter_anisotropy = std::clamp(f, -1.0F, 1.0F); }},
@@ -135,23 +136,22 @@ inline const std::unordered_map<std::string_view, ScalarSetter> scalarSetters = 
      [](MaterialDesc& d, float f) { d.transmission_dispersion_scale = std::max(f, 0.0F); }},
     {"transmission_dispersion_abbe_number",
      [](MaterialDesc& d, float f) { d.transmission_dispersion_abbe_number = f; }},
-    {"thin_film_weight", [](MaterialDesc& d, float f) { d.thin_film_weight = std::clamp(f, 0.0F, 1.0F); }},
+    {"thin_film_weight", [](MaterialDesc& d, float f) { d.thin_film_weight = sm::saturate(f); }},
     {"thin_film_thickness", [](MaterialDesc& d, float f) { d.thin_film_thickness = std::max(f, 0.0F); }},
     {"thin_film_ior", [](MaterialDesc& d, float f) { d.thin_film_ior = std::max(f, 1.0F); }},
-    {"coat_weight", [](MaterialDesc& d, float f) { d.coat_weight = std::clamp(f, 0.0F, 1.0F); }},
-    {"coat_roughness", [](MaterialDesc& d, float f) { d.coat_roughness = std::clamp(f, 0.0F, 1.0F); }},
-    {"coat_roughness_anisotropy",
-     [](MaterialDesc& d, float f) { d.coat_roughness_anisotropy = std::clamp(f, 0.0F, 1.0F); }},
+    {"coat_weight", [](MaterialDesc& d, float f) { d.coat_weight = sm::saturate(f); }},
+    {"coat_roughness", [](MaterialDesc& d, float f) { d.coat_roughness = sm::saturate(f); }},
+    {"coat_roughness_anisotropy", [](MaterialDesc& d, float f) { d.coat_roughness_anisotropy = sm::saturate(f); }},
     {"coat_ior", [](MaterialDesc& d, float f) { d.coat_ior = std::max(f, 1.0F); }},
     {"coat_darkening", [](MaterialDesc& d, float f) { d.coat_darkening = f; }},
-    {"fuzz_weight", [](MaterialDesc& d, float f) { d.fuzz_weight = std::clamp(f, 0.0F, 1.0F); }},
+    {"fuzz_weight", [](MaterialDesc& d, float f) { d.fuzz_weight = sm::saturate(f); }},
     {"fuzz_roughness", [](MaterialDesc& d, float f) { d.fuzz_roughness = f; }},
     {"emission_luminance", [](MaterialDesc& d, float f) { d.emission_luminance = f; }},
-    {"subsurface_weight", [](MaterialDesc& d, float f) { d.subsurface_weight = std::clamp(f, 0.0F, 1.0F); }},
+    {"subsurface_weight", [](MaterialDesc& d, float f) { d.subsurface_weight = sm::saturate(f); }},
     {"subsurface_radius", [](MaterialDesc& d, float f) { d.subsurface_radius = f; }},
     {"subsurface_scatter_anisotropy",
      [](MaterialDesc& d, float f) { d.subsurface_scatter_anisotropy = std::clamp(f, -1.0F, 1.0F); }},
-    {"geometry_opacity", [](MaterialDesc& d, float f) { d.geometry_opacity = std::clamp(f, 0.0F, 1.0F); }},
+    {"geometry_opacity", [](MaterialDesc& d, float f) { d.geometry_opacity = sm::saturate(f); }},
 };
 
 } // namespace aether::format
