@@ -197,15 +197,14 @@ jobs:
       - name: Test
         run: ctest --test-dir Aether/build --output-on-failure
 
-  # Q1 coverage lane in CI: the CPU suite runs here, so the llvm-cov report
-  # measures real test coverage (locally proven: 83.48% lines). clang (not the
+  # Q1 coverage lane in CI: enforced (promoted from report-only after the
+                # lane proved green on both platforms) (locally proven: 83.48% lines). clang (not the
   # matrix's g++) because the lane consumes llvm-profdata/llvm-cov; the `llvm`
   # package provides the unversioned tool symlinks next to /usr/bin/clang.
   # Report-only while the lane stabilizes in CI (same pattern as the lint job).
   coverage:
     name: coverage (Q1)
     runs-on: ubuntu-26.04
-    continue-on-error: true
     env:
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-binary-cache,readwrite"
     steps:
