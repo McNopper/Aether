@@ -98,31 +98,44 @@ python mtlx_to_toml.py examples/shader_ball.mtlx examples/shader_ball_openpbr.ma
 
 ---
 
-## 3. OBJ transform tools (`translate_obj_*`, `rotate_obj_*`, `scale_obj`)
+## 3. OBJ transform CLI (`obj_transform.py`)
 
-Per-axis Wavefront OBJ transform scripts (standard library only). Each reads an
-OBJ and writes a transformed copy, operating on the `v` (vertex) and, for
-rotations, `vn` (normal) lines. They preserve file encoding, line endings and
-numeric precision, and are **safe for in-place edits** — when `input.obj` and
-`output.obj` resolve to the same file, the result is written through a temp file
-in the same directory and atomically `os.replace`d, so the source is never
-truncated mid-read.
+One CLI for the per-axis Wavefront OBJ transforms (standard library only). It reads an
+OBJ and writes a transformed copy, operating on the `v` (vertex) and, for rotations,
+`vn` (normal) lines. It preserves file encoding, line endings and numeric precision,
+and is **safe for in-place edits** — when `input.obj` and `output.obj` resolve to the
+same file, the result is written through a temp file in the same directory and
+atomically `os.replace`d, so the source is never truncated mid-read.
 
-* `translate_obj_x.py` / `_y.py` / `_z.py` — add a numeric offset to one axis
-  of every vertex.
-* `scale_obj.py` — multiply every vertex by a uniform factor (normals, UVs and
+* `translate <x|y|z> <offset>` — add a numeric offset to one axis of every vertex.
+* `scale <factor>` — multiply every vertex by a uniform factor (normals, UVs and
   faces are left untouched).
-* `rotate_obj_x.py` / `_y.py` / `_z.py` — rotate by **90, 180 or 270°** about an
-  axis using exact coordinate swizzling (no trig): axes are only swapped and
-  signs flipped on the original string tokens, so each value is preserved
-  byte-for-byte and a 4×90° round-trip is an exact identity.
+* `rotate <x|y|z> <90|180|270>` — rotate by **90, 180 or 270°** about an axis using
+  exact coordinate swizzling (no trig): axes are only swapped and signs flipped on
+  the original string tokens, so each value is preserved byte-for-byte and a
+  4×90° round-trip is an exact identity.
 
 ```bash
-python tools/translate_obj_y.py input.obj -0.21 output.obj   # offset Y by -0.21
-python tools/scale_obj.py        input.obj 0.1   output.obj   # uniform scale x0.1
-python tools/rotate_obj_y.py     input.obj 90    output.obj   # +90 deg about Y
-python tools/rotate_obj_y.py     input.obj 90    input.obj    # in-place (safe)
+python tools/obj_transform.py translate y input.obj -0.21 output.obj   # offset Y by -0.21
+python tools/obj_transform.py scale    input.obj 0.1   output.obj     # uniform scale x0.1
+python tools/obj_transform.py rotate   y 90    input.obj output.obj   # +90 deg about Y
+python tools/obj_transform.py rotate   y 90    input.obj input.obj    # in-place (safe)
 ```
+
+The streaming engine (one input OBJ → one output OBJ, `v`/`vn` lines rewritten,
+everything else copied byte-for-byte) lives in the shared `_obj_transform.py`
+module, also used by `obj_bounds.py`.
+
+### Tests
+
+```bash
+python tools/test_obj_transform.py
+```
+
+Golden-file tests (stdlib only): the nine rotate swizzles on `v`+`vn`, translate/
+scale goldens, 4×90°/2×180° byte-exact identities, CRLF preservation, extra
+vertex-color columns and short `v` lines, safe in-place edits, and the exact
+validation messages/exit codes.
 
 ---
 

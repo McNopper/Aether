@@ -1,11 +1,11 @@
-"""Shared helpers for the OBJ-transform wrapper scripts (rotate/translate/scale).
+"""Shared streaming engine for the OBJ transform CLI (rotate/translate/scale).
 
-Each wrapper supplies only its unique transform function (a per-axis swizzle
-table, a per-axis offset, or a uniform scale factor) and delegates file I/O,
-atomic in-place replacement, line framing, and CLI parsing to this module.
+The CLI (``obj_transform.py``) supplies only its transform functions (a
+per-axis swizzle table, a per-axis offset, or a uniform scale factor) and
+delegates file I/O, atomic in-place replacement, line framing, and token
+negation/formatting to this module.
 """
 import os
-import sys
 import tempfile
 
 
@@ -132,30 +132,3 @@ def process(input_path, output_path, transform_v, transform_vn=None):
             os.remove(write_path)
         raise
     finalize()
-
-
-def main_for_transform(argv, script_name, usage_arg, parse_value, value_error_msg, run):
-    """Shared CLI: `python <script> <input.obj> <<usage_arg>> <output.obj>`.
-
-    `parse_value(str) -> value` parses argv[2] (raises ValueError on bad input).
-    `value_error_msg` is printed on parse failure. `run(value, input_path,
-    output_path)` performs the transform.
-    """
-    if len(argv) != 4:
-        sys.stderr.write(
-            f"Usage: python {script_name} <input.obj> <{usage_arg}> <output.obj>\n"
-        )
-        return 2
-    input_path = argv[1]
-    try:
-        value = parse_value(argv[2])
-    except ValueError:
-        sys.stderr.write(value_error_msg + "\n")
-        return 2
-    output_path = argv[3]
-    try:
-        run(value, input_path, output_path)
-    except ValueError as e:
-        sys.stderr.write(f"Error: {e}\n")
-        return 2
-    return 0
