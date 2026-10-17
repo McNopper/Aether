@@ -15,6 +15,8 @@ jobs:
   lint:
     name: lint (Q2-Q6)
     runs-on: ubuntu-latest
+    # Newly added: report findings without blocking CI while tool versions stabilize
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
