@@ -18,10 +18,10 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
 
-from mtlx_to_toml import (  # noqa: E402
+from mtlx_to_toml import (
     OpenPBRValidationError,
-    convert_document,
     _write_material_library,
+    convert_document,
 )
 
 FIXTURES = HERE / "fixtures"

@@ -23,7 +23,6 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-
 # OpenPBR surface node categories (element tag of a node instance).
 OPENPBR_SURFACE_NODES = ("open_pbr_surface", "openpbr_surface")
 

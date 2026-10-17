@@ -62,9 +62,9 @@ import struct
 import sys
 import tempfile
 import zlib
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator
 
 try:
     import tomllib  # Python 3.11+
@@ -104,7 +104,7 @@ def fmt(value: float) -> str:
     """Compact float formatting (``%.10g``), signed zero normalised."""
     if value == 0:
         value = 0.0
-    return "%.10g" % value
+    return f"{value:.10g}"
 
 
 # ── PNG decode / encode (standard library only) ──────────────────────────────
@@ -121,7 +121,7 @@ def decode_png(path: Path) -> tuple[int, int, int, bytes]:
     data = path.read_bytes()
     sig = b"\x89PNG\r\n\x1a\n"
     if data[:8] != sig:
-        raise ValueError("%s: not a PNG (bad signature)" % path)
+        raise ValueError(f"{path}: not a PNG (bad signature)")
     pos = 8
     width = height = bit_depth = colour_type = None
     idat = bytearray()
@@ -144,10 +144,10 @@ def decode_png(path: Path) -> tuple[int, int, int, bytes]:
         elif ctype == b"IEND":
             break
     if width is None or bit_depth != 8:
-        raise ValueError("%s: only 8-bit PNG supported" % path)
+        raise ValueError(f"{path}: only 8-bit PNG supported")
     channels = {0: 1, 2: 3, 4: 2, 6: 4}.get(colour_type)
     if channels is None:
-        raise ValueError("%s: unsupported PNG colour type %s" % (path, colour_type))
+        raise ValueError(f"{path}: unsupported PNG colour type {colour_type}")
 
     raw = zlib.decompress(bytes(idat))
     stride = width * channels
@@ -186,7 +186,7 @@ def decode_png(path: Path) -> tuple[int, int, int, bytes]:
                 pred = left if (pa <= pb and pa <= pc) else (up if pb <= pc else upleft)
                 row[i] = (row[i] + pred) & 0xFF
         else:
-            raise ValueError("%s: unknown PNG filter %s" % (path, ftype))
+            raise ValueError(f"{path}: unknown PNG filter {ftype}")
         out[y * stride:(y + 1) * stride] = row
         prev = row
     return width, height, channels, bytes(out)
@@ -260,7 +260,7 @@ class OpacitySampler:
         self.px = pixels
 
     @classmethod
-    def from_png(cls, path: Path) -> "OpacitySampler":
+    def from_png(cls, path: Path) -> OpacitySampler:
         w, h, ch, px = decode_png(path)
         return cls(w, h, ch, px)
 
@@ -333,10 +333,8 @@ class OpacitySampler:
                     a = (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) / 255.0
                 else:
                     a = c[0] / 255.0
-                if a < lo:
-                    lo = a
-                if a > hi:
-                    hi = a
+                lo = min(lo, a)
+                hi = max(hi, a)
         return (lo, hi)
 
 
@@ -384,7 +382,7 @@ def parse_obj(path: Path) -> ObjMesh:
     with open(path, "rb") as f:
         for lineno, line in enumerate(f, start=1):
             head = line.lstrip()
-            if head.startswith(b"v ") or head.startswith(b"v\t"):
+            if head.startswith((b"v ", b"v\t")):
                 parts = head.split()
                 if len(parts) < 4:
                     _warn(path, lineno, "ignoring 'v' with < 3 coordinates")
@@ -393,7 +391,7 @@ def parse_obj(path: Path) -> ObjMesh:
                     mesh.positions.append((float(parts[1]), float(parts[2]), float(parts[3])))
                 except ValueError:
                     _warn(path, lineno, "ignoring non-numeric 'v'")
-            elif head.startswith(b"vt ") or head.startswith(b"vt\t"):
+            elif head.startswith((b"vt ", b"vt\t")):
                 parts = head.split()
                 if len(parts) < 3:
                     continue
@@ -401,15 +399,15 @@ def parse_obj(path: Path) -> ObjMesh:
                     mesh.uvs.append((float(parts[1]), float(parts[2])))
                 except ValueError:
                     _warn(path, lineno, "ignoring non-numeric 'vt'")
-            elif head.startswith(b"g ") or head.startswith(b"g\t"):
+            elif head.startswith((b"g ", b"g\t")):
                 current_group = head.split(None, 1)[1].decode("utf-8", "replace").strip()
-            elif head.startswith(b"o ") or head.startswith(b"o\t"):
+            elif head.startswith((b"o ", b"o\t")):
                 # 'o' only names the implicit group if no 'g' has been seen yet;
                 # the list is still created lazily on the first face.
                 name = head.split(None, 1)[1].decode("utf-8", "replace").strip()
                 if current_group == "":
                     current_group = name
-            elif head.startswith(b"f ") or head.startswith(b"f\t"):
+            elif head.startswith((b"f ", b"f\t")):
                 verts = _parse_face(head, len(mesh.positions), len(mesh.uvs))
                 if verts is None or len(verts) < 3:
                     _warn(path, lineno, "ignoring face with < 3 vertices")
@@ -747,7 +745,7 @@ def resolve_scene(
         scene = tomllib.load(f)
     libs = scene.get("material_libraries", [])
     if not libs:
-        raise ValueError("%s: no material_libraries declared" % scene_path)
+        raise ValueError(f"{scene_path}: no material_libraries declared")
     lib_path = (scene_path.parent / libs[0]).resolve()
     materials = _load_material_library(lib_path)
 
@@ -759,7 +757,7 @@ def resolve_scene(
             break
     if obj_rel is None:
         raise ValueError(
-            "%s: no [[mesh]] with name = \"%s\"" % (scene_path, mesh_name)
+            f"{scene_path}: no [[mesh]] with name = \"{mesh_name}\""
         )
     obj_path = (scene_path.parent / obj_rel).resolve()
 
@@ -779,7 +777,7 @@ def resolve_scene(
         break
     if not group_to_mat:
         raise ValueError(
-            "%s: instance of mesh \"%s\" has no materials map" % (scene_path, mesh_name)
+            f"{scene_path}: instance of mesh \"{mesh_name}\" has no materials map"
         )
 
     group_inputs: dict[str, OpacityInput] = {}
@@ -789,8 +787,7 @@ def resolve_scene(
         mat = materials.get(mat_name)
         if mat is None:
             sys.stderr.write(
-                "warning: %s: material \"%s\" (group \"%s\") not found — skipping\n"
-                % (scene_path.name, mat_name, grp)
+                f"warning: {scene_path.name}: material \"{mat_name}\" (group \"{grp}\") not found — skipping\n"
             )
             continue
         tex, scalar = _material_opacity(mat, lib_path.parent)
@@ -805,8 +802,7 @@ def resolve_scene(
         )
     if not group_inputs:
         raise ValueError(
-            "%s: no group of mesh \"%s\" has a material with map_opacity"
-            % (scene_path.name, mesh_name)
+            f"{scene_path.name}: no group of mesh \"{mesh_name}\" has a material with map_opacity"
         )
     return SceneTarget(
         obj_path=obj_path,
@@ -828,7 +824,7 @@ def bake_group(
     """Bake one OBJ group's triangles against the resolved opacity input."""
     tris = obj.groups.get(group)
     if tris is None:
-        raise ValueError("OBJ has no group \"%s\"" % group)
+        raise ValueError(f"OBJ has no group \"{group}\"")
     sampler = OpacitySampler.from_png(inp.texture_path)
     records: list[BakedTriangle] = []
     for tri in tris:
@@ -863,13 +859,13 @@ def render_omm(
     OBJ face order (positional — loader validates count == OBJ group faces)."""
     le = "\n"
     lines: list[str] = [
-        "# %s opacity micromap text source (omm-text/v1)" % obj_path.name,
+        f"# {obj_path.name} opacity micromap text source (omm-text/v1)",
         "# Packs to VkMicromapTriangleKHR[] + packed-state data (LSB-first, SFC order).",
         "# Each 'T <level> <format> <hex>' is one base triangle's record;",
         "# 'S <special>' is a fully-uniform triangle",
         "#   (-1 transparent / -2 opaque / -3 unknown-transparent / -4 unknown-opaque;",
         "#    the 'unknown' pair means: traversal asks the shader per hit).",
-        "# Source texture: %s" % texture_path.name,
+        f"# Source texture: {texture_path.name}",
         "",
     ]
     for gb in groups:
@@ -925,37 +921,37 @@ def render_micromap_toml(
         "# The baked OMM = (mesh UVs) x (material map_opacity); both sources are",
         "# recorded below so 'omm_bake.py --check' can re-bake and detect drift.",
         'format = "omm-text/v1"',
-        'source_obj = "%s"' % base(obj_path),
+        f'source_obj = "{base(obj_path)}"',
     ]
     if scene_path is not None:
-        lines.append('source_scene = "%s"' % base(scene_path))
+        lines.append(f'source_scene = "{base(scene_path)}"')
     if lib_path is not None:
-        lines.append('source_material_library = "%s"' % base(lib_path))
-    lines.append('source_texture = "%s"' % base(texture_path))
+        lines.append(f'source_material_library = "{base(lib_path)}"')
+    lines.append(f'source_texture = "{base(texture_path)}"')
     lines.extend(
         [
             "default_subdivision_level = %d" % default_level,
             "default_format = %d" % default_fmt,
             "",
             "[data]",
-            'file = "%s"' % omm_filename,
+            f'file = "{omm_filename}"',
             "",
         ]
     )
     for gb in groups:
-        inp = inputs[gb.name]
+        inputs[gb.name]
         usage = gb.usage()
         n_records = sum(c for (c, _l, _f) in usage)
         n_special = gb.triangle_count - n_records
         lines.append("[[group]]")
-        lines.append('name = "%s"' % gb.name)
-        lines.append('source_material = "%s"' % gb.source_material)
+        lines.append(f'name = "{gb.name}"')
+        lines.append(f'source_material = "{gb.source_material}"')
         lines.append("triangle_count = %d  # base triangles (T + S)" % gb.triangle_count)
         lines.append(
             "record_count = %d  # T records (special = %d)"
             % (n_records, n_special)
         )
-        lines.append("usage = %s" % _toml_inline_usage(usage))
+        lines.append(f"usage = {_toml_inline_usage(usage)}")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -973,7 +969,7 @@ def _split_le(line: str) -> tuple[str, str]:
     return line, ""
 
 
-import re  # noqa: E402
+import re
 
 _RE_ARRAY_HEADER = re.compile(r"^\s*\[\[([A-Za-z0-9_]+)\]\]\s*$")
 _RE_TABLE_HEADER = re.compile(r"^\s*\[([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)\]\s*$")
@@ -1019,7 +1015,7 @@ def _last_kv_index(lines: list[str]) -> int:
     for idx, line in enumerate(lines):
         core, _ = _split_le(line)
         stripped = core.strip()
-        if not stripped or stripped.startswith("#") or stripped.startswith("["):
+        if not stripped or stripped.startswith(("#", "[")):
             continue
         if "=" in core:
             last = idx
@@ -1051,7 +1047,7 @@ def inject_opacity_micromaps(
     found = _find_mesh_by_name(lines, mesh_name)
     if found is None:
         raise ValueError(
-            "%s: no [[mesh]] with name = \"%s\"" % (scene_path, mesh_name)
+            f"{scene_path}: no [[mesh]] with name = \"{mesh_name}\""
         )
     start, end = found
     body = lines[start:end]
@@ -1061,7 +1057,7 @@ def inject_opacity_micromaps(
 
     inline = (
         "opacity_micromaps = { "
-        + ", ".join('"%s" = "%s"' % (g, f) for g, f in group_to_file.items())
+        + ", ".join(f'"{g}" = "{f}"' for g, f in group_to_file.items())
         + " }"
     )
 
@@ -1237,11 +1233,11 @@ def _run_explicit(args) -> tuple[Path, Path | None, dict[str, OpacityInput], Pat
     materials = _load_material_library(lib_path)
     mat = materials.get(args.material)
     if mat is None:
-        raise ValueError("material \"%s\" not in %s" % (args.material, lib_path))
+        raise ValueError(f"material \"{args.material}\" not in {lib_path}")
     tex, scalar = _material_opacity(mat, lib_path.parent)
     if tex is None:
         raise ValueError(
-            "material \"%s\" has no map_opacity — nothing to bake" % args.material
+            f"material \"{args.material}\" has no map_opacity — nothing to bake"
         )
     groups = [g for g in (args.groups.split(",") if args.groups else []) if g]
     if not groups:
@@ -1304,7 +1300,7 @@ def _run_bake(args) -> int:
     ordered = [g for g in obj.group_order() if g in inputs]
     missing = [g for g in inputs if g not in obj.groups]
     if missing:
-        raise ValueError("OBJ %s has no group(s): %s" % (obj_path.name, ", ".join(missing)))
+        raise ValueError("OBJ {} has no group(s): {}".format(obj_path.name, ", ".join(missing)))
 
     group_bakes: list[GroupBake] = []
     for g in ordered:
@@ -1346,7 +1342,7 @@ def _run_bake(args) -> int:
         group_to_file = {gb.name: toml_path.name for gb in group_bakes}
         inject_opacity_micromaps(scene_path, args.mesh, group_to_file)
         if not args.quiet:
-            sys.stderr.write("wrote opacity_micromaps into %s\n" % scene_path)
+            sys.stderr.write(f"wrote opacity_micromaps into {scene_path}\n")
 
     if not args.quiet:
         for gb in group_bakes:
@@ -1362,7 +1358,7 @@ def _run_bake(args) -> int:
                     ", ".join("L%dF%dx%d" % (l, f, c) for (c, l, f) in usage) or "none",
                 )
             )
-        sys.stderr.write("wrote %s + %s\n" % (omm_path, toml_path))
+        sys.stderr.write(f"wrote {omm_path} + {toml_path}\n")
     return 0
 
 
@@ -1406,7 +1402,7 @@ def _run_check(args) -> int:
                     _tex, scalar = _material_opacity(mat, lib_path.parent)
                     inp.scalar = scalar
         if name not in obj.groups:
-            errors.append("group %s: OBJ %s no longer has it" % (name, obj_path.name))
+            errors.append(f"group {name}: OBJ {obj_path.name} no longer has it")
             continue
         tris = obj.groups[name]
         if len(tris) != tricount:
@@ -1447,11 +1443,11 @@ def _run_check(args) -> int:
                     )
     if errors:
         for e in errors[:20]:
-            sys.stderr.write("drift: %s\n" % e)
+            sys.stderr.write(f"drift: {e}\n")
         sys.stderr.write("--check: %d divergence(s)\n" % len(errors))
         return 1
     if not args.quiet:
-        sys.stderr.write("--check: %s in sync with sources\n" % toml_path.name)
+        sys.stderr.write(f"--check: {toml_path.name} in sync with sources\n")
     return 0
 
 
@@ -1463,7 +1459,7 @@ def _run_inspect(args) -> int:
     omm = parse_omm(omm_path)
     group = args.group
     if group is None or group not in omm.groups:
-        raise ValueError("group %r not in %s" % (group, omm_path))
+        raise ValueError(f"group {group!r} not in {omm_path}")
     recs = omm.groups[group]
     idx = args.triangle
     if idx < 0 or idx >= len(recs):
@@ -1473,7 +1469,6 @@ def _run_inspect(args) -> int:
         sys.stdout.write("group %s tri %d: special %d\n" % (group, idx, rec[1]))
         return 0
     _t, level, fmt, hexbits = rec
-    bits_per = 1 if fmt == FORMAT_TWO_STATE else 2
     n = 4 ** level
     # Re-expand hex -> per-microtriangle state in SFC order.
     raw = int(hexbits, 16)
@@ -1512,7 +1507,7 @@ def main(argv: list[str] | None = None) -> int:
             return _run_inspect(args)
         return _run_bake(args)
     except ValueError as exc:
-        sys.stderr.write("error: %s\n" % exc)
+        sys.stderr.write(f"error: {exc}\n")
         return 1
 
 

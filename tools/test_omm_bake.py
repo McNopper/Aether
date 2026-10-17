@@ -13,10 +13,6 @@ parse round-trip, the scene ``--write`` injection, and the failure modes
 
 from __future__ import annotations
 
-import io
-import math
-import os
-import struct
 import sys
 import tempfile
 from pathlib import Path
@@ -24,7 +20,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import omm_bake as omm  # noqa: E402
+import omm_bake as omm
 
 try:
     import tomllib  # Python 3.11+
@@ -126,14 +122,14 @@ def check_sampler_uv_convention(tmp: Path) -> list[str]:
     for u, want in cases:
         got = s.opacity(u, 0.5)
         if not _approx(got, want):
-            errors.append("sample u=%g: expected %g, got %g" % (u, want, got))
+            errors.append(f"sample u={u:g}: expected {want:g}, got {got:g}")
     # Vertical: a 1x2 image, row 0 (top) opaque, row 1 transparent.
     rows = bytearray(b"\xff\xff\xff\xff" + b"\x00\x00\x00\x00")
     sv = omm.OpacitySampler(1, 2, 4, bytes(rows))
     for v, want in ((0.25, 1.0), (0.75, 0.0)):
         got = sv.opacity(0.5, v)
         if not _approx(got, want):
-            errors.append("V convention at v=%g: expected %g, got %g (V flip?)" % (v, want, got))
+            errors.append(f"V convention at v={v:g}: expected {want:g}, got {got:g} (V flip?)")
     return errors
 
 
@@ -276,7 +272,7 @@ def check_obj_parse_groups(tmp: Path) -> list[str]:
     obj_path = _write(tmp, "two.obj", TWO_GROUP_OBJ)
     obj = omm.parse_obj(obj_path)
     if set(obj.groups) != {"Hero", "Flat"}:
-        errors.append("groups: expected {Hero,Flat}, got %s" % set(obj.groups))
+        errors.append(f"groups: expected {{Hero,Flat}}, got {set(obj.groups)}")
     if len(obj.groups["Hero"]) != 1:
         errors.append("Hero tri count: expected 1, got %d" % len(obj.groups["Hero"]))
     if len(obj.groups["Flat"]) != 1:
@@ -308,7 +304,7 @@ material = "Hero"
         root = tomllib.load(f)
     om = root["mesh"][0].get("opacity_micromaps")
     if om != {"Hero": "m_omm.micromap.toml"}:
-        errors.append("injected opacity_micromaps wrong: %r" % om)
+        errors.append(f"injected opacity_micromaps wrong: {om!r}")
     # Re-inject replaces, not duplicates.
     omm.inject_opacity_micromaps(scene_path, "m", {"Hero": "other.micromap.toml"})
     text = scene_path.read_text(encoding="utf-8")
@@ -404,14 +400,14 @@ def main() -> int:
             try:
                 errs = fn(tmp)
             except Exception as exc:  # noqa: BLE001
-                errs = ["raised %s: %s" % (type(exc).__name__, exc)]
+                errs = [f"raised {type(exc).__name__}: {exc}"]
             if errs:
                 failures += 1
-                sys.stderr.write("FAIL %s:\n" % name)
+                sys.stderr.write(f"FAIL {name}:\n")
                 for e in errs:
-                    sys.stderr.write("    %s\n" % e)
+                    sys.stderr.write(f"    {e}\n")
             else:
-                sys.stderr.write("ok   %s\n" % name)
+                sys.stderr.write(f"ok   {name}\n")
     if failures:
         sys.stderr.write("\n%d check(s) failed\n" % failures)
         return 1

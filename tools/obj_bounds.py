@@ -36,7 +36,6 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-
 # ── Number formatting ────────────────────────────────────────────────────────
 
 
@@ -51,7 +50,7 @@ def fmt(value: float) -> str:
     """
     if value == 0:
         value = 0.0
-    return "%.10g" % value
+    return f"{value:.10g}"
 
 
 # ── Result dataclasses ───────────────────────────────────────────────────────
@@ -143,7 +142,7 @@ def iter_vertices(path: Path):
     with open(path, "rb") as f:
         for lineno, line in enumerate(f, start=1):
             head = line.lstrip()
-            if not (head.startswith(b"v ") or head.startswith(b"v\t")):
+            if not (head.startswith((b"v ", b"v\t"))):
                 continue
             parts = head.split()
             if len(parts) < 4:
@@ -198,7 +197,7 @@ def compute(path: Path, want_sphere: bool = False) -> Result:
             max_z_pt = (x, y, z)
 
     if count == 0:
-        raise ValueError("no vertex positions ('v' lines) found in %s" % path)
+        raise ValueError(f"no vertex positions ('v' lines) found in {path}")
 
     bounds = Bounds(min_x, min_y, min_z, max_x, max_y, max_z)
 
@@ -268,20 +267,20 @@ def _render_table(header: str, pairs: list[tuple[str, str]], pretty: bool) -> li
     When ``pretty`` is set, the ``=`` signs are aligned by padding keys to the
     longest key width within the table.
     """
-    lines = ["[%s]" % header]
+    lines = [f"[{header}]"]
     if pretty and pairs:
         width = max(len(k) for k, _ in pairs)
         for key, value in pairs:
             lines.append("%-*s = %s" % (width, key, value))
     else:
         for key, value in pairs:
-            lines.append("%s = %s" % (key, value))
+            lines.append(f"{key} = {value}")
     return lines
 
 
 def _vec3(a: float, b: float, c: float) -> str:
     """Render a 3-float TOML inline array using ``fmt``."""
-    return "[%s, %s, %s]" % (fmt(a), fmt(b), fmt(c))
+    return f"[{fmt(a)}, {fmt(b)}, {fmt(c)}]"
 
 
 def render_bounds_block(
@@ -442,7 +441,7 @@ def _last_kv_index(lines: list[str]) -> int:
     for idx, line in enumerate(lines):
         core, _ = _split_le(line)
         stripped = core.strip()
-        if not stripped or stripped.startswith("#") or stripped.startswith("["):
+        if not stripped or stripped.startswith(("#", "[")):
             continue
         if "=" in core:
             last = idx
@@ -476,15 +475,14 @@ def inject_into_scene(
     found = _find_mesh_entry(lines, obj_basename, obj_declared)
     if found is None:
         raise ValueError(
-            "no [[...]] entry with path = \"%s\" found in %s"
-            % (obj_basename, scene_path)
+            f"no [[...]] entry with path = \"{obj_basename}\" found in {scene_path}"
         )
     start, end, array_key = found
 
     body = lines[start:end]
-    body = _strip_subtable(body, "[%s.bounds]" % array_key)
+    body = _strip_subtable(body, f"[{array_key}.bounds]")
     if with_sphere:
-        body = _strip_subtable(body, "[%s.sphere]" % array_key)
+        body = _strip_subtable(body, f"[{array_key}.sphere]")
 
     # Match the line ending already used in the file (LF or CRLF).
     _, le = _split_le(body[0]) if body else ("\n", "\n")
@@ -505,7 +503,7 @@ def inject_into_scene(
     if insert_at > 0 and _split_le(body[insert_at - 1])[0].strip() != "":
         block.append(le)
     block.extend(
-        line + le for line in _render_table("%s.bounds" % array_key, bounds_pairs, pretty)
+        line + le for line in _render_table(f"{array_key}.bounds", bounds_pairs, pretty)
     )
     if with_sphere and result.sphere is not None:
         s = result.sphere
@@ -516,7 +514,7 @@ def inject_into_scene(
         block.append(le)
         block.extend(
             line + le
-            for line in _render_table("%s.sphere" % array_key, sphere_pairs, pretty)
+            for line in _render_table(f"{array_key}.sphere", sphere_pairs, pretty)
         )
 
     new_body = body[:insert_at] + block + body[insert_at:]
@@ -588,13 +586,13 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     input_path = Path(args.input)
     if not input_path.exists():
-        sys.stderr.write("error: input file not found: %s\n" % input_path)
+        sys.stderr.write(f"error: input file not found: {input_path}\n")
         return 1
 
     try:
         result = compute(input_path, want_sphere=args.sphere)
     except ValueError as exc:
-        sys.stderr.write("error: %s\n" % exc)
+        sys.stderr.write(f"error: {exc}\n")
         return 1
 
     if not args.quiet:
@@ -603,18 +601,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.write:
         scene_path = Path(args.write)
         if not scene_path.exists():
-            sys.stderr.write("error: scene file not found: %s\n" % scene_path)
+            sys.stderr.write(f"error: scene file not found: {scene_path}\n")
             return 1
         try:
             array_key = inject_into_scene(
                 scene_path, input_path, result, args.sphere, args.pretty
             )
         except ValueError as exc:
-            sys.stderr.write("error: %s\n" % exc)
+            sys.stderr.write(f"error: {exc}\n")
             return 1
         if not args.quiet:
             sys.stderr.write(
-                "wrote [%s.bounds] into %s\n" % (array_key, scene_path)
+                f"wrote [{array_key}.bounds] into {scene_path}\n"
             )
         return 0
 

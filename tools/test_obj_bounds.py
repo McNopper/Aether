@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import io
 import math
-import os
 import sys
 import tempfile
 from pathlib import Path
@@ -22,7 +21,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import obj_bounds  # noqa: E402
+import obj_bounds
 
 try:
     import tomllib  # Python 3.11+
@@ -86,9 +85,9 @@ def check_basic_aabb(tmp: Path) -> list[str]:
     got_min = (result.bounds.min_x, result.bounds.min_y, result.bounds.min_z)
     got_max = (result.bounds.max_x, result.bounds.max_y, result.bounds.max_z)
     if not all(_approx_equal(a, b) for a, b in zip(got_min, EXPECTED_MIN)):
-        errors.append("min: expected %s, got %s" % (EXPECTED_MIN, got_min))
+        errors.append(f"min: expected {EXPECTED_MIN}, got {got_min}")
     if not all(_approx_equal(a, b) for a, b in zip(got_max, EXPECTED_MAX)):
-        errors.append("max: expected %s, got %s" % (EXPECTED_MAX, got_max))
+        errors.append(f"max: expected {EXPECTED_MAX}, got {got_max}")
     return errors
 
 
@@ -113,7 +112,7 @@ def check_toml_block(tmp: Path) -> list[str]:
     try:
         doc = tomllib.loads(out.getvalue())
     except Exception as exc:  # noqa: BLE001 - surface any parse failure
-        errors.append("stdout did not parse as TOML: %s" % exc)
+        errors.append(f"stdout did not parse as TOML: {exc}")
         return errors
     bounds = doc.get("bounds")
     if not isinstance(bounds, dict):
@@ -122,9 +121,9 @@ def check_toml_block(tmp: Path) -> list[str]:
     got_min = list(bounds.get("min", []))
     got_max = list(bounds.get("max", []))
     if not all(_approx_equal(a, b) for a, b in zip(got_min, EXPECTED_MIN)):
-        errors.append("bounds.min: expected %s, got %s" % (EXPECTED_MIN, got_min))
+        errors.append(f"bounds.min: expected {EXPECTED_MIN}, got {got_min}")
     if not all(_approx_equal(a, b) for a, b in zip(got_max, EXPECTED_MAX)):
-        errors.append("bounds.max: expected %s, got %s" % (EXPECTED_MAX, got_max))
+        errors.append(f"bounds.max: expected {EXPECTED_MAX}, got {got_max}")
     return errors
 
 
@@ -143,11 +142,11 @@ def check_ignores_non_v(tmp: Path) -> list[str]:
     got_min = (result.bounds.min_x, result.bounds.min_y, result.bounds.min_z)
     got_max = (result.bounds.max_x, result.bounds.max_y, result.bounds.max_z)
     if not all(_approx_equal(a, b) for a, b in zip(got_min, EXPECTED_MIN)):
-        errors.append("min leaked: expected %s, got %s" % (EXPECTED_MIN, got_min))
+        errors.append(f"min leaked: expected {EXPECTED_MIN}, got {got_min}")
     if not all(_approx_equal(a, b) for a, b in zip(got_max, EXPECTED_MAX)):
-        errors.append("max leaked: expected %s, got %s" % (EXPECTED_MAX, got_max))
+        errors.append(f"max leaked: expected {EXPECTED_MAX}, got {got_max}")
     if result.bounds.max_x >= 50.0 or result.bounds.min_x <= -50.0:
-        errors.append("vn/vt/vp clearly contaminated bounds: %s" % result.bounds)
+        errors.append(f"vn/vt/vp clearly contaminated bounds: {result.bounds}")
     return errors
 
 
@@ -187,14 +186,13 @@ def check_ritter_encloses(tmp: Path) -> list[str]:
         d = math.sqrt((px - cx) ** 2 + (py - cy) ** 2 + (pz - cz) ** 2)
         if d > s.radius + 1e-9:
             errors.append(
-                "point %s outside sphere (d=%s > radius=%s)"
-                % ((px, py, pz), d, s.radius)
+                f"point {(px, py, pz)} outside sphere (d={d} > radius={s.radius})"
             )
     # The circumsphere radius is an upper bound: Ritter must be no larger.
     circ = result.bounds.sphere_radius()
     if s.radius > circ + 1e-9:
         errors.append(
-            "Ritter radius %s exceeds circumsphere %s" % (s.radius, circ)
+            f"Ritter radius {s.radius} exceeds circumsphere {circ}"
         )
     return errors
 
@@ -237,7 +235,7 @@ def check_scene_write(tmp: Path) -> list[str]:
         return ["--write: no [mesh.bounds] sub-table on the 'thing' entry"]
     got_min = list(bounds.get("min", []))
     if not all(_approx_equal(a, b) for a, b in zip(got_min, EXPECTED_MIN)):
-        errors.append("--write bounds.min: expected %s, got %s" % (EXPECTED_MIN, got_min))
+        errors.append(f"--write bounds.min: expected {EXPECTED_MIN}, got {got_min}")
     # 'other' mesh must be untouched (no bounds key).
     other = next((m for m in meshes if m.get("name") == "other"), None)
     if other is not None and "bounds" in other:
@@ -282,12 +280,12 @@ def main() -> int:
             errs = fn(tmp)
             if errs:
                 for e in errs:
-                    failures.append("%s: %s" % (name, e))
+                    failures.append(f"{name}: {e}")
             else:
                 passed += 1
-                print("PASS %s" % name)
+                print(f"PASS {name}")
     for err in failures:
-        print("FAIL %s" % err)
+        print(f"FAIL {err}")
     print("\n%d passed, %d failed" % (passed, len(failures)))
     return 1 if failures else 0
 

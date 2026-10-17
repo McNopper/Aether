@@ -39,7 +39,7 @@ def fmt(value):
     """
     if value == 0:
         value = 0.0
-    return "%.10g" % value
+    return f"{value:.10g}"
 
 
 def transform_vec3_line(line_bytes, modify):
@@ -51,7 +51,7 @@ def transform_vec3_line(line_bytes, modify):
     """
     stripped = line_bytes
     eol = b""
-    while stripped.endswith(b"\n") or stripped.endswith(b"\r"):
+    while stripped.endswith((b"\n", b"\r")):
         eol = stripped[-1:] + eol
         stripped = stripped[:-1]
 
@@ -121,9 +121,9 @@ def process(input_path, output_path, transform_v, transform_vn=None):
         with open(input_path, "rb") as fin, open(write_path, "wb") as fout:
             for line in fin:
                 head = line.lstrip()
-                if head.startswith(b"vn ") or head.startswith(b"vn\t"):
+                if head.startswith((b"vn ", b"vn\t")):
                     fout.write(transform_vn(line) if transform_vn else line)
-                elif head.startswith(b"v ") or head.startswith(b"v\t"):
+                elif head.startswith((b"v ", b"v\t")):
                     fout.write(transform_v(line))
                 else:
                     fout.write(line)
@@ -143,7 +143,7 @@ def main_for_transform(argv, script_name, usage_arg, parse_value, value_error_ms
     """
     if len(argv) != 4:
         sys.stderr.write(
-            "Usage: python %s <input.obj> <%s> <output.obj>\n" % (script_name, usage_arg)
+            f"Usage: python {script_name} <input.obj> <{usage_arg}> <output.obj>\n"
         )
         return 2
     input_path = argv[1]
@@ -156,6 +156,6 @@ def main_for_transform(argv, script_name, usage_arg, parse_value, value_error_ms
     try:
         run(value, input_path, output_path)
     except ValueError as e:
-        sys.stderr.write("Error: %s\n" % e)
+        sys.stderr.write(f"Error: {e}\n")
         return 2
     return 0

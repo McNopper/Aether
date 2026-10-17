@@ -13,9 +13,8 @@ import json
 import math
 import os
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Iterable
 
 import bpy
 from bpy.props import BoolProperty, FloatProperty, StringProperty
