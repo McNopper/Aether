@@ -14,7 +14,8 @@ from _obj_transform import fmt, main_for_transform, process, transform_v_line
 
 
 def run(offset, input_path, output_path):
-    modify = lambda x, y, z: (fmt(float(x) + offset), y, z)
+    def modify(x, y, z):
+        return (fmt(float(x) + offset), y, z)
     process(input_path, output_path, lambda line: transform_v_line(line, modify))
 
 

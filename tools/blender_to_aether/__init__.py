@@ -11,9 +11,9 @@ bl_info = {
 
 import json
 import math
-import os
 import re
 from collections.abc import Iterable, Sequence
+from typing import ClassVar
 from pathlib import Path
 
 import bpy
@@ -205,7 +205,7 @@ def _write_scene_toml(
 class AetherSceneExporter(Operator, ExportHelper):
     bl_idname = "export.aether_scene"
     bl_label = "Export Aether Scene"
-    bl_options = {"PRESET", "UNDO"}
+    bl_options: ClassVar[set[str]] = {"PRESET", "UNDO"}
 
     filename_ext = ".scene.toml"
     filter_glob: StringProperty(default="*.scene.toml", options={"HIDDEN"}, maxlen=255)

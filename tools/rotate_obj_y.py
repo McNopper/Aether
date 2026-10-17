@@ -37,7 +37,8 @@ def make_swizzle(angle):
 
 def run(angle, input_path, output_path):
     swizzle = make_swizzle(angle)
-    fn = lambda line: transform_xyz_line(line, swizzle)
+    def fn(line):
+        return transform_xyz_line(line, swizzle)
     process(input_path, output_path, fn, fn)
 
 

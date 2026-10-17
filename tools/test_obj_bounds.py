@@ -111,7 +111,7 @@ def check_toml_block(tmp: Path) -> list[str]:
     # Stdout must be parseable TOML with a top-level [bounds] table.
     try:
         doc = tomllib.loads(out.getvalue())
-    except Exception as exc:  # noqa: BLE001 - surface any parse failure
+    except Exception as exc:
         errors.append(f"stdout did not parse as TOML: {exc}")
         return errors
     bounds = doc.get("bounds")

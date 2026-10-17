@@ -13,7 +13,8 @@ from _obj_transform import fmt, main_for_transform, process, transform_v_line
 
 
 def run(factor, input_path, output_path):
-    modify = lambda x, y, z: (fmt(float(x) * factor), fmt(float(y) * factor), fmt(float(z) * factor))
+    def modify(x, y, z):
+        return (fmt(float(x) * factor), fmt(float(y) * factor), fmt(float(z) * factor))
     process(input_path, output_path, lambda line: transform_v_line(line, modify))
 
 

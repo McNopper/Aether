@@ -1,2 +1,1 @@
-from .mtlx_to_toml import main
-
+from .mtlx_to_toml import main as main  # re-export: addon entry point

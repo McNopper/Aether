@@ -27,6 +27,8 @@ Standard library only. Usage:
 
 from __future__ import annotations
 
+import contextlib
+
 import argparse
 import math
 import os
@@ -423,10 +425,8 @@ def _atomic_write_text(path: Path, text: str) -> None:
             f.write(text)
         os.replace(tmp, path)
     except BaseException:
-        try:
+        with contextlib.suppress(OSError):
             os.remove(tmp)
-        except OSError:
-            pass
         raise
 
 

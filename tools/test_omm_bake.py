@@ -399,7 +399,7 @@ def main() -> int:
         for name, fn in CHECKS:
             try:
                 errs = fn(tmp)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 errs = [f"raised {type(exc).__name__}: {exc}"]
             if errs:
                 failures += 1

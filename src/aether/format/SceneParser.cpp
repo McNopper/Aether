@@ -337,8 +337,8 @@ std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFi
         for (const auto& elem : *meshes) {
             if (const toml::table* m = elem.as_table()) {
                 parseMeta(root, desc);
-    parseMetaLinks(root, desc);
-    parseMesh(*m, desc);
+                parseMetaLinks(root, desc);
+                parseMesh(*m, desc);
             }
         }
     }

@@ -56,8 +56,10 @@ Standard library only (``zlib`` + ``struct`` + ``tomllib``). Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import math
 import os
+import re
 import struct
 import sys
 import tempfile
@@ -551,14 +553,14 @@ def _state_from_range(lo: float, hi: float, fmt: int) -> int:
     """Classify one microtriangle from the ``(min, max)`` opacity a renderer can
     sample inside it (see ``OpacitySampler.opacity_range``).
 
-    OpenPBR's α is a *presence weight*, not a threshold: the renderers resolve it
-    stochastically, so a microtriangle may only be decided by traversal where α is
+    OpenPBR's alpha is a *presence weight*, not a threshold: the renderers resolve it
+    stochastically, so a microtriangle may only be decided by traversal where alpha is
     constant over its whole footprint.
 
-    * α ≡ 0 everywhere → ``STATE_TRANSPARENT``: the shaded gate would always have
+    * alpha ≡ 0 everywhere → ``STATE_TRANSPARENT``: the shaded gate would always have
       passed the ray through, so skipping it in traversal changes nothing;
-    * α ≡ 1 everywhere → ``STATE_OPAQUE``: the gate would always have kept it;
-    * anything else (including a partially-transparent α such as 0.4, and every
+    * alpha ≡ 1 everywhere → ``STATE_OPAQUE``: the gate would always have kept it;
+    * anything else (including a partially-transparent alpha such as 0.4, and every
       microtriangle straddling a cut-out edge) → ``STATE_UNKNOWN_OPAQUE``, which
       hands the decision back to the shader — the identical per-hit
       ``geometry_opacity * map_opacity`` test the unaccelerated mesh runs.
@@ -709,10 +711,7 @@ def _material_opacity(mat: dict, lib_dir: Path) -> tuple[str | None, float]:
     """Return ``(texture_path_or_None, geometry_opacity)`` for a material table.
     A material with no ``map_opacity`` returns ``None`` — the filter signal."""
     tex = mat.get("map_opacity")
-    if isinstance(tex, str) and tex:
-        tex = str((lib_dir / tex).resolve())
-    else:
-        tex = None
+    tex = str((lib_dir / tex).resolve()) if isinstance(tex, str) and tex else None
     return tex, float(mat.get("geometry_opacity", 1.0))
 
 
@@ -915,7 +914,9 @@ def render_micromap_toml(
     sidecar reference, recorded sources (mesh + material + texture) for
     ``--check``, and one ``[[group]]`` per baked group with its usage
     histogram."""
-    base = lambda p: p.name  # relative filenames keep the asset portable
+    def base(p):
+        # relative filenames keep the asset portable
+        return p.name
     lines: list[str] = [
         "# opacity micromap descriptor (Aether omm-text/v1).",
         "# The baked OMM = (mesh UVs) x (material map_opacity); both sources are",
@@ -968,8 +969,6 @@ def _split_le(line: str) -> tuple[str, str]:
         return line[:-1], "\r"
     return line, ""
 
-
-import re
 
 _RE_ARRAY_HEADER = re.compile(r"^\s*\[\[([A-Za-z0-9_]+)\]\]\s*$")
 _RE_TABLE_HEADER = re.compile(r"^\s*\[([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)\]\s*$")
@@ -1030,10 +1029,8 @@ def _atomic_write_text(path: Path, text: str) -> None:
             f.write(text)
         os.replace(tmp, path)
     except BaseException:
-        try:
+        with contextlib.suppress(OSError):
             os.remove(tmp)
-        except OSError:
-            pass
         raise
 
 
@@ -1355,7 +1352,7 @@ def _run_bake(args) -> int:
                     gb.triangle_count,
                     n_rec,
                     gb.triangle_count - n_rec,
-                    ", ".join("L%dF%dx%d" % (l, f, c) for (c, l, f) in usage) or "none",
+                    ", ".join("L%dF%dx%d" % (lvl, f, c) for (c, lvl, f) in usage) or "none",
                 )
             )
         sys.stderr.write(f"wrote {omm_path} + {toml_path}\n")

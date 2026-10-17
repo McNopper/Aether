@@ -106,9 +106,9 @@ struct InstanceDesc {
 /// Per-linked-file summary: tells an AI agent what the file contains
 /// without opening it. The consumer is an AI agent assembling scenes.
 struct LinkMeta {
-    std::string kind;        ///< "material-library" | "mesh" | "env" | "micromap" | "scene"
-    std::string description; ///< agent-readable prose (e.g. "Suzanne — glossy ceramic")
-    std::optional<Aabb> bounds;  ///< object-space AABB (frame + orientation from the instance TRS)
+    std::string kind;           ///< "material-library" | "mesh" | "env" | "micromap" | "scene"
+    std::string description;    ///< agent-readable prose (e.g. "Suzanne — glossy ceramic")
+    std::optional<Aabb> bounds; ///< object-space AABB (frame + orientation from the instance TRS)
     std::uint32_t triangles = 0;
     std::vector<std::string> materials;
 };
@@ -143,9 +143,9 @@ struct SceneDesc {
     /// absent means the consumer's default (rec2020).
     std::optional<std::string> workingColorSpace;
 
-    std::optional<SceneMeta> meta;             ///< agent-legible [meta] block (optional)
+    std::optional<SceneMeta> meta; ///< agent-legible [meta] block (optional)
 
-    std::map<std::string, LinkMeta> links;     ///< [meta.link] summaries keyed by relative path
+    std::map<std::string, LinkMeta> links; ///< [meta.link] summaries keyed by relative path
 
     std::vector<std::string> mtllibs;    ///< referenced .materials.toml libraries (relative paths)
     std::vector<MeshDesc> meshes;        ///< declared meshes, deduplicated by name
