@@ -150,6 +150,82 @@ void resolveSection(const toml::table& root,
     apply(*tbl, desc);
 }
 
+/// Parse the optional [meta] block: AI context for agents, never affects rendering.
+void parseMeta(const toml::table& root, SceneDesc& desc) {
+    const toml::table* meta = root["meta"].as_table();
+    if (meta == nullptr) {
+        return;
+    }
+    SceneMeta m;
+    if (const auto v = meta->get("schema")->value<std::string>()) {
+        m.schema = *v;
+    }
+    if (const auto v = meta->get("version")->value<std::int64_t>()) {
+        m.version = static_cast<std::uint32_t>(*v);
+    }
+    if (const auto v = meta->get("model")->value<std::string>()) {
+        m.model = *v;
+    }
+    if (const auto v = meta->get("title")->value<std::string>()) {
+        m.title = *v;
+    }
+    if (const auto v = meta->get("description")->value<std::string>()) {
+        m.description = *v;
+    }
+    if (const auto v = meta->get("units")->value<std::string>()) {
+        m.units = *v;
+    }
+    if (const auto v = meta->get("generator")->value<std::string>()) {
+        m.generator = *v;
+    }
+    desc.meta = std::move(m);
+}
+
+/// Parse [meta.link."<path>"] tables: per-linked-file AI summaries.
+void parseMetaLinks(const toml::table& root, SceneDesc& desc) {
+    const toml::table* meta = root["meta"].as_table();
+    if (meta == nullptr) {
+        return;
+    }
+    for (auto&& [key, node] : *meta) {
+        if (!key.str().starts_with("link.")) {
+            continue;
+        }
+        const toml::table* linkTbl = node.as_table();
+        if (linkTbl == nullptr) {
+            continue;
+        }
+        const std::string path{key.str().substr(5)};
+        LinkMeta lm;
+        if (const auto v = linkTbl->get("kind")->value<std::string>()) {
+            lm.kind = *v;
+        }
+        if (const auto v = linkTbl->get("description")->value<std::string>()) {
+            lm.description = *v;
+        }
+        if (const auto v = linkTbl->get("triangles")->value<std::int64_t>()) {
+            lm.triangles = static_cast<std::uint32_t>(*v);
+        }
+        if (const toml::array* mats = linkTbl->get("materials") ? linkTbl->get("materials")->as_array() : nullptr) {
+            for (auto&& mat : *mats) {
+                if (const auto m = mat.value<std::string>()) {
+                    lm.materials.push_back(*m);
+                }
+            }
+        }
+        if (const toml::table* bounds = linkTbl->get("bounds") ? linkTbl->get("bounds")->as_table() : nullptr) {
+            const auto mn = bounds->get("min");
+            const auto mx = bounds->get("max");
+            const auto mnVec = mn ? asVec3(*mn) : std::nullopt;
+            const auto mxVec = mx ? asVec3(*mx) : std::nullopt;
+            if (mnVec && mxVec) {
+                lm.bounds = Aabb{*mnVec, *mxVec};
+            }
+        }
+        desc.links[path] = std::move(lm);
+    }
+}
+
 void parseMesh(const toml::table& m, SceneDesc& desc) {
     MeshDesc mesh{};
     mesh.name = m["name"].value_or<std::string>("");
@@ -260,7 +336,9 @@ std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFi
     if (const toml::array* meshes = root["mesh"].as_array()) {
         for (const auto& elem : *meshes) {
             if (const toml::table* m = elem.as_table()) {
-                parseMesh(*m, desc);
+                parseMeta(root, desc);
+    parseMetaLinks(root, desc);
+    parseMesh(*m, desc);
             }
         }
     }

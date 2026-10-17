@@ -2,6 +2,7 @@
 #define AETHER_TYPES_SCENEDESC_HPP
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -102,6 +103,31 @@ struct InstanceDesc {
 /// consumer resolves and loads them. The tonemapper and post-tonemap renderer
 /// are carried as raw keyword tokens — mapping them to renderer modes is a
 /// Harmonia / renderer concern, not file-format data.
+/// Per-linked-file summary: tells an AI agent what the file contains
+/// without opening it. The consumer is an AI agent assembling scenes.
+struct LinkMeta {
+    std::string kind;        ///< "material-library" | "mesh" | "env" | "micromap" | "scene"
+    std::string description; ///< agent-readable prose (e.g. "Suzanne — glossy ceramic")
+    std::optional<Aabb> bounds;  ///< object-space AABB (frame + orientation from the instance TRS)
+    std::uint32_t triangles = 0;
+    std::vector<std::string> materials;
+};
+
+/// Optional agent-legible metadata, authored directly in the scene TOML.
+/// Pure AI context - the renderer never reads it. Helps agents understand
+/// and assemble scenes without opening every linked file.
+struct SceneMeta {
+    std::string schema = "aether-scene";
+    std::uint32_t version = 1;
+    std::string model = "openpbr";
+    std::string title;
+    std::string description;
+    std::string units = "m";
+    std::string generator;
+    /// Per-linked-file summaries, keyed by the relative path used in the TOML.
+    std::map<std::string, LinkMeta> links;
+};
+
 struct SceneDesc {
     CameraDesc camera;
 
@@ -116,6 +142,10 @@ struct SceneDesc {
     /// The scene-referred working color space all assets are converted into;
     /// absent means the consumer's default (rec2020).
     std::optional<std::string> workingColorSpace;
+
+    std::optional<SceneMeta> meta;             ///< agent-legible [meta] block (optional)
+
+    std::map<std::string, LinkMeta> links;     ///< [meta.link] summaries keyed by relative path
 
     std::vector<std::string> mtllibs;    ///< referenced .materials.toml libraries (relative paths)
     std::vector<MeshDesc> meshes;        ///< declared meshes, deduplicated by name
