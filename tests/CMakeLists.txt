@@ -56,8 +56,11 @@ add_executable(aether_tests
 )
 
 target_link_libraries(aether_tests
-    PRIVATE aether::aether aether_project_options GTest::gtest GTest::gtest_main
+    PRIVATE aether::aether aether_project_options tomlplusplus::tomlplusplus GTest::gtest GTest::gtest_main
 )
+# tomlplusplus: MaterialKwTables.hpp (included directly by the KwTablePairingInvariant
+# test) exposes toml++ types; the PRIVATE link on aether does not propagate its
+# interface include dirs, so the test target links the same imported target itself.
 
 # Aether owns the canonical assets; tests parse real .scene / .mtlx fixtures.
 target_compile_definitions(aether_tests

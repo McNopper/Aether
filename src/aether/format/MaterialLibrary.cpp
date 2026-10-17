@@ -1,12 +1,12 @@
 #include "aether/format/MaterialLibrary.hpp"
 
-#include <algorithm>
 #include <iostream>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <toml++/toml.hpp>
 
+#include "aether/format/MaterialKwTables.hpp"
 #include "aether/format/toml_readers.hpp"
 
 namespace aether {
@@ -35,39 +35,18 @@ namespace {
     return kw;
 }
 
-// ── TOML value readers ─────────────────────────────────────────────────────
-
-[[nodiscard]] std::optional<float> asFloat(const toml::node& n) {
-    if (const auto v = n.value<double>()) {
-        return static_cast<float>(*v);
-    }
-    return std::nullopt;
-}
-
 // ── Parameter dispatch ────────────────────────────────────────────────────
 
 void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
     const std::string_view kw = normalise(rawKw);
 
-    using TextureSlot = TextureRef MaterialDesc::*;
-    using ScalarSetter = void (*)(MaterialDesc&, float);
-    using ColorSetter = void (*)(MaterialDesc&, const Vec3&);
-    using BoolSetter = void (*)(MaterialDesc&, const toml::node&);
-
+    // Dispatch tables live in MaterialKwTables.hpp (file scope, shared with
+    // the KwTablePairingInvariant test); the order below is the parser's
+    // contract: texture paths, color spaces, colors, bools, scalars —
+    // unmatched keys are ignored.
+    //
     // ── Texture map paths (string values) ────────────────────────────────
-    static const std::unordered_map<std::string_view, TextureSlot> texturePathSetters = {
-        {"map_base_color", &MaterialDesc::map_base_color},
-        {"map_normal", &MaterialDesc::map_normal},
-        {"map_orm", &MaterialDesc::map_orm},
-        {"map_roughness", &MaterialDesc::map_roughness},
-        {"map_metalness", &MaterialDesc::map_metalness},
-        {"map_emission_color", &MaterialDesc::map_emission_color},
-        {"map_coat_normal", &MaterialDesc::map_coat_normal},
-        {"map_tangent", &MaterialDesc::map_tangent},
-        {"map_coat_tangent", &MaterialDesc::map_coat_tangent},
-        {"map_opacity", &MaterialDesc::map_opacity},
-    };
-    if (const auto it = texturePathSetters.find(kw); it != texturePathSetters.end()) {
+    if (const auto it = format::texturePathSetters.find(kw); it != format::texturePathSetters.end()) {
         (p.*(it->second)).path = value.value_or<std::string>("");
         return;
     }
@@ -75,23 +54,7 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
     // ── Texture map color spaces (ColorInterop interop IDs) ──────────────
     // Unknown tokens keep the slot's default and warn — silently treating a
     // wrong color space as data would render wrong colors.
-    struct ColorSpaceSetter {
-        TextureSlot slot{};
-        std::string_view label{};
-    };
-    static const std::unordered_map<std::string_view, ColorSpaceSetter> colorspaceSetters = {
-        {"map_base_color_colorspace", {&MaterialDesc::map_base_color, "map_base_color"}},
-        {"map_normal_colorspace", {&MaterialDesc::map_normal, "map_normal"}},
-        {"map_orm_colorspace", {&MaterialDesc::map_orm, "map_orm"}},
-        {"map_roughness_colorspace", {&MaterialDesc::map_roughness, "map_roughness"}},
-        {"map_metalness_colorspace", {&MaterialDesc::map_metalness, "map_metalness"}},
-        {"map_emission_color_colorspace", {&MaterialDesc::map_emission_color, "map_emission_color"}},
-        {"map_coat_normal_colorspace", {&MaterialDesc::map_coat_normal, "map_coat_normal"}},
-        {"map_tangent_colorspace", {&MaterialDesc::map_tangent, "map_tangent"}},
-        {"map_coat_tangent_colorspace", {&MaterialDesc::map_coat_tangent, "map_coat_tangent"}},
-        {"map_opacity_colorspace", {&MaterialDesc::map_opacity, "map_opacity"}},
-    };
-    if (const auto it = colorspaceSetters.find(kw); it != colorspaceSetters.end()) {
+    if (const auto it = format::colorspaceSetters.find(kw); it != format::colorspaceSetters.end()) {
         const std::string token = value.value_or<std::string>("");
         if (const auto cs = parseTextureColorSpace(token)) {
             (p.*(it->second.slot)).colorSpace = *cs;
@@ -102,21 +65,7 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
     }
 
     // ── Colour keywords (3-element arrays) ────────────────────────────────
-    // NOTE: Aether records colors verbatim in the declared input color space
-    // (p.inputColorSpace); the consumer performs any conversion. Non-color data
-    // (subsurface_radius_scale, transmission_scatter) is never color-converted.
-    static const std::unordered_map<std::string_view, ColorSetter> colorSetters = {
-        {"base_color", [](MaterialDesc& d, const Vec3& v) { d.base_color = v; }},
-        {"specular_color", [](MaterialDesc& d, const Vec3& v) { d.specular_color = v; }},
-        {"transmission_color", [](MaterialDesc& d, const Vec3& v) { d.transmission_color = v; }},
-        {"transmission_scatter", [](MaterialDesc& d, const Vec3& v) { d.transmission_scatter = v; }},
-        {"coat_color", [](MaterialDesc& d, const Vec3& v) { d.coat_color = v; }},
-        {"fuzz_color", [](MaterialDesc& d, const Vec3& v) { d.fuzz_color = v; }},
-        {"emission_color", [](MaterialDesc& d, const Vec3& v) { d.emission_color = v; }},
-        {"subsurface_color", [](MaterialDesc& d, const Vec3& v) { d.subsurface_color = v; }},
-        {"subsurface_radius_scale", [](MaterialDesc& d, const Vec3& v) { d.subsurface_radius_scale = v; }},
-    };
-    if (const auto it = colorSetters.find(kw); it != colorSetters.end()) {
+    if (const auto it = format::colorSetters.find(kw); it != format::colorSetters.end()) {
         if (const auto c = asVec3(value)) {
             it->second(p, *c);
         }
@@ -124,67 +73,14 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
     }
 
     // ── Boolean keywords ──────────────────────────────────────────────────
-    static const std::unordered_map<std::string_view, BoolSetter> boolSetters = {
-        {"geometry_thin_walled",
-         [](MaterialDesc& d, const toml::node& v) {
-             if (const auto b = v.value<bool>()) {
-                 d.geometry_thin_walled = *b;
-             } else if (const auto f = asFloat(v)) {
-                 d.geometry_thin_walled = (*f != 0.0F);
-             }
-         }},
-        {"emission_as_light_source",
-         [](MaterialDesc& d, const toml::node& v) {
-             if (const auto b = v.value<bool>()) {
-                 d.emission_as_light_source = *b;
-             } else if (const auto f = asFloat(v)) {
-                 d.emission_as_light_source = (*f != 0.0F);
-             }
-         }},
-    };
-    if (const auto it = boolSetters.find(kw); it != boolSetters.end()) {
+    if (const auto it = format::boolSetters.find(kw); it != format::boolSetters.end()) {
         it->second(p, value);
         return;
     }
 
     // ── Scalar keywords ───────────────────────────────────────────────────
-    static const std::unordered_map<std::string_view, ScalarSetter> scalarSetters = {
-        {"base_weight", [](MaterialDesc& d, float f) { d.base_weight = std::clamp(f, 0.0F, 1.0F); }},
-        {"base_metalness", [](MaterialDesc& d, float f) { d.base_metalness = f; }},
-        {"base_diffuse_roughness", [](MaterialDesc& d, float f) { d.base_diffuse_roughness = f; }},
-        {"specular_weight", [](MaterialDesc& d, float f) { d.specular_weight = std::max(f, 0.0F); }},
-        {"specular_roughness", [](MaterialDesc& d, float f) { d.specular_roughness = std::clamp(f, 0.0F, 1.0F); }},
-        {"specular_roughness_anisotropy",
-         [](MaterialDesc& d, float f) { d.specular_roughness_anisotropy = std::clamp(f, 0.0F, 1.0F); }},
-        {"specular_ior", [](MaterialDesc& d, float f) { d.specular_ior = std::max(f, 1.0F); }},
-        {"transmission_weight", [](MaterialDesc& d, float f) { d.transmission_weight = std::clamp(f, 0.0F, 1.0F); }},
-        {"transmission_depth", [](MaterialDesc& d, float f) { d.transmission_depth = f; }},
-        {"transmission_scatter_anisotropy",
-         [](MaterialDesc& d, float f) { d.transmission_scatter_anisotropy = std::clamp(f, -1.0F, 1.0F); }},
-        {"transmission_dispersion_scale",
-         [](MaterialDesc& d, float f) { d.transmission_dispersion_scale = std::max(f, 0.0F); }},
-        {"transmission_dispersion_abbe_number",
-         [](MaterialDesc& d, float f) { d.transmission_dispersion_abbe_number = f; }},
-        {"thin_film_weight", [](MaterialDesc& d, float f) { d.thin_film_weight = std::clamp(f, 0.0F, 1.0F); }},
-        {"thin_film_thickness", [](MaterialDesc& d, float f) { d.thin_film_thickness = std::max(f, 0.0F); }},
-        {"thin_film_ior", [](MaterialDesc& d, float f) { d.thin_film_ior = std::max(f, 1.0F); }},
-        {"coat_weight", [](MaterialDesc& d, float f) { d.coat_weight = std::clamp(f, 0.0F, 1.0F); }},
-        {"coat_roughness", [](MaterialDesc& d, float f) { d.coat_roughness = std::clamp(f, 0.0F, 1.0F); }},
-        {"coat_roughness_anisotropy",
-         [](MaterialDesc& d, float f) { d.coat_roughness_anisotropy = std::clamp(f, 0.0F, 1.0F); }},
-        {"coat_ior", [](MaterialDesc& d, float f) { d.coat_ior = std::max(f, 1.0F); }},
-        {"coat_darkening", [](MaterialDesc& d, float f) { d.coat_darkening = f; }},
-        {"fuzz_weight", [](MaterialDesc& d, float f) { d.fuzz_weight = std::clamp(f, 0.0F, 1.0F); }},
-        {"fuzz_roughness", [](MaterialDesc& d, float f) { d.fuzz_roughness = f; }},
-        {"emission_luminance", [](MaterialDesc& d, float f) { d.emission_luminance = f; }},
-        {"subsurface_weight", [](MaterialDesc& d, float f) { d.subsurface_weight = std::clamp(f, 0.0F, 1.0F); }},
-        {"subsurface_radius", [](MaterialDesc& d, float f) { d.subsurface_radius = f; }},
-        {"subsurface_scatter_anisotropy",
-         [](MaterialDesc& d, float f) { d.subsurface_scatter_anisotropy = std::clamp(f, -1.0F, 1.0F); }},
-        {"geometry_opacity", [](MaterialDesc& d, float f) { d.geometry_opacity = std::clamp(f, 0.0F, 1.0F); }},
-    };
-    if (const auto it = scalarSetters.find(kw); it != scalarSetters.end()) {
-        if (const auto f = asFloat(value)) {
+    if (const auto it = format::scalarSetters.find(kw); it != format::scalarSetters.end()) {
+        if (const auto f = format::asFloat(value)) {
             it->second(p, *f);
         }
         return;

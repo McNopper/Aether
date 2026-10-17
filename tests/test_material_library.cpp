@@ -1,8 +1,10 @@
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
+#include <string>
 #include <string_view>
 
+#include "aether/format/MaterialKwTables.hpp"
 #include "aether/format/MaterialLibrary.hpp"
 
 namespace {
@@ -165,6 +167,34 @@ TEST(MaterialLibrary, MatchingPrimariesWithEncodedTextureIsAccepted) {
     ASSERT_TRUE(mat.has_value());
     EXPECT_EQ(mat->map_base_color.colorSpace, aether::TextureColorSpace::SrgbRec709Scene);
     EXPECT_EQ(mat->map_normal.colorSpace, aether::TextureColorSpace::Data);
+}
+
+// ── Keyword-table pairing invariant ─────────────────────────────────────────
+
+// The texture-path and colorspace dispatch tables (MaterialKwTables.hpp) must
+// pair perfectly: equal counts, every `map_X` slot key has a `map_X_colorspace`
+// sibling targeting the SAME slot with an aligned warning label, and no
+// orphan on either side. A drifted pair would silently accept a texture path
+// whose colorspace can never be declared — or declare one for a dead slot.
+TEST(MaterialLibrary, KwTablePairingInvariant) {
+    ASSERT_EQ(aether::format::texturePathSetters.size(), aether::format::colorspaceSetters.size())
+        << "texture-path and colorspace keyword tables must have equal counts";
+
+    constexpr std::string_view kColorspaceSuffix = "_colorspace";
+    for (const auto& [key, slot] : aether::format::texturePathSetters) {
+        const std::string colorspaceKey = std::string{key} + "_colorspace";
+        const auto it = aether::format::colorspaceSetters.find(colorspaceKey);
+        ASSERT_NE(it, aether::format::colorspaceSetters.end()) << "missing colorspace sibling for " << key;
+        EXPECT_EQ(it->second.slot, slot) << "colorspace sibling of " << key << " targets a different slot";
+        EXPECT_EQ(it->second.label, key) << "colorspace sibling of " << key << " carries a stale warning label";
+    }
+    for (const auto& entry : aether::format::colorspaceSetters) {
+        std::string base{entry.first};
+        ASSERT_TRUE(base.ends_with(kColorspaceSuffix)) << "not a colorspace key: " << entry.first;
+        base.resize(base.size() - kColorspaceSuffix.size());
+        EXPECT_NE(aether::format::texturePathSetters.find(base), aether::format::texturePathSetters.end())
+            << "colorspace key without a texture-path sibling: " << entry.first;
+    }
 }
 
 } // namespace
