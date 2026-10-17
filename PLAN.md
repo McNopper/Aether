@@ -29,9 +29,9 @@ tools — never renderer code, never Vulkan. Sibling plans: `Harmonia/PLAN.md`,
 
 ## At a glance
 
-- **Release:** v0.7.7 (tag-synced with GitHub); consumed via FetchContent pins by
+- **Release:** v0.7.8 (tag-synced with GitHub); consumed via FetchContent pins by
   Harmonia -> Hyperion/Theia; the slang-math pin is bumped to v0.4.0.
-- **Last shipped (v0.7.7):** META1 `[meta]` block (agent-legible scene metadata),
+- **Last shipped (v0.7.8):** A-02 (one `obj_transform` CLI), A-05 (kw tables + pairing invariant), SM6 (`sm::saturate`); tests 44->45. Prior (v0.7.7): META1 `[meta]` block (agent-legible scene metadata),
   A-01 `_obj_transform` dedup (one parameterized `transform_vec3_line` + thin aliases),
   A-03 `parseMesh` guard clauses, output color-space shim removal, Q1 coverage lane
   (83.48% lines), architecture gate orphan-free.
