@@ -29,13 +29,17 @@ tools — never renderer code, never Vulkan. Sibling plans: `Harmonia/PLAN.md`,
 
 ## At a glance
 
-- **Release:** v0.7.4 (tag-synced with GitHub); consumed via FetchContent pins by
-  Harmonia → Hyperion/Theia.
-- **Last shipped (v0.7.4):** OpenPBR 1.1.1 spec-default conformance (coat_ior 1.6,
-  thin_film_ior 1.4, thin_film_thickness 500 nm) + `specular_weight` > 1 parser acceptance
-  (see Baseline).
-- **Next:** NH1 (node graph) — it unblocks the animation track (ANI) across the family.
-
+- **Release:** v0.7.7 (tag-synced with GitHub); consumed via FetchContent pins by
+  Harmonia -> Hyperion/Theia; the slang-math pin is bumped to v0.4.0.
+- **Last shipped (v0.7.7):** META1 `[meta]` block (agent-legible scene metadata),
+  A-01 `_obj_transform` dedup (one parameterized `transform_vec3_line` + thin aliases),
+  A-03 `parseMesh` guard clauses, output color-space shim removal, Q1 coverage lane
+  (83.48% lines), architecture gate orphan-free.
+- **Quality gates (family-uniform):** blocking lint (Q2-Q6) on every push -
+  clang-format pinned 22.1.3, ruff contract in `ruff.toml` (identical x5), cppcheck,
+  bandit, actionlint 1.7.12, yamllint; plus **blocking coverage CI** (`coverage (Q1)`).
+- **Next:** NH1 (node graph) - it unblocks the animation track (ANI) across the
+  family. A-02 (one OBJ-transform CLI) executing now.
 ## How to continue
 
 Batching: the Aether items below sit in front 1 (scene description & representation) of the
