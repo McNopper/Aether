@@ -1,6 +1,6 @@
 # AGENTS.md â€” Aether
 
-Quick-start context for AI agents so basic facts don't have to be rediscovered each session.
+Quick-start context for AI agents so basic facts don't have to be rediscovered.
 
 **Outstanding work, governance (definition of done + guardrails) and release history: see
 [`PLAN.md`](PLAN.md).**
@@ -46,7 +46,7 @@ OpenPBR's canonical/reference implementation is **MaterialX** (`mx_*` nodes); wh
 naming parameters, follow OpenPBR/MaterialX, not a renderer-specific convention. The tag exists
 so future material models can coexist.
 
-### âš ï¸ FetchContent asset gotcha (read this â€” it bites every session)
+### âš ï¸ FetchContent asset gotcha (read this â€” it bites every asset edit)
 
 Hyperion and Theia do **NOT** read assets from this working tree. They read from their
 own FetchContent clone at `<Renderer>/build/_deps/aether-src/assets/`.
@@ -99,20 +99,23 @@ same commands from the repo root before pushing a lint-affecting change.
 are report-only). Also registered as ctest `test_tidy` (label `analysis`; the fast test loop is `ctest -LE analysis`; skips when
 clang-tidy, Python3 or the database is missing).
 **Architecture gate:** `ARCHITECTURE.md` is the machine-checked architecture contract
-(the check-arch reflexion gate - the document is the contract, the include graph is measured
+(the document is the contract, the include graph is measured
 against it). ctest `test_arch` runs the vendored `tools/check_arch.py` engine (label
-`analysis`; registered only where the check-arch skill exists — local, not CI). Contract:
+`analysis`; registered where the check-arch engine is installed — local; not wired into CI). Contract:
 `aether/types` is the leaf, `aether/format` consumes it, the root `aether`
 vocabulary consumes both; includes may only go **down** that order and there must be **no
-include cycles** (file-level SCC detection), declared edges only. Sanitizer lane (Clang/GCC configures only):
+include cycles** (file-level SCC detection), declared edges only.
+
+**Sanitizer lane (Clang/GCC configures only):** `-DAETHER_SANITIZER=address|undefined|thread`.
+Host-side FP is deterministic (`/fp:strict` / `-ffp-contract=off -fno-fast-math`).
+
 **Coverage lane (Clang/GCC configures only):** configure a separate build with
 `-DAETHER_COVERAGE=ON` (e.g. `-B build/coverage`), then run `python tools/coverage.py` - it
 builds the instrumented tree, runs the tests with `LLVM_PROFILE_FILE` set, merges the
 profiles and prints the llvm-cov report for `src/` (gcc builds report via gcov; exit 77
-when the LLVM tools are missing). Wired into CI as a report-only `coverage (Q1)` job (ubuntu-26.04, clang + llvm tools, `continue-on-error` while it stabilizes) - the CPU suite runs in CI, so the report measures real coverage.
-
-`-DAETHER_SANITIZER=address|undefined|thread`. Host-side FP is deterministic
-(`/fp:strict` / `-ffp-contract=off -fno-fast-math`).
+when the LLVM tools are missing). Wired into CI as a blocking `coverage (Q1)` job
+(ubuntu-26.04, clang + llvm tools) - the CPU suite runs in CI, so the report measures
+real coverage.
 
 ## Conventions
 

@@ -26,7 +26,7 @@ flowchart LR
 
 Aether is **fully independent**: it has **no Vulkan, no GPU, and no renderer
 dependencies** (only [slang-math](https://github.com/McNopper/slang-math) for math and toml++ for parsing). It turns text files into plain
-CPU structs; consumers (Harmonia and the renderers) own all GPU upload.
+CPU structs; consumers (Harmonia and the renderers) handle all GPU upload.
 
 | Parses | Into |
 |--------|------|

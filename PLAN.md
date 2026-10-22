@@ -4,10 +4,9 @@
 lists; the shipped record is the *Baseline* below and `git log`. Only outstanding work is
 tracked here.
 
-**How to read this plan** — *human / PM:* *How to continue* is the prioritized next-up list.
-*AI agent picking up work:* read `AGENTS.md` (orientation, gotchas — especially the
-FetchContent asset trap) → *How to continue* (your task) → *Governance* (definition of done +
-guardrails) **before editing**.
+**How to read this plan** — *How to continue* is the prioritized next-up list. Before
+editing, read `AGENTS.md` (orientation, gotchas — especially the FetchContent asset trap),
+then *How to continue* → *Governance* (definition of done + guardrails).
 
 ## Context
 
@@ -23,7 +22,7 @@ flowchart LR
 ```
 
 The family's goal is OpenPBR 1.1.1 as the single material standard, with Theia converging to
-Hyperion's unbiased ground truth. Aether owns scene/material/mesh **data** and authoring
+Hyperion's unbiased ground truth. Aether carries the scene/material/mesh **data** and the authoring
 tools — never renderer code, never Vulkan. Sibling plans: `Harmonia/PLAN.md`,
 `Hyperion/PLAN.md`, `Theia/PLAN.md`, `slang-math/PLAN.md` in the sibling clones.
 
@@ -39,11 +38,12 @@ tools — never renderer code, never Vulkan. Sibling plans: `Harmonia/PLAN.md`,
   clang-format pinned 22.1.3, ruff contract in `ruff.toml` (identical x5), cppcheck,
   bandit, actionlint 1.7.12, yamllint; plus **blocking coverage CI** (`coverage (Q1)`).
 - **Next:** NH1 (node graph) - it unblocks the animation track (ANI) across the
-  family. A-02 (one OBJ-transform CLI) executing now.
+  family.
+
 ## How to continue
 
-Batching: the Aether items below sit in front 1 (scene description & representation) of the
-family categorization - see Harmonia PLAN for the front sequence and the shared review.
+The Aether items below cover scene description & representation; see the Harmonia plan for
+the family-wide ordering.
 
 ### Metadata track (META) — agent-legible format
 
@@ -100,12 +100,6 @@ Harmonia/PLAN.md).
 |----|------|------|--------|
 | ANI1 | **Keyframed transform channels (schema)** — Aether carries the timeline: per-node translate/rotate/scale vs time (interpolated) in the scene format. The renderer-side sampling at shutter time lives in Harmonia/Hyperion/Theia (their PLAN.md files). | NH1 | backlog |
 
-### Downstream-library migration
-
-| ID | Task | Deps | Status |
-|----|------|------|--------|
-| SM6-Aether | **slang-math v0.3.0 migration slice** — replace the 12 hand-rolled `std::clamp(x,0,1)` lambdas in `src/aether/format/MaterialLibrary.cpp` with `sm::saturate`; the FetchContent pin bump to slang-math v0.3.1 is DONE (2026-10-15, verified 44/44) in this repo's release commit. Track origin: slang-math/PLAN.md SM6. | slang-math v0.3.0 tag | backlog |
-
 ## Governance
 
 **Definition of done (per change):** `ctest` green **+** warning-clean build (strict
@@ -118,7 +112,7 @@ above plus `verify-full` (verify + format-check + clang-tidy + cppcheck).
 - Aether must never reference the renderers (AGENTS.md) — GPU-agnostic CPU data only.
 - **OpenPBR Surface 1.1.1** is the material standard; parameter naming follows OpenPBR /
   MaterialX, never a renderer-specific convention.
-- Fix bugs at once — root-caused and patched in the same session. Deferral is not an
+- Fix bugs at once — root-caused and patched immediately. Deferral is not an
   acceptable resolution for a known defect.
 - Solve directly, never defer: divergences are root-caused and fixed in code.
 - Tags are always pushed to GitHub — after any local tag, verify `git ls-remote --tags
@@ -131,28 +125,25 @@ above plus `verify-full` (verify + format-check + clang-tidy + cppcheck).
 
 ## Baseline
 
-## Baseline
-
-- **v0.7.7** (current): **cleanup + quality.** A-01 dedup (the identical transform
+- **v0.7.7**: **cleanup + quality.** A-01 dedup (the identical transform
   functions in `_obj_transform` -> one parameterized `transform_vec3_line` + thin aliases),
   A-03 guard-clause flattening of the `parseMesh` bounds nesting, the Q1 coverage lane
-  (`AETHER_COVERAGE` + `tools/coverage.py`, verified 83.48% lines), the architecture gate
-  (check-arch vendored engine, orphan-free), and the front-1 batching pointer
-  (Harmonia PLAN categorization v2). 44/44 ctest, gate clean.
+  (`AETHER_COVERAGE` + `tools/coverage.py`, verified 83.48% lines), and the architecture gate
+  (vendored check-arch engine, orphan-free). 44/44 ctest, gate clean.
 
-- **v0.7.6** (current): **code-health wave: dead surface removed + architecture gate.**
+- **v0.7.6**: **dead surface removed + architecture gate.**
   The `Aether.hpp` umbrella header had zero consumers in all five repos (no include, no
   CMake reference) — deleted per the only-latest-and-greatest rule. `tools/check_layers.py`
   (ctest `test_layers`, label `analysis`): the module DAG `aether/types` ← `aether/format`
   ← root, file-level cycle detection, and any `harmonia/`/`theia/`/`hyperion/` include
   fails (Aether sits below Harmonia; the sibling renderers are out of reach). 44/44 ctest
   on Windows; Linux suite green.
-- **v0.7.5** (ships with the family 2026-10-09 wave): **dual-OS CI + badge; test
+- **v0.7.5** (family-wide release): **dual-OS CI + badge; test
   registration for the CI ctest lane.** `.github/workflows/build.yml` on `windows-latest` +
-  `ubuntu-26.04` with the Git LFS asset checkout (Aether owns the family's LFS content); the
+  `ubuntu-26.04` with the Git LFS asset checkout (the family's LFS content lives in Aether); the
   CPU suite runs in CI (43/43 on both OSes); `tests/CMakeLists.txt` registers the CI ctest
   lane. **No library code changes since v0.7.4** — the parser and format are identical, so
-  downstream pins may remain at v0.7.4 until the next wave.
+  downstream pins may remain at v0.7.4 until the next release.
 - **v0.7.4** (ships alongside the family v0.7.8): **OpenPBR 1.1.1 spec-default
   conformance** — `coat_ior` default 1.6 (was 1.5), `thin_film_ior` default 1.4 (was 1.5),
   `thin_film_thickness` default 500 nm (spec 0.5 µm; was 0) — inert for all shipped assets
@@ -178,5 +169,5 @@ above plus `verify-full` (verify + format-check + clang-tidy + cppcheck).
   (`bounds = { min=[...], max=[...] }`) + `tools/obj_bounds.py` (stdlib-only OBJ→AABB,
   `--write` in-place, optional Ritter sphere). Consumers shipped downstream (Harmonia BV2,
   Theia BV3).
-- **v0.7.2**: `applyKw` table-driven dispatch (family code-health pass).
+- **v0.7.2**: `applyKw` table-driven dispatch.
 - Earlier history in `git log`.

@@ -1,7 +1,7 @@
 # Architecture
 
-The checked-in architecture contract for Aether (the check-arch reflexion
-gate). `aether/types` is the leaf, `aether/format` consumes it. Aether sits
+The checked-in architecture contract for Aether, measured against the include graph
+by the vendored `tools/check_arch.py` engine. `aether/types` is the leaf, `aether/format` consumes it. Aether sits
 below Harmonia in the family: any `harmonia/`/`theia/`/`hyperion/` include is
 a hard violation (upward or sibling dependency).
 
@@ -51,8 +51,8 @@ namespace_require:
 unresolved: info
 within_layer: deny              # undeclared same-layer edges: violations
 kind: library                   # public API surface: volume judged per file
-header_size: error               # the standing bloat rule (hard gate; the 2026-10 bloat queue is drained)
-smells: report                 # refactoring-catalog proxies: report-only review signals
+header_size: error               # the standing bloat rule (hard gate)
+smells: report                 # report-only
 
 layer types
 layer format
