@@ -1,4 +1,4 @@
-# AGENTS.md â€” Aether
+# AGENTS.md — Aether
 
 Quick-start context for AI agents so basic facts don't have to be rediscovered.
 
@@ -9,7 +9,7 @@ Quick-start context for AI agents so basic facts don't have to be rediscovered.
 
 **Aether** is the abstract **file-format library** for a four-repo rendering pipeline.
 It defines scenes, materials, cameras, tonemap/render presets and the asset loaders.
-It holds **GPU-agnostic** scene/material/mesh data only â€” no renderer code, no Vulkan,
+It holds **GPU-agnostic** scene/material/mesh data only — no renderer code, no Vulkan,
 no GPU-optimized layouts.
 
 Pipeline (dependency direction):
@@ -19,7 +19,7 @@ flowchart LR
     SM["slang-math<br/>math"] --> A["<b>Aether</b><br/>file format (this repo)"]
     SM --> H
     A --> H["Harmonia<br/>shared Vulkan lib"]
-    H --> Hy["Hyperion<br/>path tracer Â· ground truth"]
+    H --> Hy["Hyperion<br/>path tracer · ground truth"]
     H --> T["Theia<br/>real-time renderer"]
 ```
 
@@ -41,12 +41,12 @@ Format is TOML (chosen as the best token/readability/comment compromise).
 
 **Material model = OpenPBR Surface** (Academy Software Foundation). Material libraries are
 tagged `model = "openpbr"` and use **OpenPBR parameter names** (`base_color`, `specular_ior`,
-`transmission_weight`, `geometry_opacity`, `coat_*`, `subsurface_*`, `thin_film_*`, â€¦).
+`transmission_weight`, `geometry_opacity`, `coat_*`, `subsurface_*`, `thin_film_*`, …).
 OpenPBR's canonical/reference implementation is **MaterialX** (`mx_*` nodes); when adding or
 naming parameters, follow OpenPBR/MaterialX, not a renderer-specific convention. The tag exists
 so future material models can coexist.
 
-### âš ï¸ FetchContent asset gotcha (read this â€” it bites every asset edit)
+### ⚠ï¸ FetchContent asset gotcha (read this — it bites every asset edit)
 
 Hyperion and Theia do **NOT** read assets from this working tree. They read from their
 own FetchContent clone at `<Renderer>/build/_deps/aether-src/assets/`.
@@ -93,7 +93,7 @@ zero - fix code, do not grow ignores), bandit (accepted tool-script patterns in 
 `--skip` list), actionlint + yamllint on the workflows. Local pre-flight: run the
 same commands from the repo root before pushing a lint-affecting change.
 
-**Static analysis:** `python tools/check_tidy.py` â€” parallel clang-tidy over
+**Static analysis:** `python tools/check_tidy.py` — parallel clang-tidy over
 `build/compile_commands.json`, classified per `.clang-tidy`'s WarningsAsErrors contract
 (clang-diagnostic/clang-analyzer/bugprone fail the run; modernize/performance/portability
 are report-only). Also registered as ctest `test_tidy` (label `analysis`; the fast test loop is `ctest -LE analysis`; skips when
