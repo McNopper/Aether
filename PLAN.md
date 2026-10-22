@@ -125,6 +125,7 @@ above plus `verify-full` (verify + format-check + clang-tidy + cppcheck).
 
 ## Baseline
 
+- **v0.7.8**: **tools + kw tables + SM6.** A-02 (one `tools/obj_transform.py` CLI, the seven per-axis scripts removed after a 13/13 byte-identity matrix), A-05 (dispatch tables hoisted to `MaterialKwTables.hpp` + pairing-invariant test), SM6 (material weight clamps via `sm::saturate`), slang-math pin v0.4.0, blocking coverage CI. 45/45 ctest, gate clean.
 - **v0.7.7**: **cleanup + quality.** A-01 dedup (the identical transform
   functions in `_obj_transform` -> one parameterized `transform_vec3_line` + thin aliases),
   A-03 guard-clause flattening of the `parseMesh` bounds nesting, the Q1 coverage lane
