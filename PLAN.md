@@ -21,7 +21,7 @@ flowchart LR
     H --> T["Theia<br/>real-time · games-grade"]
 ```
 
-The family's goal is OpenPBR 1.1.1 as the single material standard, with Theia converging to
+The family's material standard is OpenPBR: currently **1.1.1**, bumping to **1.1.2** (patch) on its release via C16 in `Harmonia/PLAN.md`; the **1.2** minor spec is a separate later track (C15). After the 1.1.2 bump, older versions are unsupported by declaration, with Theia converging to
 Hyperion's unbiased ground truth. Aether carries the scene/material/mesh **data** and the authoring
 tools — never renderer code, never Vulkan. Sibling plans: `Harmonia/PLAN.md`,
 `Hyperion/PLAN.md`, `Theia/PLAN.md`, `slang-math/PLAN.md` in the sibling clones.
@@ -110,7 +110,7 @@ above plus `verify-full` (verify + format-check + clang-tidy + cppcheck).
 **Guardrails:**
 
 - Aether must never reference the renderers (AGENTS.md) — GPU-agnostic CPU data only.
-- **OpenPBR Surface 1.1.1** is the material standard; parameter naming follows OpenPBR /
+- **OpenPBR Surface** is the material standard: conformance target **1.1.2** on its release (1.1-line patch; older versions unsupported by declaration; the **1.2** minor spec is a separate track); parameter naming follows OpenPBR /
   MaterialX, never a renderer-specific convention.
 - Fix bugs at once — root-caused and patched immediately. Deferral is not an
   acceptable resolution for a known defect.
