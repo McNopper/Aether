@@ -56,8 +56,32 @@ namespace {
 
 bool parseAnimations(const toml::table& root, SceneDesc& desc, std::string* error) {
     const toml::array* entries = root["animation"].as_array();
+
+    // [animation_clock] — the scene's tick clock (ANI2): the deterministic
+    // ticks-per-second base the tick APIs divide by (seconds = tick / fps),
+    // independent of the render rate. Required (positive) whenever
+    // [[animation]] tracks exist; validated whenever authored. Track times
+    // remain seconds, exactly as before.
+    if (const toml::table* clock = root["animation_clock"].as_table()) {
+        const auto fps = (*clock)["fps"].value<double>();
+        if (!fps || !std::isfinite(*fps) || *fps <= 0.0) {
+            if (error != nullptr) {
+                *error =
+                    "animation clock: 'fps' must be a positive number ([animation_clock] fps = <ticks per second>)";
+            }
+            return false;
+        }
+        desc.animationFps = *fps;
+    } else if (entries != nullptr && !entries->empty()) {
+        if (error != nullptr) {
+            *error = "animation clock: missing [animation_clock] fps — required (a positive ticks-per-second) "
+                     "when [[animation]] tracks exist";
+        }
+        return false;
+    }
+
     if (entries == nullptr) {
-        return true; // no [[animation]] — the scene is untouched
+        return true; // no [[animation]] — only the optional (validated) clock was read
     }
 
     // Nodes are fully parsed (and resolved) before this runs, so targets can
@@ -109,12 +133,23 @@ bool parseAnimations(const toml::table& root, SceneDesc& desc, std::string* erro
         const AnimationTargetBinding* binding = findAnimationTargetBinding(parameterName);
         if (binding == nullptr) {
             if (error != nullptr) {
-                *error =
-                    label + ": unknown parameter '" + std::string{parameterName} + "' (translation | rotation | scale)";
+                // A 4-segment target names a component: when the parameter
+                // itself is known, report the component case precisely.
+                const std::size_t slash = parameterName.find('/');
+                if (slash != std::string_view::npos &&
+                    findAnimationTargetBinding(parameterName.substr(0, slash)) != nullptr) {
+                    *error = label + ": unknown component '" + std::string{parameterName.substr(slash + 1)} +
+                             "' for parameter '" + std::string{parameterName.substr(0, slash)} +
+                             "' (translation/scale: x | y | z; rotation: x | y | z | w)";
+                } else {
+                    *error = label + ": unknown parameter '" + std::string{parameterName} +
+                             "' (translation | rotation | scale)";
+                }
             }
             return false;
         }
         track.parameter = binding->parameter;
+        track.componentIndex = binding->componentIndex;
 
         // times + values: present, non-empty, numeric, finite.
         if (!readFloatArray(*tbl, "times", track.times, label, error) ||
@@ -256,10 +291,10 @@ SceneDesc SceneAnimator::evaluate(const SceneDesc& scene, float timeSeconds) {
     }
 
     // 1) Evaluate tracks → node local TRS. Declaration order: a later track
-    //    driving the same node parameter wins.
+    //    driving the same node parameter wins (whole-parameter or component).
     float sampled[kMaxAnimationArity]; // stack scratch, reused across tracks
     for (const AnimationTrack& track : out.animations) {
-        const AnimationTargetBinding& binding = animationTargetBinding(track.parameter);
+        const AnimationTargetBinding& binding = animationTargetBinding(track.parameter, track.componentIndex);
         sampleTrack(track, binding, timeSeconds, sampled);
         binding.apply(out.nodes[track.nodeIndex], sampled);
     }
@@ -273,6 +308,19 @@ SceneDesc SceneAnimator::evaluate(const SceneDesc& scene, float timeSeconds) {
     out.instances.resize(flatCount);
     [[maybe_unused]] const bool resolved = resolveNodes(out, nullptr);
     return out;
+}
+
+SceneDesc SceneAnimator::evaluateAtTick(const SceneDesc& scene, std::uint64_t tick) {
+    if (!(scene.animationFps > 0.0)) {
+        return scene; // degenerate hand-built clock: no meaningful time axis
+    }
+    // Integer tick → seconds in double precision, then the float the sampler
+    // runs on. The conversion is a pure function of (tick, fps): the same
+    // tick always yields bit-identical times, so repeated evaluations — and
+    // evaluations across SceneDesc copies — produce identical instance lists
+    // regardless of the render rate.
+    const float timeSeconds = static_cast<float>(static_cast<double>(tick) / scene.animationFps);
+    return evaluate(scene, timeSeconds);
 }
 
 } // namespace aether

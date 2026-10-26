@@ -21,9 +21,12 @@ writes:
    path) and one `[[node]]` block per exported object (`id`, optional
    `parent`, a `translate` / `rotate` / `scale` TRS, and for mesh objects the
    `mesh` reference plus material binding), an optional `material_libraries`
-   list, and `[render]` / `[camera]` / `[tonemap]` references. The Aether
-   parser validates the node graph (duplicate ids, unknown parents, cycles)
-   and compounds the parent transforms into its flat instance list itself.
+   list, and `[render]` / `[camera]` / `[tonemap]` references. Scene TOMLs
+   with content also carry a `[meta]` block whose `generator` field names
+   this exporter and its version (`blender_to_aether/x.y.z` from `bl_info`).
+   The Aether parser validates the node graph (duplicate ids, unknown
+   parents, cycles) and compounds the parent transforms into its flat
+   instance list itself.
 2. `<name>.camera.toml` — a camera preset (`translate`, `rotate`,
    `vertical_field_of_view`, `ev100`) referenced from the scene's `[camera]`
    section.
@@ -89,9 +92,10 @@ scene without animation is unchanged from the pre-NH4b output.
 * **Frames → seconds**: ANI1 times are seconds. Blender's frame-rate model is
   `render.fps` frames per `render.fps_base` seconds, so the effective rate is
   `fps / fps_base` and `time = frame · fps_base / fps` (negative frames give
-  negative times — both finite, both valid). The schema has no fps field and
-  none is invented; the exporter writes the used rate as a TOML comment above
-  the first `[[animation]]` and this paragraph is the contract.
+  negative times — both finite, both valid). The used rate is emitted as the
+  scene's ANI2 tick clock (`[animation_clock] fps`, required by the Aether
+  parser whenever `[[animation]]` tracks exist), so Aether tick N at the
+  exported clock is exactly Blender frame N.
 * **Frames → axes**: animated values are exported in the Aether frame exactly
   like the static node TRS: a translation key `(x, y, z)` becomes
   `(x, z, -y)`, a scale key `(x, y, z)` becomes `(x, z, y)`, and a rotation
@@ -124,20 +128,20 @@ scene without animation is unchanged from the pre-NH4b output.
   Blender ≥ 3.0's x-parameterized Bézier evaluation. A channel whose stored
   handle sits on its key (freshly keyed boundary keys headless) exports a
   zero tangent — faithful to what Blender itself evaluates.
-* **Registry limit (component key-time mismatch)**: the ANI1 target registry
-  has only the three vector parameters and a target parameter may not contain
-  `/` (`splitAnimationTarget`), so per-component scalar tracks
-  (`nodes/<id>/translation/x`) do not parse today. A property is therefore
-  exported only when **all its component F-curves share identical key
-  frames** (the block-keyed common case; a missing component contributes its
-  static value, which is exact — Blender evaluates a channel without an
-  F-curve as its static value). When component key frames differ, the
-  property cannot be represented 1:1 without resampling (forbidden): the
-  animation of that property is **not exported**, a warning names it, and the
-  node's static TRS stands. Scalar component targets in the registry are a
-  tracked follow-up. If component curves share key frames but disagree on
-  per-key interpolation, the mode segments follow the lowest-index channel
-  (values at keys stay exact; a warning names the deviation).
+* **Registry limit (component key-time mismatch)**: the Aether ANI1 registry
+  has scalar component targets (`nodes/<id>/<parameter>/<component>`, which
+  parse and evaluate mixed component key times since the component-target
+  update), but this exporter does **not yet emit them** (a tracked follow-up).
+  A property is therefore still exported only when **all its component
+  F-curves share identical key frames** (the block-keyed common case; a
+  missing component contributes its static value, which is exact — Blender
+  evaluates a channel without an F-curve as its static value). When component
+  key frames differ, this exporter cannot represent the property 1:1 without
+  resampling (forbidden): the animation of that property is **not exported**,
+  a warning names it, and the node's static TRS stands. If component curves
+  share key frames but disagree on per-key interpolation, the mode segments
+  follow the lowest-index channel (values at keys stay exact; a warning names
+  the deviation).
 * **Rotation modes**: only the curves matching the object's `rotation_mode`
   drive the pose. `QUATERNION` uses the `rotation_quaternion` channels
   (Blender order w, x, y, z → schema x, y, z, w). An Euler mode converts its

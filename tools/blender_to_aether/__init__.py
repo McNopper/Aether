@@ -274,9 +274,10 @@ def _node_block(
 #
 # Frames → seconds: ANI1 times are SECONDS. Blender's frame-rate model is
 # `render.fps` frames per `render.fps_base` seconds, so the effective rate is
-# `fps / fps_base` and time = frame · fps_base / fps. The schema has no fps
-# field (none is invented); the rate used is emitted as a TOML comment and the
-# conversion is documented in tools/README.md.
+# `fps / fps_base` and time = frame · fps_base / fps. The rate is emitted as
+# the scene's ANI2 tick clock ([animation_clock] fps), so Aether tick N at the
+# exported clock is exactly Blender frame N; the conversion is documented in
+# tools/README.md.
 #
 # Frames → axes: animated values are exported in the Aether frame exactly like
 # the static node TRS (CONV conjugation): a translation key (x, y, z)_blender
@@ -295,15 +296,14 @@ def _node_block(
 # (auto/clamped handles) and the same approximation every glTF exporter makes
 # against Blender ≥ 3.0's x-parameterized Bézier evaluation.
 #
-# Registry limit: the ANI1 target registry has only the three vector parameters
-# (translation | rotation | scale) and a target parameter may not contain '/'
-# (splitAnimationTarget), so per-component scalar tracks do not parse. A
-# property is therefore exported as ONE vector track per mode segment only when
+# Registry limit: the Aether ANI1 registry HAS scalar component targets
+# (nodes/<id>/<parameter>/<component>, including mixed component key times),
+# but this exporter does not yet emit them (a tracked follow-up). A property
+# is therefore still exported as ONE vector track per mode segment only when
 # its component F-curves share identical key frames (the block-keyed common
 # case); when component key frames differ the property cannot be represented
-# without resampling (forbidden) and is NOT exported — a warning names it and
-# the node's static TRS stands. Scalar component targets in the registry are a
-# tracked follow-up.
+# by this exporter without resampling (forbidden) and is NOT exported — a
+# warning names it and the node's static TRS stands.
 #
 # Rotation: only the curves matching the object's rotation_mode drive the pose
 # (QUATERNION → rotation_quaternion channels (w, x, y, z); an Euler mode →
@@ -547,11 +547,11 @@ def _scalar_property_tracks(
     for index, keys in keys_by_index.items():
         if [key["frame"] for key in keys] != frames:
             warnings.append(
-                f"{obj.name}: {parameter} component F-curves key different frames — the "
-                "ANI1 registry has no per-component scalar targets (only the vector "
-                f"'nodes/<id>/{parameter}'), block-keyed components are the supported "
-                "case, and resampling is not allowed: this property's animation is NOT "
-                "exported and its static TRS stands"
+                f"{obj.name}: {parameter} component F-curves key different frames — this exporter "
+                f"only emits vector tracks (the Aether registry's per-component scalar targets "
+                f"nodes/<id>/{parameter}/<component> are not emitted yet, a tracked follow-up), "
+                "block-keyed components are the supported case, and resampling is not allowed: this "
+                "property's animation is NOT exported and its static TRS stands"
             )
             return []
     modes = [key.interpolation for key in reference_curve.keyframe_points]
@@ -739,6 +739,12 @@ def _animation_tracks(obj: bpy.types.Object, fps: float, warnings: list[str]) ->
     return tracks
 
 
+def _generator_field() -> str:
+    # The [meta] generator token: "blender_to_aether/<bl_info version>",
+    # formatted "x.y.z".
+    return "blender_to_aether/" + ".".join(str(part) for part in bl_info["version"])
+
+
 def _write_scene_toml(
     scene_path: Path,
     meshes: list[dict[str, object]],
@@ -760,6 +766,10 @@ def _write_scene_toml(
         lines.extend(["[camera]", f"reference = {_quote(camera_reference)}", ""])
     if tonemap_reference:
         lines.extend(["[tonemap]", f"reference = {_quote(tonemap_reference)}", ""])
+    if meshes or nodes:
+        # Provenance for agents reading the file: which tool wrote it. Only
+        # when the scene has content (an empty export stays headerless).
+        lines.extend(["[meta]", f'generator = {_quote(_generator_field())}', ""])
     for mesh in meshes:
         lines.append("[[mesh]]")
         for key, value in mesh.items():
@@ -771,11 +781,12 @@ def _write_scene_toml(
             lines.append(f"{key} = {_format_value(value)}")
         lines.append("")
     if animations:
-        # The schema has no fps field; times are seconds, converted from
-        # Blender frames at the scene's effective rate (render.fps /
-        # render.fps_base). The comment records the rate for provenance.
-        lines.append(f"# animation times are seconds: frame / {animation_fps:g} fps (render.fps / render.fps_base)")
-        lines.append("")
+        # ANI2: the animation tick clock ([animation_clock] fps) — required
+        # (positive) whenever [[animation]] tracks exist, and it is exactly
+        # the rate the times were converted with: times are seconds, computed
+        # as frame / fps from Blender's render.fps / render.fps_base, so
+        # Aether tick N at this clock is Blender frame N.
+        lines.extend(["[animation_clock]", f"fps = {_format_value(animation_fps)}", ""])
         for block in animations:
             lines.append("[[animation]]")
             for key, value in block.items():

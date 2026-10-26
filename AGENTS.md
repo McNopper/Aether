@@ -7,7 +7,7 @@ Quick-start context for AI agents so basic facts don't have to be rediscovered.
 
 ## What this repo is
 
-**Aether** is the abstract **file-format library** for a four-repo rendering pipeline.
+**Aether** is the abstract **file-format library** for the family's five-repo rendering pipeline.
 It defines scenes, materials, cameras, tonemap/render presets and the asset loaders.
 It holds **GPU-agnostic** scene/material/mesh data only — no renderer code, no Vulkan,
 no GPU-optimized layouts.

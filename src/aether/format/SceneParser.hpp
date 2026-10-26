@@ -93,33 +93,48 @@ namespace aether {
 /// appended after them, depth-first with children in declaration order. A
 /// node-free scene resolves to the identical flat instance list as before.
 ///
-/// ANIMATION (optional keyframed channels, ANI1)
-/// ────────────────────────────────────────────
+/// ANIMATION (optional keyframed channels, ANI1 + tick clock ANI2)
+/// ────────────────────────────────────────────────────────────────────────
+///   [animation_clock]  optional tick-clock table (REQUIRED when any
+///                      [[animation]] track exists — a scene with tracks and
+///                      no clock, or a non-positive clock, is a parse error)
+///     fps = 30          (positive ticks-per-second; the deterministic
+///                       animation time base, independent of the render rate)
+///
 ///   [[animation]]   optional ordered array of keyframed tracks
 ///     target = "nodes/<id>/<parameter>"  (required; `parameter` is
-///                translation | rotation | scale, and the node id must name
-///                a [[node]] entry)
+///                translation | rotation | scale, optionally extended to a
+///                scalar COMPONENT target "nodes/<id>/<parameter>/<component>"
+///                — translation/scale components x|y|z, rotation components
+///                x|y|z|w (x, y, z, w order); an unknown node, parameter or
+///                component is a parse error, and the node id must name a
+///                [[node]] entry)
 ///     interpolation = "step" | "linear" | "cubic_spline"
 ///                                     (optional, default "linear"; glTF 2.0
 ///                                     sampler semantics, 1:1)
 ///     times  = [ ... ]               (finite, strictly ascending)
 ///     values = [ ... ]               (flat floats; `arity` per key — 3 for
-///                translation and scale, 4 for rotation (x,y,z,w); a
-///                cubic_spline track carries 3x that per key: inTangent,
-///                value, outTangent)
+///                translation and scale, 4 for rotation (x,y,z,w), 1 for a
+///                component target; a cubic_spline track carries 3x that per
+///                key: inTangent, value, outTangent)
 ///
 /// The parsed track binds to its `[[node]]` by id (stored as a node index —
-/// unknown node, unknown parameter, unknown interpolation token, non-finite
-/// values, non-ascending times, wrong value arity, or an empty track is a
-/// parse ERROR naming the target). Validity at evaluation: samples clamp to
-/// [times.front, times.back] (loop/wrap reserved); rotation keys are
-/// normalized at load and every sampled quaternion renormalized (linear
-/// rotation blends as shortest-arc slerp); scale components floor away from
-/// zero. EVALUATION IS AETHER-SIDE — the renderers advance the clock and
-/// call aether::SceneAnimator::evaluate(scene, t), which samples every track,
-/// writes the node-local TRS and re-runs the node-graph compounding, and
-/// returns the fully resolved flat instance list; they never see keyframes.
-/// Scenes without [[animation]] parse and evaluate exactly as before.
+/// unknown node, unknown parameter or component, unknown interpolation token,
+/// non-finite values, non-ascending times, wrong value arity, or an empty
+/// track is a parse ERROR naming the target). Component tracks drive ONE TRS
+/// scalar with the same policies as their parent parameter; a rotation
+/// component write renormalizes the whole quaternion. Validity at evaluation:
+/// samples clamp to [times.front, times.back] (loop/wrap reserved); rotation
+/// keys are normalized at load and every sampled quaternion renormalized
+/// (linear rotation blends as shortest-arc slerp); scale components floor
+/// away from zero. EVALUATION IS AETHER-SIDE — the renderers advance the
+/// clock and call aether::SceneAnimator::evaluate(scene, t) (seconds), or
+/// evaluateAtTick(scene, tick) over the [animation_clock] fps clock
+/// (seconds = tick / fps — the deterministic tick-based time base), which
+/// samples every track, writes the node-local TRS and re-runs the node-graph
+/// compounding, and returns the fully resolved flat instance list; they never
+/// see keyframes. Scenes without [[animation]] parse and evaluate exactly as
+/// before.
 ///
 /// Transform composition follows the glTF convention: T × R × S.
 /// Unknown keys / mesh types are silently ignored.

@@ -134,27 +134,38 @@ struct NodeDesc {
 };
 
 /// One keyframed animation track (ANI1): a timed float sequence driving one
-/// addressable node parameter.
+/// addressable node parameter — the whole parameter, or ONE of its scalar
+/// components.
 ///
-/// `target` is authored as `nodes/<id>/<parameter>`; the parser resolves it
-/// against the `[[node]]` list into `nodeIndex` + `parameter` (an unknown node
-/// or parameter is a parse error). `times` are strictly ascending and finite;
+/// `target` is authored as `nodes/<id>/<parameter>` or, for a component
+/// target, `nodes/<id>/<parameter>/<component>`; the parser resolves it
+/// against the `[[node]]` list into `nodeIndex` + `parameter` +
+/// `componentIndex` (an unknown node, parameter or component is a parse
+/// error). Component names: translation/scale drive `x|y|z`, rotation drives
+/// `x|y|z|w` (slang-math order). `times` are strictly ascending and finite;
 /// `values` are the flat key values — `arity` floats per key, with the arity
 /// and the value policies defined by the target-binding registry
 /// (`aether::kAnimationTargetBindings`: translation 3, rotation 4 in
-/// slang-math (x, y, z, w) order, scale 3). For `Interpolation::CubicSpline`
-/// each key carries glTF CUBICSPLINE layout — `inTangent`, `value`,
-/// `outTangent` — so `3 * arity` floats per key. Samples clamp to
-/// `[times.front, times.back]` (loop/wrap is reserved, not in scope); a
-/// single-key track is constant. The evaluation API is
-/// `aether::SceneAnimator::evaluate`.
+/// slang-math (x, y, z, w) order, scale 3; every component row arity 1). For
+/// `Interpolation::CubicSpline` each key carries glTF CUBICSPLINE layout —
+/// `inTangent`, `value`, `outTangent` — so `3 * arity` floats per key.
+/// Samples clamp to `[times.front, times.back]` (loop/wrap is reserved, not
+/// in scope); a single-key track is constant. The evaluation APIs are
+/// `aether::SceneAnimator::evaluate` (seconds) and
+/// `aether::SceneAnimator::evaluateAtTick` (ticks over the scene's clock).
 struct AnimationTrack {
     /// The node parameter this track drives (the registry row is keyed by it).
     enum class Parameter : std::uint8_t {
-        Translation, ///< `translation` — arity 3
-        Rotation,    ///< `rotation` — arity 4, slang-math order (x, y, z, w)
-        Scale,       ///< `scale` — arity 3
+        Translation, ///< `translation` — arity 3 (or one of its x|y|z components)
+        Rotation,    ///< `rotation` — arity 4 (or one of its x|y|z|w components), slang-math order
+        Scale,       ///< `scale` — arity 3 (or one of its x|y|z components)
     };
+
+    /// `componentIndex` of a whole-parameter track (the registry's
+    /// whole-parameter rows carry it too). Component tracks carry the
+    /// zero-based component instead: translation/scale 0..2 = x..z, rotation
+    /// 0..3 = x..w.
+    static constexpr std::uint8_t kNoComponent = 0xFF;
 
     /// Key interpolation, glTF 2.0 sampler semantics (1:1).
     enum class Interpolation : std::uint8_t {
@@ -166,10 +177,13 @@ struct AnimationTrack {
     std::string target; ///< as authored: "nodes/<id>/<parameter>"
 
     /// Resolved binding: the `[[node]]` this track drives (index into
-    /// `SceneDesc::nodes`) and which of its TRS parameters. Resolved at parse
-    /// time so evaluation never touches strings.
+    /// `SceneDesc::nodes`) and which of its TRS parameters — plus, for a
+    /// component target, which scalar component (`kNoComponent` for a
+    /// whole-parameter track). Resolved at parse time so evaluation never
+    /// touches strings.
     std::size_t nodeIndex = std::numeric_limits<std::size_t>::max();
     Parameter parameter = Parameter::Translation;
+    std::uint8_t componentIndex = kNoComponent;
 
     Interpolation interpolation = Interpolation::Linear; ///< default when the TOML omits it
 
@@ -246,6 +260,16 @@ struct SceneDesc {
     /// every track sampled at t and the compounding re-run (the renderers'
     /// per-frame entry point — keyframes never leave Aether).
     std::vector<AnimationTrack> animations;
+    /// The animation clock rate in ticks per second (ANI2). Authored as
+    /// `[animation_clock] fps = <positive number>`; the parser enforces a
+    /// positive value whenever it is present and requires it whenever
+    /// `animations` is non-empty (a scene with tracks and no clock is a parse
+    /// error). Authoritative exactly when `!animations.empty()`; for an
+    /// animation-free scene the field is inert (the default keeps it a valid
+    /// divisor). `SceneAnimator::evaluateAtTick` advances time as
+    /// `seconds = tick / animationFps` — a deterministic, tick-based clock
+    /// independent of the render rate.
+    double animationFps = 30.0;
     std::vector<InstanceDesc> instances; ///< placed instances, in declaration order
 };
 

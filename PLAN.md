@@ -70,7 +70,7 @@ title = "Suzanne in the snow"
 description = "Snow scene: Suzanne (glossy ceramic) on a snowy ground; sun IBL, falling snow via opacity masks."
 assembly = "The rig nodes parent the shaderball; the plane is the snowy ground; snow particles hang in a subtree above."
 units = { length = "m", luminance = "nits" }
-generator = "blender_to_aether"
+generator = "blender_to_aether/1.2.0"
 
 [meta.link."materials/snow.toml"]
 kind = "material-library"
@@ -95,7 +95,7 @@ renderers always receive the flat, world-resolved instance list (Harmonia NH2 dr
 | ID | Task | Deps | Status |
 |----|------|------|--------|
 | NH1 | **Node graph in Aether** — extend the scene TOML + `SceneParser`: parent/child nodes with compounded TRS; instances reference a node path. Today `InstanceDesc` (`src/aether/types/SceneDesc.hpp:87`) is flat with no parent field. | — | **done** |
-| NH4 | **DCC round-trip** - `blender_to_aether` (done: emits the NH1 node graph, verified headless on Blender 5.2.3) / `mtlx_to_aether` emit the hierarchy (Blender collections/parents → Aether nodes). Standing constraint: Blender authors no OpenPBR, and the MaterialX path rejects non-OpenPBR sources (`tools/README.md`) — hierarchy export does not change that. | NH1 | done (blender side; mtlx pending) |
+| NH4 | **DCC round-trip** - `blender_to_aether` (done: emits the NH1 node graph, verified headless on Blender 5.2.3; also emits the `[[animation]]` tracks 1:1 (NH4b) with the ANI2 tick clock and the `[meta]` `generator` field) / `mtlx_to_aether` emit the hierarchy (Blender collections/parents → Aether nodes). Standing constraint: Blender authors no OpenPBR, and the MaterialX path rejects non-OpenPBR sources (`tools/README.md`) — hierarchy export does not change that. | NH1 | done (blender side; mtlx pending) |
 
 ### Animation track (ANI) — Aether slice
 
@@ -103,11 +103,15 @@ renderers always receive the flat, world-resolved instance list (Harmonia NH2 dr
 interpolation, evaluation — lives in Aether. The renderers
 (Harmonia/Theia/Hyperion) advance the clock and call the evaluation API; they
 ALWAYS receive only the flat, world-resolved instance list with the animated
-world transforms, and never see keyframes.
+world transforms, and never see keyframes. The time base is deterministic and
+tick-based: each scene carries its own animation fps (`[animation_clock] fps`,
+required whenever tracks exist) and the renderers advance integer ticks via
+`SceneAnimator::evaluateAtTick` (seconds = tick / fps) — independent of the
+render rate and exactly reproducible.
 
 | ID | Task | Deps | Status |
 |----|------|------|--------|
-| ANI1 | **Keyframed transform channels (schema + evaluation)** — `[[animation]]` tracks: `target = "nodes/<id>/<parameter>"` bound against the NH1 node graph, `interpolation` = step / linear / cubic_spline with glTF 2.0 sampler semantics (1:1), clamped sampling outside `[first, last]`, rotation keys normalized at load + samples renormalized (shortest-arc slerp), scale floored away from zero; validation (unknown node/parameter, non-finite values, non-ascending times, wrong arity, empty track) as parse errors. Evaluation: `SceneAnimator::evaluate(scene, t)` — sample tracks → node-local TRS → re-run the NH1 compounding → fully resolved flat instance list. | NH1 | **done** |
+| ANI1 | **Keyframed transform channels (schema + evaluation)** — `[[animation]]` tracks: `target = "nodes/<id>/<parameter>"` bound against the NH1 node graph, `interpolation` = step / linear / cubic_spline with glTF 2.0 sampler semantics (1:1), clamped sampling outside `[first, last]`, rotation keys normalized at load + samples renormalized (shortest-arc slerp), scale floored away from zero; validation (unknown node/parameter, non-finite values, non-ascending times, wrong arity, empty track) as parse errors. Evaluation: `SceneAnimator::evaluate(scene, t)` — sample tracks → node-local TRS → re-run the NH1 compounding → fully resolved flat instance list. **+ tick clock (`[animation_clock] fps`, `SceneAnimator::evaluateAtTick`) + scalar component targets** (`nodes/<id>/<parameter>/<component>` with per-parameter component validation; rotation components renormalize the whole quaternion; mixed component key times parse and evaluate — the mismatched-F-curve export case now works Aether-side). | NH1 | **done** |
 
 ## Governance
 

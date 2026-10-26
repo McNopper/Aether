@@ -840,6 +840,29 @@ mesh = "ball"
     EXPECT_EQ(f.scene->meta->assembly, "The arm node parents the grip; the grip places the ball mesh.");
 }
 
+TEST(SceneParser, MetaGeneratorParses) {
+    // A minimal [meta] block with only the generator field parses (the shape
+    // blender_to_aether emits): every other key keeps its default.
+    NodeScene f{"meta_generator",
+                R"toml([meta]
+generator = "blender_to_aether/1.2.0"
+
+[[mesh]]
+name = "ball"
+type = "sphere"
+radius = 0.5
+
+[[node]]
+id = "solo"
+mesh = "ball"
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_TRUE(f.scene->meta.has_value());
+    EXPECT_EQ(f.scene->meta->generator, "blender_to_aether/1.2.0");
+    EXPECT_EQ(f.scene->meta->schema, "aether-scene"); // untouched defaults
+    EXPECT_EQ(f.scene->meta->version, 1U);
+}
+
 TEST(SceneParser, NodeMetaDoesNotChangeResolvedInstances) {
     // The same node scene with and without META2 annotations must resolve to
     // identical instance lists: the metadata is authoring-layer only.

@@ -37,9 +37,12 @@ struct AnimScene {
     ~AnimScene() { std::filesystem::remove_all(dir); }
 };
 
-// Shared scene body: one meshed node "n" (identity TRS) so single-node
-// targets like nodes/n/rotation bind. Tests append [[animation]] entries.
-constexpr std::string_view kBallNode = R"toml([[mesh]]
+// Shared scene body: the animation tick clock (ANI2 — required whenever
+// [[animation]] tracks exist) plus one meshed node "n" (identity TRS) so
+// single-node targets like nodes/n/rotation bind. Tests append [[animation]]
+// entries. (Clock-validation tests that must author scenes WITHOUT the clock
+// use kBallNodeNoClock below.)
+constexpr std::string_view kBallNodeNoClock = R"toml([[mesh]]
 name = "ball"
 type = "sphere"
 radius = 0.5
@@ -50,6 +53,19 @@ mesh = "ball"
 
 )toml";
 
+constexpr std::string_view kBallNode = R"toml([animation_clock]
+fps = 30
+
+[[mesh]]
+name = "ball"
+type = "sphere"
+radius = 0.5
+
+[[node]]
+id = "n"
+mesh = "ball"
+
+)toml";
 // Component-wise near-equality for evaluated TRS values (slerp / Hermite go
 // through trig, so exact float equality is not meaningful).
 constexpr float kTrsEpsilon = 1.0e-4F;
@@ -519,7 +535,10 @@ TEST(SceneAnimator, AnimatedRotationCompoundsIntoWorldTransform) {
     // static child "hand" holds the mesh at local +X. The world translation
     // of the instance must be the sampled parent rotation applied to the
     // child translation.
-    AnimScene f{"e2e_rotation", R"toml([[mesh]]
+    AnimScene f{"e2e_rotation", R"toml([animation_clock]
+fps = 30
+
+[[mesh]]
 name = "ball"
 type = "sphere"
 radius = 0.5
@@ -631,6 +650,393 @@ translate = [1.0, 2.0, 3.0]
         expectVec3Near(out.instances[0].scale, 1.0F, 1.0F, 1.0F);
         expectQuatNear(out.instances[0].rotation, 0.0F, 0.0F, 0.0F, 1.0F);
     }
+}
+
+// ── Tick clock (ANI2): [animation_clock] fps + evaluateAtTick ───────────────
+
+TEST(SceneAnimator, TickClockParsesIntoSceneDesc) {
+    // The clock lands on SceneDesc::animationFps and coexists with the tracks.
+    AnimScene f{"clock_parses",
+                std::string{kBallNodeNoClock} +
+                    R"toml([animation_clock]
+fps = 24
+
+[[animation]]
+target = "nodes/n/translation"
+times = [0.0, 1.0]
+values = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_EQ(f.scene->animations.size(), 1U);
+    EXPECT_DOUBLE_EQ(f.scene->animationFps, 24.0);
+}
+
+TEST(SceneAnimator, TickClockMissingFailsParseWhenTracksExist) {
+    // Tracks without a clock: parse error naming the issue.
+    AnimScene f{"clock_missing",
+                std::string{kBallNodeNoClock} +
+                    R"toml([[animation]]
+target = "nodes/n/translation"
+times = [0.0, 1.0]
+values = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+)toml"};
+    EXPECT_FALSE(f.scene.has_value());
+    EXPECT_NE(f.error.find("animation clock"), std::string::npos) << "error: " << f.error;
+    EXPECT_NE(f.error.find("fps"), std::string::npos) << "error: " << f.error;
+}
+
+TEST(SceneAnimator, TickClockNonPositiveFailsParse) {
+    // fps = 0, negative fps and a wrong-typed fps are all rejected — with or
+    // without tracks (an authored clock must be valid whenever present).
+    const auto check = [](std::string_view name, std::string_view clockTable) {
+        AnimScene f{std::string{name}, std::string{kBallNodeNoClock} + std::string{clockTable}};
+        EXPECT_FALSE(f.scene.has_value()) << name;
+        if (!f.scene.has_value()) {
+            EXPECT_NE(f.error.find("positive"), std::string::npos) << name << ": " << f.error;
+        }
+    };
+    check("clock_zero", "[animation_clock]\nfps = 0\n");
+    check("clock_negative", "[animation_clock]\nfps = -30\n");
+    check("clock_string", "[animation_clock]\nfps = \"thirty\"\n");
+    check("clock_no_fps", "[animation_clock]\n");
+}
+
+TEST(SceneAnimator, TickClockWithoutTracksIsInert) {
+    // A valid clock with no [[animation]] entries parses (and lands on the
+    // SceneDesc) but animates nothing: evaluateAtTick is the parse result
+    // verbatim for any tick.
+    AnimScene f{"clock_no_tracks", std::string{kBallNodeNoClock} + R"toml([animation_clock]
+fps = 30
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_TRUE(f.scene->animations.empty());
+    EXPECT_DOUBLE_EQ(f.scene->animationFps, 30.0);
+    ASSERT_EQ(f.scene->instances.size(), 1U);
+    for (const std::uint64_t tick : {std::uint64_t{0}, std::uint64_t{7}, std::uint64_t{1000000}}) {
+        const aether::SceneDesc out = aether::SceneAnimator::evaluateAtTick(*f.scene, tick);
+        ASSERT_EQ(out.instances.size(), 1U);
+        expectVec3Near(out.instances[0].translation, 0.0F, 0.0F, 0.0F);
+    }
+}
+
+TEST(SceneAnimator, EvaluateAtTickIsRepeatableAndRenderRateIndependent) {
+    // The determinism contract: the same tick evaluated twice — and across
+    // two copies of the same parsed scene — produces identical instance
+    // lists. Seconds = tick / fps only; no wall-clock or render-rate input.
+    AnimScene f{"tick_determinism",
+                std::string{kBallNode} +
+                    R"toml([[animation]]
+target = "nodes/n/rotation"
+interpolation = "linear"
+times = [0.0, 2.0]
+values = [0.0, 0.0, 0.0, 1.0, 0.0, 0.7071068, 0.0, 0.7071068]
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+
+    aether::SceneDesc copy = *f.scene; // an independent SceneDesc copy
+    for (const std::uint64_t tick : {std::uint64_t{0}, std::uint64_t{17}, std::uint64_t{61}}) {
+        const aether::SceneDesc first = aether::SceneAnimator::evaluateAtTick(*f.scene, tick);
+        const aether::SceneDesc second = aether::SceneAnimator::evaluateAtTick(*f.scene, tick);
+        const aether::SceneDesc fromCopy = aether::SceneAnimator::evaluateAtTick(copy, tick);
+        ASSERT_EQ(first.instances.size(), second.instances.size());
+        ASSERT_EQ(first.instances.size(), fromCopy.instances.size());
+        for (std::size_t i = 0; i < first.instances.size(); ++i) {
+            EXPECT_EQ(first.instances[i].meshName, second.instances[i].meshName);
+            EXPECT_EQ(first.instances[i].meshName, fromCopy.instances[i].meshName);
+            EXPECT_FLOAT_EQ(first.instances[i].translation.x, second.instances[i].translation.x);
+            EXPECT_FLOAT_EQ(first.instances[i].translation.y, second.instances[i].translation.y);
+            EXPECT_FLOAT_EQ(first.instances[i].translation.z, second.instances[i].translation.z);
+            EXPECT_FLOAT_EQ(first.instances[i].rotation.x, second.instances[i].rotation.x);
+            EXPECT_FLOAT_EQ(first.instances[i].rotation.y, second.instances[i].rotation.y);
+            EXPECT_FLOAT_EQ(first.instances[i].rotation.z, second.instances[i].rotation.z);
+            EXPECT_FLOAT_EQ(first.instances[i].rotation.w, second.instances[i].rotation.w);
+            EXPECT_FLOAT_EQ(first.instances[i].scale.x, fromCopy.instances[i].scale.x);
+            EXPECT_FLOAT_EQ(first.instances[i].scale.y, fromCopy.instances[i].scale.y);
+            EXPECT_FLOAT_EQ(first.instances[i].scale.z, fromCopy.instances[i].scale.z);
+        }
+    }
+}
+
+TEST(SceneAnimator, EvaluateAtTickAdvancesSequentialTicks) {
+    // fps 30: ticks 0, 1, 2 map to seconds 0, 1/30, 2/30 — spot-checked
+    // against a linear translation track (x = t, keys (0 s → 0) and (1 s → 1))
+    // and a step track keyed exactly at the tick times.
+    AnimScene linear{"tick_linear",
+                     std::string{kBallNode} +
+                         R"toml([[animation]]
+target = "nodes/n/translation"
+interpolation = "linear"
+times = [0.0, 1.0]
+values = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
+)toml"};
+    ASSERT_TRUE(linear.scene.has_value()) << linear.error;
+    const auto tickX = [&](std::uint64_t tick) {
+        return aether::SceneAnimator::evaluateAtTick(*linear.scene, tick).instances[0].translation.x;
+    };
+    EXPECT_FLOAT_EQ(tickX(0), 0.0F);
+    EXPECT_FLOAT_EQ(tickX(1), static_cast<float>(1.0 / 30.0)); // 1 tick = 1/30 s
+    EXPECT_FLOAT_EQ(tickX(2), static_cast<float>(2.0 / 30.0)); // 2 ticks = 2/30 s
+    EXPECT_FLOAT_EQ(tickX(30), 1.0F);                          // a full second is 30 ticks
+
+    // A step track keyed AT the tick times flips keys exactly on tick
+    // boundaries (the key time and the tick→seconds conversion produce the
+    // same float).
+    AnimScene step{"tick_step",
+                   std::string{kBallNode} +
+                       R"toml([[animation]]
+target = "nodes/n/translation"
+interpolation = "step"
+times = [0.0, 0.0333333333333333, 0.0666666666666667]
+values = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 2.0, 0.0, 0.0]
+)toml"};
+    ASSERT_TRUE(step.scene.has_value()) << step.error;
+    const auto tickT = [&](std::uint64_t tick) {
+        return aether::SceneAnimator::evaluateAtTick(*step.scene, tick).instances[0].translation;
+    };
+    expectVec3Near(tickT(0), 0.0F, 0.0F, 0.0F);
+    expectVec3Near(tickT(1), 1.0F, 0.0F, 0.0F);
+    expectVec3Near(tickT(2), 2.0F, 0.0F, 0.0F);
+}
+
+// ── Scalar component targets (registry extension) ───────────────────────────
+
+TEST(SceneAnimator, ComponentTrackDrivesOnlyItsComponent) {
+    // A translation-x track moves ONLY x; y and z keep the authored TRS.
+    AnimScene f{"component_only",
+                std::string{kBallNode} +
+                    R"toml([[node]]
+id = "posed"
+parent = "n"
+mesh = "ball"
+translate = [5.0, 6.0, 7.0]
+
+[[animation]]
+target = "nodes/posed/translation/x"
+interpolation = "linear"
+times = [0.0, 1.0]
+values = [4.0, 9.0]
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    // "posed" is the second meshed node (declared after "n") → instance 1.
+    ASSERT_EQ(f.scene->instances.size(), 2U);
+    const auto at = [&](float t) { return aether::SceneAnimator::evaluate(*f.scene, t).instances[1].translation; };
+    expectVec3Near(at(0.0F), 4.0F, 6.0F, 7.0F);
+    expectVec3Near(at(0.5F), 6.5F, 6.0F, 7.0F);
+    expectVec3Near(at(1.0F), 9.0F, 6.0F, 7.0F);
+}
+
+TEST(SceneAnimator, MixedComponentKeyTimesParseAndEvaluate) {
+    // The exporter-limitation case, now working: component F-curves with
+    // MISMATCHED key times parse and evaluate each component on its own
+    // schedule (previously a property like this could not be represented).
+    AnimScene f{"component_mismatch",
+                std::string{kBallNode} +
+                    R"toml([[animation]]
+target = "nodes/n/translation/x"
+interpolation = "linear"
+times = [0.0, 1.0]
+values = [5.0, 10.0]
+
+[[animation]]
+target = "nodes/n/translation/y"
+interpolation = "linear"
+times = [0.0, 0.5, 1.0]
+values = [6.0, 8.0, 2.0]
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_EQ(f.scene->animations.size(), 2U);
+    const auto at = [&](float t) { return aether::SceneAnimator::evaluate(*f.scene, t).instances[0].translation; };
+    expectVec3Near(at(0.0F), 5.0F, 6.0F, 0.0F);
+    expectVec3Near(at(0.25F), 6.25F, 7.0F, 0.0F); // x on [0,1]; y mid-segment
+    expectVec3Near(at(0.75F), 8.75F, 5.0F, 0.0F); // y already on its second segment
+    expectVec3Near(at(1.0F), 10.0F, 2.0F, 0.0F);
+}
+
+TEST(SceneAnimator, RotationComponentTrackRenormalizesWholeQuaternion) {
+    // The rotation components keep the whole-quaternion validity policy: the
+    // sampled scalar is written into the component, then the ENTIRE
+    // quaternion is renormalized. An identity node + a rotation-x track
+    // 0 → 1 samples normalize(x, 0, 0, 1): Ry(90°) at the end, unit length
+    // everywhere.
+    AnimScene f{"rotation_component",
+                std::string{kBallNode} +
+                    R"toml([[animation]]
+target = "nodes/n/rotation/x"
+interpolation = "linear"
+times = [0.0, 1.0]
+values = [0.0, 1.0]
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    const auto at = [&](float t) { return aether::SceneAnimator::evaluate(*f.scene, t).instances[0].rotation; };
+    expectQuatNear(at(0.0F), 0.0F, 0.0F, 0.0F, 1.0F); // normalize(0,0,0,1) = identity
+    const aether::Quat half = at(0.5F);               // normalize(0.5,0,0,1)
+    expectQuatNear(half, 0.4472136F, 0.0F, 0.0F, 0.8944272F);
+    const aether::Quat end = at(1.0F); // normalize(1,0,0,1) = Ry(90°)
+    expectQuatNear(end, 0.7071068F, 0.0F, 0.0F, 0.7071068F);
+    EXPECT_NEAR(quatLength(half), 1.0F, kTrsEpsilon);
+    EXPECT_NEAR(quatLength(end), 1.0F, kTrsEpsilon);
+}
+
+TEST(SceneAnimator, RotationWComponentTrackPreservesOtherComponents) {
+    // A w-only track on a non-identity node: x/y/z components keep their
+    // authored values, w drives, the whole quaternion renormalizes. Node
+    // rotation Ry(90°) = (0,1,0,0); w: 0 → 1.
+    AnimScene f{"rotation_w_component",
+                std::string{kBallNode} +
+                    R"toml([[node]]
+id = "spun"
+parent = "n"
+mesh = "ball"
+rotate = [0.0, 1.0, 0.0, 0.0]
+
+[[animation]]
+target = "nodes/spun/rotation/w"
+interpolation = "linear"
+times = [0.0, 1.0]
+values = [0.0, 1.0]
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    // "spun" is the second meshed node (declared after "n") → instance 1.
+    ASSERT_EQ(f.scene->instances.size(), 2U);
+    const aether::Quat mid = aether::SceneAnimator::evaluate(*f.scene, 0.5F).instances[1].rotation;
+    expectQuatNear(mid, 0.0F, 0.8944272F, 0.0F, 0.4472136F); // normalize(0, 1, 0, 0.5)
+    EXPECT_NEAR(quatLength(mid), 1.0F, kTrsEpsilon);
+}
+
+TEST(SceneAnimator, ScaleComponentTrackFloorsAwayFromZero) {
+    // The parent parameter's validity policy at arity 1: the driven component
+    // floors away from zero; the untouched components keep their TRS values.
+    AnimScene f{"scale_component",
+                std::string{kBallNode} +
+                    R"toml([[animation]]
+target = "nodes/n/scale/x"
+interpolation = "linear"
+times = [0.0, 1.0]
+values = [1.0, 0.0]
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    const auto scaleAt = [&](float t) { return aether::SceneAnimator::evaluate(*f.scene, t).instances[0].scale; };
+    const aether::Vec3 floored = scaleAt(1.0F);
+    EXPECT_FLOAT_EQ(floored.x, aether::kScaleFloor);
+    EXPECT_FLOAT_EQ(floored.y, 1.0F);
+    EXPECT_FLOAT_EQ(floored.z, 1.0F);
+    EXPECT_NEAR(scaleAt(0.5F).x, 0.5F, kTrsEpsilon);
+}
+
+TEST(SceneAnimator, ComponentTrackCubicSplineMatchesHandComputedHermite) {
+    // Arity-1 spline layout: 3 floats per key (inTangent, value, outTangent).
+    // Keys at t = 0 / 1 (dt = 1), value 0 → 3 with out/in tangents 3 / 0:
+    // x(0.5) = h10*3 + h01*3 = 0.125*3 + 0.5*3 = 1.875.
+    AnimScene f{"component_spline",
+                std::string{kBallNode} +
+                    R"toml([[animation]]
+target = "nodes/n/translation/x"
+interpolation = "cubic_spline"
+times = [0.0, 1.0]
+values = [0.0, 0.0, 3.0, 0.0, 3.0, 0.0]
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    const aether::Vec3 half = aether::SceneAnimator::evaluate(*f.scene, 0.5F).instances[0].translation;
+    EXPECT_FLOAT_EQ(half.x, 1.875F);
+    EXPECT_FLOAT_EQ(half.y, 0.0F);
+    EXPECT_FLOAT_EQ(half.z, 0.0F);
+}
+
+TEST(SceneAnimator, ComponentTrackFieldsRoundTrip) {
+    // The resolved binding carries the parameter AND the component index
+    // (0-based, x..w order); the target string stays verbatim.
+    AnimScene f{"component_fields",
+                std::string{kBallNode} +
+                    R"toml([[animation]]
+target = "nodes/n/translation/x"
+times = [0.0]
+values = [1.0]
+
+[[animation]]
+target = "nodes/n/rotation/w"
+times = [0.0]
+values = [2.0]
+
+[[animation]]
+target = "nodes/n/scale/z"
+times = [0.0]
+values = [3.0]
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_EQ(f.scene->animations.size(), 3U);
+    EXPECT_EQ(f.scene->animations[0].target, "nodes/n/translation/x");
+    EXPECT_EQ(f.scene->animations[0].parameter, aether::AnimationTrack::Parameter::Translation);
+    EXPECT_EQ(f.scene->animations[0].componentIndex, 0U);
+    EXPECT_EQ(f.scene->animations[1].target, "nodes/n/rotation/w");
+    EXPECT_EQ(f.scene->animations[1].parameter, aether::AnimationTrack::Parameter::Rotation);
+    EXPECT_EQ(f.scene->animations[1].componentIndex, 3U);
+    EXPECT_EQ(f.scene->animations[2].target, "nodes/n/scale/z");
+    EXPECT_EQ(f.scene->animations[2].parameter, aether::AnimationTrack::Parameter::Scale);
+    EXPECT_EQ(f.scene->animations[2].componentIndex, 2U);
+
+    // A whole-parameter track keeps kNoComponent.
+    AnimScene whole{"component_fields_whole",
+                    std::string{kBallNode} +
+                        R"toml([[animation]]
+target = "nodes/n/translation"
+times = [0.0]
+values = [1.0, 2.0, 3.0]
+)toml"};
+    ASSERT_TRUE(whole.scene.has_value()) << whole.error;
+    EXPECT_EQ(whole.scene->animations[0].componentIndex, aether::AnimationTrack::kNoComponent);
+}
+
+TEST(SceneAnimator, UnknownComponentFailsParse) {
+    // Component names validate per parameter (translation/scale: x|y|z;
+    // rotation: x|y|z|w); unknown components name the parameter in the error.
+    const auto check = [](std::string_view name, std::string_view target) {
+        AnimScene f{std::string{name},
+                    std::string{kBallNode} + R"toml([[animation]]
+target = ")toml" + std::string{target} +
+                        R"toml("
+times = [0.0]
+values = [1.0]
+)toml"};
+        EXPECT_FALSE(f.scene.has_value()) << name;
+        if (!f.scene.has_value()) {
+            EXPECT_NE(f.error.find("unknown component"), std::string::npos) << name << ": " << f.error;
+        }
+    };
+    check("component_translation_q", "nodes/n/translation/q");
+    check("component_rotation_a", "nodes/n/rotation/a");
+    check("component_scale_w", "nodes/n/scale/w"); // w exists only on rotation
+    check("component_deeper_path", "nodes/n/translation/x/y");
+
+    // An unknown PARAMETER with a component-looking tail stays a parameter
+    // error (the parameter token does not resolve either).
+    AnimScene unknownParam{"component_unknown_param",
+                           std::string{kBallNode} +
+                               R"toml([[animation]]
+target = "nodes/n/color/red"
+times = [0.0]
+values = [1.0]
+)toml"};
+    EXPECT_FALSE(unknownParam.scene.has_value());
+    EXPECT_NE(unknownParam.error.find("unknown parameter"), std::string::npos) << "error: " << unknownParam.error;
+}
+
+TEST(SceneAnimator, ComponentTargetsEvaluateAtTick) {
+    // Component tracks compose with the tick clock end-to-end.
+    AnimScene f{"component_tick",
+                std::string{kBallNode} +
+                    R"toml([[animation]]
+target = "nodes/n/translation/x"
+interpolation = "linear"
+times = [0.0, 1.0]
+values = [0.0, 1.0]
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    const auto x = [&](std::uint64_t tick) {
+        return aether::SceneAnimator::evaluateAtTick(*f.scene, tick).instances[0].translation.x;
+    };
+    EXPECT_FLOAT_EQ(x(0), 0.0F);
+    EXPECT_FLOAT_EQ(x(15), 0.5F); // tick 15 at fps 30 = 0.5 s
+    EXPECT_FLOAT_EQ(x(30), 1.0F);
 }
 
 } // namespace
