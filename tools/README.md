@@ -72,6 +72,95 @@ just no longer emitted by this exporter).
 * Nodes are emitted parents-first (stable topological order); the parser
   resolves parents by id regardless of file order.
 
+### Animation export (NH4b)
+
+Objects whose **active action** drives `location` / `rotation_quaternion` /
+`rotation_euler` / `scale` additionally emit `[[animation]]` tracks (ANI1
+schema, `src/aether/format/SceneAnimator.hpp`) after the `[[node]]` blocks,
+key for key — the exporter **never samples or bakes**. Objects without an
+active action (or an action that drives none of those channels) emit none; a
+scene without animation is unchanged from the pre-NH4b output.
+
+* **Targets**: `nodes/<object name>/translation`, `.../rotation`,
+  `.../scale` (the object name is the `[[node]]` `id`). One scalar Blender
+  F-curve is ONE channel of a vector track. Emission order per object is
+  translation → rotation → scale; segment runs of one target stay
+  consecutive.
+* **Frames → seconds**: ANI1 times are seconds. Blender's frame-rate model is
+  `render.fps` frames per `render.fps_base` seconds, so the effective rate is
+  `fps / fps_base` and `time = frame · fps_base / fps` (negative frames give
+  negative times — both finite, both valid). The schema has no fps field and
+  none is invented; the exporter writes the used rate as a TOML comment above
+  the first `[[animation]]` and this paragraph is the contract.
+* **Frames → axes**: animated values are exported in the Aether frame exactly
+  like the static node TRS: a translation key `(x, y, z)` becomes
+  `(x, z, -y)`, a scale key `(x, y, z)` becomes `(x, z, y)`, and a rotation
+  key `q` is conjugated `Q_CONV ⊗ q ⊗ Q_CONV⁻¹` (the quaternion form of the
+  same -90° X rotation). Since conjugation is fixed, it distributes over the
+  animation exactly as over the static node graph. Quaternion products are
+  spelled out in Python doubles on purpose — mathutils' Quaternion products
+  are float32 in Blender 5.x, and keys conjugate exactly.
+* **Interpolation**: per-key `CONSTANT`/`LINEAR`/`BEZIER` map to
+  `step`/`linear`/`cubic_spline`. **Per-key variance splits the F-curve** into
+  consecutive same-mode `[[animation]]` entries on the same target. The
+  Aether evaluator gives a later-declared track precedence from its first key
+  onwards; split boundaries share their boundary key (identical time and
+  value in both tracks), so the concatenation reproduces the F-curve exactly
+  and the distinct key set is preserved (per-track key counts therefore sum
+  to `keys + runs − 1`). Other easing modes (`SINE` … `BOUNCE`) have no ANI1
+  equivalent: they export as `cubic_spline` with the handle-derived tangents —
+  keys exact, in-between approximated — with a warning.
+* **Tangents** (cubic_spline keys): a Blender BEZIER segment is the cubic
+  Bézier over `(co, handle_right | handle_left, co)`; as a Hermite over the
+  segment duration `dt` (seconds) that is
+  `m_out = 3·(handle_right.y − co.y) / dt` and
+  `m_in = 3·(co.y − handle_left.y) / dt` — value-per-second derivatives, the
+  form the ANI1 evaluator multiplies by `dt`. Rotation tangents conjugate
+  exactly like the values (the product is bilinear; euler-channel rates are
+  converted through the derivative of the euler→quaternion map). Key values
+  are always exact; the segment shape is the glTF-style uniform-
+  parameterization Hermite, exact when handle x-deltas are proportional to
+  the segment and the same approximation every glTF exporter makes against
+  Blender ≥ 3.0's x-parameterized Bézier evaluation. A channel whose stored
+  handle sits on its key (freshly keyed boundary keys headless) exports a
+  zero tangent — faithful to what Blender itself evaluates.
+* **Registry limit (component key-time mismatch)**: the ANI1 target registry
+  has only the three vector parameters and a target parameter may not contain
+  `/` (`splitAnimationTarget`), so per-component scalar tracks
+  (`nodes/<id>/translation/x`) do not parse today. A property is therefore
+  exported only when **all its component F-curves share identical key
+  frames** (the block-keyed common case; a missing component contributes its
+  static value, which is exact — Blender evaluates a channel without an
+  F-curve as its static value). When component key frames differ, the
+  property cannot be represented 1:1 without resampling (forbidden): the
+  animation of that property is **not exported**, a warning names it, and the
+  node's static TRS stands. Scalar component targets in the registry are a
+  tracked follow-up. If component curves share key frames but disagree on
+  per-key interpolation, the mode segments follow the lowest-index channel
+  (values at keys stay exact; a warning names the deviation).
+* **Rotation modes**: only the curves matching the object's `rotation_mode`
+  drive the pose. `QUATERNION` uses the `rotation_quaternion` channels
+  (Blender order w, x, y, z → schema x, y, z, w). An Euler mode converts its
+  `rotation_euler` keys (in the object's rotation order) to quaternion keys
+  at the **union** of the three curves' key frames — key count preserved, no
+  resampling: at a foreign frame a channel contributes the value Blender
+  itself shows there (its F-curve evaluated and clamped, or its static value
+  without a curve). In-between, Blender blends euler channels component-wise
+  before converting while ANI1 slerps quaternions: key poses are exact,
+  in-between motion differs slightly (schema property, same for block-keyed
+  quaternion curves). Curves on the non-matching rotation path (e.g. stale
+  `rotation_euler` curves on a quaternion object) do not drive the pose and
+  are not exported (warning).
+* **Single-key** properties export one constant `linear` track (ANI1: one key
+  holds everywhere — the same constant Blender's clamped evaluation shows);
+  outside a track's key range both Blender and ANI1 clamp to the endpoint
+  key. The node's static TRS remains the export-time pose and is replaced per
+  parameter only where tracks drive it.
+* **Not exported**: F-curve modifiers (`CYCLE` etc.), NLA layering and
+  multi-layer (layered) actions beyond the first layer/active slot, drivers,
+  and channel data paths other than the node TRS — each warning when present;
+  the active action's plain F-curves are the 1:1 contract.
+
 **Install:** copy `blender_to_aether/` into your Blender addons folder and
 enable *Aether Scene Exporter*, or run it headless:
 
@@ -305,6 +394,22 @@ fan-triangulation, the scene `--write` injection (adds + replaces, TOML-valid),
 and the failure modes (material without `map_opacity`, malformed hex length).
 
 ---
+
+## Test scenes (NH4 round-trip)
+
+`tools/test_scenes.py` builds deterministic test scenes in headless Blender
+and exports them through the addon - the NH4 verification oracle:
+
+```text
+blender --background --python tools/test_scenes.py -- \
+        --scene hierarchy|animated|simple|instancing --out <dir>
+```
+
+Each run writes `<scene>.scene.toml` plus `<scene>.expected.json`
+(Blender-computed world matrices per meshed node) - the oracle the
+round-trip verification compares against. `animated` exercises the
+NH4b contract: CONSTANT blocks, BEZIER tangents, and a
+mixed-interpolation location curve split into per-mode tracks.
 
 ## References
 
