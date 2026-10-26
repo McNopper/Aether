@@ -373,6 +373,67 @@ TEST(SceneParser, AllShippedScenesParse) {
 // (world = parent_world * local, T × R × S: the child translation is scaled
 // then rotated into the parent frame, rotations compose parent-after-child).
 
+TEST(SceneParser, BlenderExportedHierarchyParsesAndResolves) {
+    // Round-trip fixture: the verbatim shape of a blender_to_aether NH4 export
+    // (Blender 5.2 headless; external material/preset/camera refs stripped -
+    // mesh paths resolve consumer-side, so missing OBJs are fine at parse time).
+    NodeScene f{"blender_export",
+                R"toml([[mesh]]
+name = "LoneCube"
+path = "LoneCube.obj"
+
+[[mesh]]
+name = "TwinCube"
+path = "TwinCube.obj"
+
+[[node]]
+id = "RootEmpty"
+translate = [1.0, 3.0, -2.0]
+rotate = [0.0, 0.2588, -0.0000000113, 0.9659]
+scale = [2.0, 2.0, 2.0]
+
+[[node]]
+id = "LoneCube"
+translate = [5.0, 0.0, 0.0]
+mesh = "LoneCube"
+
+[[node]]
+id = "MarkerEmpty"
+
+[[node]]
+id = "TwinCube"
+parent = "RootEmpty"
+translate = [1.0, 1.0, -0.5]
+scale = [0.5, 0.5, 0.5]
+mesh = "TwinCube"
+
+[[node]]
+id = "NegGroup"
+parent = "RootEmpty"
+scale = [-1.0, -1.0, -1.0]
+
+[[node]]
+id = "MidEmpty"
+parent = "RootEmpty"
+translate = [0.5, 2.6e-15, 0.0000000596]
+rotate = [0.1305, 0.0, 0.0, 0.9914]
+scale = [1.5, 1.25, 1.0]
+
+[[node]]
+id = "LeafCube"
+parent = "MidEmpty"
+mesh = "TwinCube"
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    EXPECT_EQ(f.scene->nodes.size(), 7U);
+    // 3 meshed nodes -> 3 flat instances; grouping nodes emit nothing.
+    ASSERT_EQ(f.scene->instances.size(), 3U);
+    // Depth-first from roots in declaration order.
+    EXPECT_EQ(f.scene->instances[0].meshName, "TwinCube");
+    EXPECT_EQ(f.scene->instances[1].meshName, "TwinCube");
+    EXPECT_EQ(f.scene->instances[2].meshName, "LoneCube");
+}
+
 TEST(SceneParser, NodesCompoundParentChildTrs) {
     // Parent: rotate_x 90°, translate [1,2,3], scale [1,2,4].
     // Child:  rotate_y 90°, translate [10,20,30], scale [2,1,0.5], meshed.

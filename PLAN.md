@@ -88,8 +88,8 @@ groups = ["default"]
 
 Aether today carries flat instances with per-instance TRS (`parseTRS`). A parent/child node
 graph lets a child inherit and compound its parent's transform, and enables instanced
-subtrees. The shared consumption (transform compounding) lives in Harmonia (NH2,
-Harmonia/PLAN.md).
+subtrees. Architecture directive: compounding happens loader-side in Aether (NH1) - the
+renderers always receive the flat, world-resolved instance list (Harmonia NH2 dropped).
 
 | ID | Task | Deps | Status |
 |----|------|------|--------|
