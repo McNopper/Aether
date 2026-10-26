@@ -153,32 +153,38 @@ void resolveSection(const toml::table& root,
 }
 
 /// Parse the optional [meta] block: AI context for agents, never affects rendering.
+/// Keys that are absent or of the wrong TOML type silently keep their defaults -
+/// the block is pure context, so it can never cause a parse error. Reads go
+/// through node_view (`operator[]`), which is null-safe for absent keys.
 void parseMeta(const toml::table& root, SceneDesc& desc) {
     const toml::table* meta = root["meta"].as_table();
     if (meta == nullptr) {
         return;
     }
     SceneMeta m;
-    if (const auto v = meta->get("schema")->value<std::string>()) {
+    if (const auto v = (*meta)["schema"].value<std::string>()) {
         m.schema = *v;
     }
-    if (const auto v = meta->get("version")->value<std::int64_t>()) {
+    if (const auto v = (*meta)["version"].value<std::int64_t>()) {
         m.version = static_cast<std::uint32_t>(*v);
     }
-    if (const auto v = meta->get("model")->value<std::string>()) {
+    if (const auto v = (*meta)["model"].value<std::string>()) {
         m.model = *v;
     }
-    if (const auto v = meta->get("title")->value<std::string>()) {
+    if (const auto v = (*meta)["title"].value<std::string>()) {
         m.title = *v;
     }
-    if (const auto v = meta->get("description")->value<std::string>()) {
+    if (const auto v = (*meta)["description"].value<std::string>()) {
         m.description = *v;
     }
-    if (const auto v = meta->get("units")->value<std::string>()) {
+    if (const auto v = (*meta)["units"].value<std::string>()) {
         m.units = *v;
     }
-    if (const auto v = meta->get("generator")->value<std::string>()) {
+    if (const auto v = (*meta)["generator"].value<std::string>()) {
         m.generator = *v;
+    }
+    if (const auto v = (*meta)["assembly"].value<std::string>()) {
+        m.assembly = *v;
     }
     desc.meta = std::move(m);
 }
@@ -199,23 +205,26 @@ void parseMetaLinks(const toml::table& root, SceneDesc& desc) {
         }
         const std::string path{key.str().substr(5)};
         LinkMeta lm;
-        if (const auto v = linkTbl->get("kind")->value<std::string>()) {
+        // null-safe node_view reads: linkTbl->get(...)->value(...) dereferences
+        // nullptr for absent keys (the pre-existing crash the META2 pass fixed in
+        // parseMeta; this twin got the same treatment).
+        if (const auto v = (*linkTbl)["kind"].value<std::string>()) {
             lm.kind = *v;
         }
-        if (const auto v = linkTbl->get("description")->value<std::string>()) {
+        if (const auto v = (*linkTbl)["description"].value<std::string>()) {
             lm.description = *v;
         }
-        if (const auto v = linkTbl->get("triangles")->value<std::int64_t>()) {
+        if (const auto v = (*linkTbl)["triangles"].value<std::int64_t>()) {
             lm.triangles = static_cast<std::uint32_t>(*v);
         }
-        if (const toml::array* mats = linkTbl->get("materials") ? linkTbl->get("materials")->as_array() : nullptr) {
+        if (const toml::array* mats = (*linkTbl)["materials"].as_array()) {
             for (auto&& mat : *mats) {
                 if (const auto m = mat.value<std::string>()) {
                     lm.materials.push_back(*m);
                 }
             }
         }
-        if (const toml::table* bounds = linkTbl->get("bounds") ? linkTbl->get("bounds")->as_table() : nullptr) {
+        if (const toml::table* bounds = (*linkTbl)["bounds"].as_table()) {
             const auto mn = bounds->get("min");
             const auto mx = bounds->get("max");
             const auto mnVec = mn ? asVec3(*mn) : std::nullopt;
@@ -351,6 +360,18 @@ void parseNode(const toml::table& t, SceneDesc& desc) {
     node.rotation = trs.rotation;
     node.scale = trs.scale;
 
+    // META2 - agent-legible hierarchy context (what this node/subtree is).
+    // Pure AI context: never affects the resolved flat instance list, so an
+    // absent or wrong-typed key just leaves the default.
+    node.description = t["description"].value_or<std::string>("");
+    if (const toml::array* tags = t["tags"].as_array()) {
+        for (auto&& tag : *tags) {
+            if (const auto s = tag.value<std::string>()) {
+                node.tags.emplace_back(*s);
+            }
+        }
+    }
+
     desc.nodes.push_back(std::move(node));
 }
 
@@ -364,7 +385,12 @@ std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFi
     toml::table root;
     try {
         root = toml::parse_file(sceneFile.string());
-    } catch (const toml::parse_error&) {
+    } catch (const toml::parse_error& e) {
+        // Surface the real syntax error (file + line) to the validation CLI /
+        // agent loop instead of a bare "malformed" shrug.
+        if (errorMessage) {
+            *errorMessage = "TOML syntax error: " + std::string(e.description());
+        }
         return std::nullopt;
     }
 

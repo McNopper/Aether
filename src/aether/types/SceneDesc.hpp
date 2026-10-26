@@ -121,6 +121,16 @@ struct NodeDesc {
     /// the whole mesh, `groupMaterials` overrides per OBJ group/object name.
     std::string materialName;
     std::unordered_map<std::string, std::string> groupMaterials;
+
+    /// META2 - agent-legible hierarchy context: what this node and its subtree
+    /// ARE (prose, e.g. "left arm of the shaderball rig; children are its
+    /// joints"). Pure AI context - the renderer never reads it, and it never
+    /// affects the resolved flat instance list. Empty = not authored.
+    std::string description;
+    /// META2 - optional categorization keywords for the node/subtree (e.g.
+    /// ["arm", "kinematic"]). Pure AI context, like `description` - the
+    /// renderer never reads it. Empty = not authored.
+    std::vector<std::string> tags;
 };
 
 /// One keyframed animation track (ANI1): a timed float sequence driving one
@@ -194,6 +204,11 @@ struct SceneMeta {
     std::string description;
     std::string units = "m";
     std::string generator;
+    /// META2 - assembly hint for agents: prose describing how the scene fits
+    /// together (what the parts are and how they connect). Pure AI context -
+    /// the renderer never reads it, and it never affects the resolved flat
+    /// instance list. Empty = not authored.
+    std::string assembly;
     /// Per-linked-file summaries, keyed by the relative path used in the TOML.
     std::map<std::string, LinkMeta> links;
 };

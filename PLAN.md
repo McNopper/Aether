@@ -57,7 +57,7 @@ summary to reason about it). Unblocked and independent of AR1/NH1.
 | ID | Task | Deps | Status |
 |----|------|------|--------|
 | META1 | **`[meta]` block in the scene/material TOML** — optional, backward compatible (existing scenes parse unchanged; unknown tables already ignored). `[meta]`: `schema`/`version`, `model = "openpbr"`, `title`, `description` (agent-readable prose), `units`, `generator`. **`[meta.link."<path>"]` per linked file** — `kind` (`material-library` \| `mesh` \| `env` \| `micromap` \| `scene`), `description` (e.g. *"Suzanne the monkey — glossy ceramic, this is the snow-scene hero"*), plus the skip-the-file summary: `bounds` = AABB **with frame/orientation** (`{ min, max, frame = "object", orientation = [x,y,z,w] }` — object-space AABB + the instance TRS already in the scene makes the world AABB derivable), content counts (`triangles`, `groups`, `materials = [...]`), and per-material one-liners where useful. Parser stores it (`SceneDesc.meta` / `LinkMeta` in `src/aether/types/`); generators populate it (`blender_to_aether`, `mtlx_to_aether`, `omm_bake`); nothing consumes it yet — the consumer is the agent. | — | **next** |
-| META2 | **Generator population + docs** — emit `[meta]` from the tooling (descriptions templated, overridable via a `--meta-description` flag or a `.meta.toml` sidecar), document the block in `tools/README.md` + `AGENTS.md`; tests assert parse round-trip and that summaries match the linked files (bounds/counts verified against the real assets). | META1 | **dropped for now** (revisit when the meta block has a real consumer) |
+| META2 | **Hierarchical agent-legible metadata (node level)** — extends META1 to the NH1 graph: `[[node]]` gains `description` (what this node/subtree IS) and `tags` (categorization), and `[meta]` gains `assembly` (prose: how the scene fits together — what the parts are and how they connect). All pure AI context — absent or wrong-typed keys parse leniently and never affect the resolved flat instance list or validation (`NodeDesc`/`SceneMeta` in `src/aether/types/SceneDesc.hpp`, parsed in `SceneParser.cpp`; tests in `tests/test_scene_parser.cpp` cover landing, empty defaults, wrong-type leniency and instance-list invariance). The real consumer exists: **the NH1 node graph is the consumer — hierarchical agent legibility** (an agent reading the TOML understands each subtree and how to assemble the scene). The previous META2 scope (generator-side population + docs) remains deferred. | META1 | **done** |
 
 Schema sketch (scene TOML):
 
@@ -68,6 +68,7 @@ version = 1
 model = "openpbr"
 title = "Suzanne in the snow"
 description = "Snow scene: Suzanne (glossy ceramic) on a snowy ground; sun IBL, falling snow via opacity masks."
+assembly = "The rig nodes parent the shaderball; the plane is the snowy ground; snow particles hang in a subtree above."
 units = { length = "m", luminance = "nits" }
 generator = "blender_to_aether"
 

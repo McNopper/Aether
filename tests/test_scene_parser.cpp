@@ -738,4 +738,177 @@ materials = { LeftWall = "RedWall", RightWall = "GreenWall" }
     EXPECT_EQ(f.scene->instances[0].groupMaterials.at("RightWall"), "GreenWall");
 }
 
+// ── Node metadata (META2) ───────────────────────────────────────────────────
+// description/tags/assembly are pure agent context: they land on the node or
+// scene they are authored on and never influence the resolved instance list.
+
+TEST(SceneParser, NodeDescriptionAndTagsLandOnRightNodes) {
+    NodeScene f{"node_meta",
+                R"toml([[mesh]]
+name = "ball"
+type = "sphere"
+radius = 0.5
+
+[[node]]
+id = "arm"
+translate = [0.0, 1.0, 0.0]
+description = "The shaderball's arm - parents the grip."
+tags = ["rig", "kinematic"]
+
+[[node]]
+id = "grip"
+parent = "arm"
+mesh = "ball"
+description = "Grip tip of the arm."
+tags = ["rig"]
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_EQ(f.scene->nodes.size(), 2U);
+    EXPECT_EQ(f.scene->nodes[0].id, "arm");
+    EXPECT_EQ(f.scene->nodes[0].description, "The shaderball's arm - parents the grip.");
+    ASSERT_EQ(f.scene->nodes[0].tags.size(), 2U);
+    EXPECT_EQ(f.scene->nodes[0].tags[0], "rig");
+    EXPECT_EQ(f.scene->nodes[0].tags[1], "kinematic");
+    EXPECT_EQ(f.scene->nodes[1].id, "grip");
+    EXPECT_EQ(f.scene->nodes[1].description, "Grip tip of the arm.");
+    ASSERT_EQ(f.scene->nodes[1].tags.size(), 1U);
+    EXPECT_EQ(f.scene->nodes[1].tags[0], "rig");
+}
+
+TEST(SceneParser, NodeMetaDefaultsAreEmpty) {
+    // Absent description/tags leave the defaults: pure context, not structure.
+    NodeScene f{"node_meta_default",
+                R"toml([[mesh]]
+name = "ball"
+type = "sphere"
+radius = 0.5
+
+[[node]]
+id = "solo"
+mesh = "ball"
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_EQ(f.scene->nodes.size(), 1U);
+    EXPECT_TRUE(f.scene->nodes[0].description.empty());
+    EXPECT_TRUE(f.scene->nodes[0].tags.empty());
+}
+
+TEST(SceneParser, WrongTypedNodeMetaIsLenientlyIgnored) {
+    // description = 42 (not a string) and tags = "rig" (not an array) parse as
+    // absent: the metadata is pure AI context, never a parse error.
+    NodeScene f{"node_meta_wrong_type",
+                R"toml([[mesh]]
+name = "ball"
+type = "sphere"
+radius = 0.5
+
+[[node]]
+id = "solo"
+mesh = "ball"
+description = 42
+tags = "rig"
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_EQ(f.scene->nodes.size(), 1U);
+    EXPECT_TRUE(f.scene->nodes[0].description.empty());
+    EXPECT_TRUE(f.scene->nodes[0].tags.empty());
+}
+
+TEST(SceneParser, MetaAssemblyParses) {
+    // A minimal [meta] block (only the META2 assembly hint) parses; the other
+    // keys keep their defaults.
+    NodeScene f{"meta_assembly",
+                R"toml([meta]
+assembly = "The arm node parents the grip; the grip places the ball mesh."
+
+[[mesh]]
+name = "ball"
+type = "sphere"
+radius = 0.5
+
+[[node]]
+id = "arm"
+translate = [0.0, 1.0, 0.0]
+
+[[node]]
+id = "grip"
+parent = "arm"
+mesh = "ball"
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_TRUE(f.scene->meta.has_value());
+    EXPECT_EQ(f.scene->meta->assembly, "The arm node parents the grip; the grip places the ball mesh.");
+}
+
+TEST(SceneParser, NodeMetaDoesNotChangeResolvedInstances) {
+    // The same node scene with and without META2 annotations must resolve to
+    // identical instance lists: the metadata is authoring-layer only.
+    NodeScene plain{"meta_plain",
+                    R"toml([[mesh]]
+name = "ball"
+type = "sphere"
+radius = 0.5
+
+[[node]]
+id = "parent"
+translate = [1.0, 2.0, 3.0]
+rotate_x = 90.0
+
+[[node]]
+id = "child"
+parent = "parent"
+mesh = "ball"
+translate = [10.0, 20.0, 30.0]
+scale = [2.0, 1.0, 0.5]
+)toml"};
+    NodeScene annotated{"meta_annotated",
+                        R"toml([meta]
+assembly = "Parent rig rotates the child grip into place."
+
+[[mesh]]
+name = "ball"
+type = "sphere"
+radius = 0.5
+
+[[node]]
+id = "parent"
+translate = [1.0, 2.0, 3.0]
+rotate_x = 90.0
+description = "Arm rig - the whole subtree rotates with it."
+tags = ["rig"]
+
+[[node]]
+id = "child"
+parent = "parent"
+mesh = "ball"
+translate = [10.0, 20.0, 30.0]
+scale = [2.0, 1.0, 0.5]
+description = "Grip tip - end effector of the arm rig."
+tags = ["rig", "end-effector"]
+)toml"};
+    ASSERT_TRUE(plain.scene.has_value()) << plain.error;
+    ASSERT_TRUE(annotated.scene.has_value()) << annotated.error;
+    ASSERT_EQ(annotated.scene->nodes.size(), plain.scene->nodes.size());
+    // Annotations landed on the annotated copy (sanity: the scenes differ only in meta).
+    EXPECT_FALSE(annotated.scene->nodes[1].description.empty());
+    EXPECT_TRUE(plain.scene->nodes[1].description.empty());
+    ASSERT_EQ(plain.scene->instances.size(), annotated.scene->instances.size());
+    for (std::size_t i = 0; i < plain.scene->instances.size(); ++i) {
+        EXPECT_EQ(plain.scene->instances[i].meshName, annotated.scene->instances[i].meshName);
+        expectVec3Near(plain.scene->instances[i].translation,
+                       annotated.scene->instances[i].translation.x,
+                       annotated.scene->instances[i].translation.y,
+                       annotated.scene->instances[i].translation.z);
+        expectVec3Near(plain.scene->instances[i].scale,
+                       annotated.scene->instances[i].scale.x,
+                       annotated.scene->instances[i].scale.y,
+                       annotated.scene->instances[i].scale.z);
+        expectQuatNear(plain.scene->instances[i].rotation,
+                       annotated.scene->instances[i].rotation.x,
+                       annotated.scene->instances[i].rotation.y,
+                       annotated.scene->instances[i].rotation.z,
+                       annotated.scene->instances[i].rotation.w);
+    }
+}
+
 } // namespace
