@@ -64,7 +64,7 @@ struct MaterialDesc {
     Vec3 transmission_scatter{0.0F, 0.0F, 0.0F};
     float transmission_scatter_anisotropy = 0.0F;      ///< HG mean cosine g ∈ [-1,1]
     float transmission_dispersion_scale = 0.0F;        ///< chromatic dispersion strength; 0 = off
-    float transmission_dispersion_abbe_number = 20.0F; ///< Abbe number Vd (lower = more dispersion)
+    float transmission_dispersion_abbe_number = 20.0F; ///< Abbe number Vd (lower = more dispersion); OpenPBR default (20)
 
     // ── coat (defaults per OpenPBR Surface spec) ───────────────────────────
     float coat_weight = 0.0F;
