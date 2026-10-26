@@ -28,7 +28,12 @@ tools — never renderer code, never Vulkan. Sibling plans: `Harmonia/PLAN.md`,
 
 ## At a glance
 
-- **Release:** v0.7.8 (tag-synced with GitHub); consumed via FetchContent pins by
+- **Core format: COMPLETE.** Node graph (NH1), animation clock + tracks
+  (ANI1, tick-based via `[animation_clock]`), hierarchical metadata (META1/2),
+  and the `aether-validate` assembly gate are the documented, tested contract.
+  Next phase: downstream consumption (renderers adopt evaluated flat lists).
+- **Release:** v0.7.8 (tag-synced with GitHub; NH1/ANI1/META2/NH4 landed on
+  main unreleased, ship with the next tag); consumed via FetchContent pins by
   Harmonia -> Hyperion/Theia; the slang-math pin is bumped to v0.4.0.
 - **Last shipped (v0.7.8):** A-02 (one `obj_transform` CLI), A-05 (kw tables + pairing invariant), SM6 (`sm::saturate`); tests 44->45. Prior (v0.7.7): META1 `[meta]` block (agent-legible scene metadata),
   A-01 `_obj_transform` dedup (one parameterized `transform_vec3_line` + thin aliases),
@@ -95,7 +100,7 @@ renderers always receive the flat, world-resolved instance list (Harmonia NH2 dr
 | ID | Task | Deps | Status |
 |----|------|------|--------|
 | NH1 | **Node graph in Aether** — extend the scene TOML + `SceneParser`: parent/child nodes with compounded TRS; instances reference a node path. Today `InstanceDesc` (`src/aether/types/SceneDesc.hpp:87`) is flat with no parent field. | — | **done** |
-| NH4 | **DCC round-trip** - `blender_to_aether` (done: emits the NH1 node graph, verified headless on Blender 5.2.3; also emits the `[[animation]]` tracks 1:1 (NH4b) with the ANI2 tick clock and the `[meta]` `generator` field) / `mtlx_to_aether` emit the hierarchy (Blender collections/parents → Aether nodes). Standing constraint: Blender authors no OpenPBR, and the MaterialX path rejects non-OpenPBR sources (`tools/README.md`) — hierarchy export does not change that. | NH1 | done (blender side; mtlx pending) |
+| NH4 | **DCC round-trip** - `blender_to_aether` emits the NH1 node graph + animation tracks (done, verified headless on Blender 5.2.3, 1:1 F-curves). `mtlx_to_aether` hierarchy emission: **not applicable** - MaterialX is a flat, OpenPBR-only material-library source by directive (complex node graphs out of scope); it emits materials, not scene hierarchies. Standing constraint: Blender authors no OpenPBR, and the MaterialX path rejects non-OpenPBR sources (`tools/README.md`). | NH1 | **done** |
 
 ### Animation track (ANI) — Aether slice
 
