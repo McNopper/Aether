@@ -94,7 +94,7 @@ renderers always receive the flat, world-resolved instance list (Harmonia NH2 dr
 | ID | Task | Deps | Status |
 |----|------|------|--------|
 | NH1 | **Node graph in Aether** — extend the scene TOML + `SceneParser`: parent/child nodes with compounded TRS; instances reference a node path. Today `InstanceDesc` (`src/aether/types/SceneDesc.hpp:87`) is flat with no parent field. | — | **done** |
-| NH4 | **DCC round-trip** — `blender_to_aether` / `mtlx_to_aether` emit the hierarchy (Blender collections/parents → Aether nodes). Standing constraint: Blender authors no OpenPBR, and the MaterialX path rejects non-OpenPBR sources (`tools/README.md`) — hierarchy export does not change that. | NH1 | backlog |
+| NH4 | **DCC round-trip** - `blender_to_aether` (done: emits the NH1 node graph, verified headless on Blender 5.2.3) / `mtlx_to_aether` emit the hierarchy (Blender collections/parents → Aether nodes). Standing constraint: Blender authors no OpenPBR, and the MaterialX path rejects non-OpenPBR sources (`tools/README.md`) — hierarchy export does not change that. | NH1 | done (blender side; mtlx pending) |
 
 ### Animation track (ANI) — Aether slice
 
