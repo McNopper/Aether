@@ -261,6 +261,16 @@ target_link_libraries(aether
 # Consumers receive this so the renderer can resolve referenced assets.
 set(AETHER_ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets" CACHE PATH "Aether canonical assets directory")
 
+# aether-validate — the assembly-gate CLI for .scene.toml (agent-facing thin
+# wrapper over the public parser; tools/validate.cpp). Like the tests, only
+# built when Aether is the top-level project.
+if(PROJECT_IS_TOP_LEVEL)
+    add_executable(aether-validate tools/validate.cpp)
+    target_link_libraries(aether-validate
+        PRIVATE aether::aether aether_project_options
+    )
+endif()
+
 # Tests only build when Aether is the top-level project.
 if(PROJECT_IS_TOP_LEVEL)
     include(CTest)

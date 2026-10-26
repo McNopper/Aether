@@ -117,6 +117,26 @@ when the LLVM tools are missing). Wired into CI as a blocking `coverage (Q1)` jo
 (ubuntu-26.04, clang + llvm tools) - the CPU suite runs in CI, so the report measures
 real coverage.
 
+### Scene validation loop: `aether-validate` (assembly gate)
+
+Agents editing any `*.scene.toml` run the validator on **every** edit instead of
+hand-auditing the TOML (build it first; the binary lands in `build/` next to the tests):
+
+```powershell
+cmake --build build --target aether-validate
+build\aether-validate.exe assets\scenes\<name>.scene.toml   # summary line
+build\aether-validate.exe <scene.toml> --tree               # + node hierarchy
+build\aether-validate.exe <scene.toml> --all                # + every resolved instance
+```
+
+Exit codes: **0** = the library accepts the file (the counts come from the resolved
+`SceneDesc` - trust them over the TOML text you just wrote); **1** = parse rejection - the
+`✘` line quotes the library error verbatim (it names the offending node/track id), fix
+exactly that; **2** = usage problem (missing/unknown argument, file not found). The tool
+is a thin wrapper over `aether::SceneParser::parse` with no validation logic of its own,
+so a green summary is exactly "the library accepts this scene" (node-graph and animation
+validation included).
+
 ## Conventions
 
 - Commit, but do **not** push unless asked.
