@@ -93,6 +93,34 @@ namespace aether {
 /// appended after them, depth-first with children in declaration order. A
 /// node-free scene resolves to the identical flat instance list as before.
 ///
+/// ANIMATION (optional keyframed channels, ANI1)
+/// ────────────────────────────────────────────
+///   [[animation]]   optional ordered array of keyframed tracks
+///     target = "nodes/<id>/<parameter>"  (required; `parameter` is
+///                translation | rotation | scale, and the node id must name
+///                a [[node]] entry)
+///     interpolation = "step" | "linear" | "cubic_spline"
+///                                     (optional, default "linear"; glTF 2.0
+///                                     sampler semantics, 1:1)
+///     times  = [ ... ]               (finite, strictly ascending)
+///     values = [ ... ]               (flat floats; `arity` per key — 3 for
+///                translation and scale, 4 for rotation (x,y,z,w); a
+///                cubic_spline track carries 3x that per key: inTangent,
+///                value, outTangent)
+///
+/// The parsed track binds to its `[[node]]` by id (stored as a node index —
+/// unknown node, unknown parameter, unknown interpolation token, non-finite
+/// values, non-ascending times, wrong value arity, or an empty track is a
+/// parse ERROR naming the target). Validity at evaluation: samples clamp to
+/// [times.front, times.back] (loop/wrap reserved); rotation keys are
+/// normalized at load and every sampled quaternion renormalized (linear
+/// rotation blends as shortest-arc slerp); scale components floor away from
+/// zero. EVALUATION IS AETHER-SIDE — the renderers advance the clock and
+/// call aether::SceneAnimator::evaluate(scene, t), which samples every track,
+/// writes the node-local TRS and re-runs the node-graph compounding, and
+/// returns the fully resolved flat instance list; they never see keyframes.
+/// Scenes without [[animation]] parse and evaluate exactly as before.
+///
 /// Transform composition follows the glTF convention: T × R × S.
 /// Unknown keys / mesh types are silently ignored.
 ///
@@ -107,8 +135,10 @@ class SceneParser {
 
     /// As parse(), additionally reporting the reason for a structural rejection
     /// in @p errorMessage (node-graph errors: duplicate node id, unknown parent,
-    /// cycle — each naming the offending node id). File-open failures leave
-    /// @p errorMessage untouched.
+    /// cycle — each naming the offending node id; animation errors: malformed
+    /// target, unknown node / parameter, unknown interpolation, non-finite
+    /// values, non-ascending times, wrong value arity — each naming the
+    /// track's target). File-open failures leave @p errorMessage untouched.
     [[nodiscard]] static std::optional<SceneDesc> parse(const std::filesystem::path& sceneFile,
                                                         std::string* errorMessage);
 };

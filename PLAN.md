@@ -37,7 +37,9 @@ tools — never renderer code, never Vulkan. Sibling plans: `Harmonia/PLAN.md`,
 - **Quality gates (family-uniform):** blocking lint (Q2-Q6) on every push -
   clang-format pinned 22.1.3, ruff contract in `ruff.toml` (identical x5), cppcheck,
   bandit, actionlint 1.7.12, yamllint; plus **blocking coverage CI** (`coverage (Q1)`).
-- **Next:** NH1 (node graph) - it unblocks the animation track (ANI) across the
+- **Next:** META1 (agent-legible `[meta]` block, marked *next* in its table
+  below). NH1 (node graph) and ANI1 (keyframed transform channels) are done —
+  the animation track now unblocks renderer-side time sampling across the
   family.
 
 ## How to continue
@@ -96,9 +98,15 @@ Harmonia/PLAN.md).
 
 ### Animation track (ANI) — Aether slice
 
+**Architecture directive (binding):** ALL animation logic — tracks,
+interpolation, evaluation — lives in Aether. The renderers
+(Harmonia/Theia/Hyperion) advance the clock and call the evaluation API; they
+ALWAYS receive only the flat, world-resolved instance list with the animated
+world transforms, and never see keyframes.
+
 | ID | Task | Deps | Status |
 |----|------|------|--------|
-| ANI1 | **Keyframed transform channels (schema)** — Aether carries the timeline: per-node translate/rotate/scale vs time (interpolated) in the scene format. The renderer-side sampling at shutter time lives in Harmonia/Hyperion/Theia (their PLAN.md files). | NH1 | backlog |
+| ANI1 | **Keyframed transform channels (schema + evaluation)** — `[[animation]]` tracks: `target = "nodes/<id>/<parameter>"` bound against the NH1 node graph, `interpolation` = step / linear / cubic_spline with glTF 2.0 sampler semantics (1:1), clamped sampling outside `[first, last]`, rotation keys normalized at load + samples renormalized (shortest-arc slerp), scale floored away from zero; validation (unknown node/parameter, non-finite values, non-ascending times, wrong arity, empty track) as parse errors. Evaluation: `SceneAnimator::evaluate(scene, t)` — sample tracks → node-local TRS → re-run the NH1 compounding → fully resolved flat instance list. | NH1 | **done** |
 
 ## Governance
 

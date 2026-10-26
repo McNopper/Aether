@@ -2,6 +2,7 @@
 #define AETHER_TYPES_SCENEDESC_HPP
 
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <optional>
 #include <string>
@@ -122,6 +123,50 @@ struct NodeDesc {
     std::unordered_map<std::string, std::string> groupMaterials;
 };
 
+/// One keyframed animation track (ANI1): a timed float sequence driving one
+/// addressable node parameter.
+///
+/// `target` is authored as `nodes/<id>/<parameter>`; the parser resolves it
+/// against the `[[node]]` list into `nodeIndex` + `parameter` (an unknown node
+/// or parameter is a parse error). `times` are strictly ascending and finite;
+/// `values` are the flat key values — `arity` floats per key, with the arity
+/// and the value policies defined by the target-binding registry
+/// (`aether::kAnimationTargetBindings`: translation 3, rotation 4 in
+/// slang-math (x, y, z, w) order, scale 3). For `Interpolation::CubicSpline`
+/// each key carries glTF CUBICSPLINE layout — `inTangent`, `value`,
+/// `outTangent` — so `3 * arity` floats per key. Samples clamp to
+/// `[times.front, times.back]` (loop/wrap is reserved, not in scope); a
+/// single-key track is constant. The evaluation API is
+/// `aether::SceneAnimator::evaluate`.
+struct AnimationTrack {
+    /// The node parameter this track drives (the registry row is keyed by it).
+    enum class Parameter : std::uint8_t {
+        Translation, ///< `translation` — arity 3
+        Rotation,    ///< `rotation` — arity 4, slang-math order (x, y, z, w)
+        Scale,       ///< `scale` — arity 3
+    };
+
+    /// Key interpolation, glTF 2.0 sampler semantics (1:1).
+    enum class Interpolation : std::uint8_t {
+        Step,        ///< hold the last key with time <= t
+        Linear,      ///< component lerp; the rotation binding slerps (shortest arc)
+        CubicSpline, ///< per-key in/out tangents, Hermite basis h00/h10/h01/h11
+    };
+
+    std::string target; ///< as authored: "nodes/<id>/<parameter>"
+
+    /// Resolved binding: the `[[node]]` this track drives (index into
+    /// `SceneDesc::nodes`) and which of its TRS parameters. Resolved at parse
+    /// time so evaluation never touches strings.
+    std::size_t nodeIndex = std::numeric_limits<std::size_t>::max();
+    Parameter parameter = Parameter::Translation;
+
+    Interpolation interpolation = Interpolation::Linear; ///< default when the TOML omits it
+
+    std::vector<float> times;  ///< key times: finite, strictly ascending
+    std::vector<float> values; ///< flat key values (layout per the struct comment)
+};
+
 /// Fully parsed `.scene.toml` file — pure CPU data, no GPU/renderer types.
 ///
 /// References (mtllibs, OBJ paths, env map) are recorded as relative paths; the
@@ -179,6 +224,13 @@ struct SceneDesc {
     /// world-space TRS (depth-first, parents before children). Empty unless the
     /// scene declares `[[node]]` entries — node-free scenes are unaffected.
     std::vector<NodeDesc> nodes;
+    /// Keyframed animation tracks (ANI1), in declaration order. Empty unless
+    /// the scene declares `[[animation]]` entries — animation-free scenes are
+    /// unaffected. A parsed scene keeps `instances` resolved at the authored
+    /// node TRS; `SceneAnimator::evaluate(scene, t)` returns the scene with
+    /// every track sampled at t and the compounding re-run (the renderers'
+    /// per-frame entry point — keyframes never leave Aether).
+    std::vector<AnimationTrack> animations;
     std::vector<InstanceDesc> instances; ///< placed instances, in declaration order
 };
 

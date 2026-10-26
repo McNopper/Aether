@@ -52,6 +52,7 @@ add_executable(aether_tests
     test_material_library.cpp
     test_obj_importer.cpp
     test_opacity_micromap.cpp
+    test_scene_animator.cpp
     test_scene_parser.cpp
 )
 
