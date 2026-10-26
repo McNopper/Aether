@@ -1,8 +1,8 @@
 bl_info = {
     "name": "Aether Scene Exporter",
     "author": "Aether Tools",
-    "version": (1, 0, 0),
-    "blender": (4, 0, 0),
+    "version": (1, 1, 0),
+    "blender": (5, 2, 0),
     "location": "File > Export > Aether Scene (.scene.toml)",
     "description": "Export Blender scenes to Aether scene/camera/OBJ files",
     "category": "Import-Export",
@@ -20,13 +20,16 @@ import bpy
 from bpy.props import BoolProperty, FloatProperty, StringProperty
 from bpy.types import Operator
 from bpy_extras.io_utils import ExportHelper
-from mathutils import Matrix
+from mathutils import Matrix, Quaternion, Vector
 
 # Blender is Z-up / -Y-forward; Aether (like glTF) is Y-up / -Z-forward.
 # CONV is the axis swizzle (x, y, z)_blender -> (x, z, -y)_aether, i.e. a -90°
 # rotation about X. Mesh vertices are exported in this Y-up local frame (via the
 # OBJ exporter's up/forward axes); object transforms are conjugated by CONV and
-# camera world positions/directions are mapped by CONV.
+# camera world positions/directions are mapped by CONV. The conjugation
+# distributes over composition — (CONV A CONV^-1)(CONV B CONV^-1) =
+# CONV (AB) CONV^-1 — so conjugating every node's LOCAL matrix compounds down
+# the Aether node graph to exactly the conjugated Blender world transforms.
 CONV = Matrix.Rotation(math.radians(-90.0), 4, "X")
 
 
@@ -154,26 +157,87 @@ def _write_simple_toml(path: Path, lines: list[str]) -> None:
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
-def _instance_block(obj: bpy.types.Object, mesh_name: str) -> dict[str, object]:
-    # Conjugate the world transform by the axis swizzle so the exported TRS
-    # places the (Y-up local) mesh correctly: T_aether = CONV @ T_blender @ CONV^-1.
-    world = CONV @ obj.matrix_world @ CONV.inverted()
-    location, rotation, scale = world.decompose()
-    block: dict[str, object] = {
-        "mesh": mesh_name,
-        "translate": [location.x, location.y, location.z],
-        "rotate": [rotation.x, rotation.y, rotation.z, rotation.w],
-        "scale": [scale.x, scale.y, scale.z],
-    }
-    if obj.active_material:
-        block["material"] = obj.active_material.name
+def _hierarchy_depth(obj: bpy.types.Object) -> int:
+    # Number of ancestors of an object. Used to sort the export list into a
+    # stable parent-before-child node order (a parent always has fewer hops).
+    depth = 0
+    parent = obj.parent
+    while parent is not None:
+        depth += 1
+        parent = parent.parent
+    return depth
+
+
+# Relative tolerance for the TRS round-trip check below. Blender matrices are
+# single precision, so the epsilon must scale with the matrix magnitude.
+_TRS_EPSILON = 1e-4
+
+
+def _decompose_checked(
+    matrix: Matrix, name: str, warnings: list[str]
+) -> tuple[Vector, Quaternion, Vector]:
+    # Decompose a (conjugated) local matrix into TRS and prove the round-trip:
+    # recomposing the parts must reproduce the matrix within an epsilon scaled
+    # by its magnitude. Shear — or any component a quaternion TRS cannot
+    # express, including negative scale — is not representable in the node
+    # format; the decomposed TRS is exported anyway and a warning is emitted.
+    location, rotation, scale = matrix.decompose()
+    recomposed = Matrix.LocRotScale(location, rotation, scale)
+    magnitude = max(1.0, max(abs(value) for row in matrix for value in row))
+    delta = max(
+        abs(left - right)
+        for matrix_row, recomposed_row in zip(matrix, recomposed)
+        for left, right in zip(matrix_row, recomposed_row)
+    )
+    if delta > _TRS_EPSILON * magnitude:
+        warnings.append(
+            f"{name}: transform has shear or a non-TRS component (recomposed "
+            f"delta {delta:.3g}); the decomposed TRS is exported — shear is "
+            "not representable in the node format"
+        )
+    if min(scale) < 0.0:
+        warnings.append(
+            f"{name}: negative scale (mirrored transform) — the decomposed "
+            "TRS preserves it, but it flips triangle winding downstream; "
+            "verify the mesh renders as intended"
+        )
+    return location, rotation, scale
+
+
+def _node_block(
+    obj: bpy.types.Object,
+    mesh_name: str | None,
+    parent_id: str | None,
+    warnings: list[str],
+) -> dict[str, object]:
+    # Local transform relative to the exported parent: matrix_local is
+    # Blender's parent-relative matrix (it includes the parent inverse, so
+    # parent.matrix_world @ matrix_local reproduces matrix_world exactly).
+    # A node whose Blender parent is not exported becomes a root and bakes the
+    # world matrix instead, which keeps placement correct for subtree exports.
+    # Conjugating every local matrix by CONV distributes over composition, so
+    # the Aether parser's per-level T*R*S compounding reproduces the conjugated
+    # Blender world transforms against the Y-up local mesh geometry (see CONV).
+    local = obj.matrix_local if parent_id is not None else obj.matrix_world
+    local = CONV @ local @ CONV.inverted()
+    location, rotation, scale = _decompose_checked(local, obj.name, warnings)
+    block: dict[str, object] = {"id": obj.name}
+    if parent_id is not None:
+        block["parent"] = parent_id
+    block["translate"] = [location.x, location.y, location.z]
+    block["rotate"] = [rotation.x, rotation.y, rotation.z, rotation.w]
+    block["scale"] = [scale.x, scale.y, scale.z]
+    if mesh_name is not None:
+        block["mesh"] = mesh_name
+        if obj.active_material:
+            block["material"] = obj.active_material.name
     return block
 
 
 def _write_scene_toml(
     scene_path: Path,
     meshes: list[dict[str, object]],
-    instances: list[dict[str, object]],
+    nodes: list[dict[str, object]],
     camera_reference: str | None,
     material_libraries: list[str],
     render_reference: str | None,
@@ -194,8 +258,8 @@ def _write_scene_toml(
         for key, value in mesh.items():
             lines.append(f"{key} = {_format_value(value)}")
         lines.append("")
-    for block in instances:
-        lines.append("[[instance]]")
+    for block in nodes:
+        lines.append("[[node]]")
         for key, value in block.items():
             lines.append(f"{key} = {_format_value(value)}")
         lines.append("")
@@ -212,7 +276,9 @@ class AetherSceneExporter(Operator, ExportHelper):
 
     selected_only: BoolProperty(
         name="Selected Only",
-        description="Export only selected mesh objects",
+        description="Export only the selected objects (parents outside the "
+        "selection are not exported; their children are re-rooted with the "
+        "world transform)",
         default=False,
     )
 
@@ -260,22 +326,53 @@ class AetherSceneExporter(Operator, ExportHelper):
         export_dir = scene_path.parent
         export_dir.mkdir(parents=True, exist_ok=True)
 
+        # Single code path: EVERY object becomes a [[node]]. Mesh objects
+        # additionally get an OBJ + a mesh binding; everything else (empties,
+        # collection instances, lights, cameras) is a meshless grouping node.
+        # No flat [[instance]] blocks are emitted — the Aether parser compounds
+        # the node graph into its flat instance list itself.
         objects = (
-            [obj for obj in context.selected_objects if obj.type == "MESH"]
-            if self.selected_only
-            else [obj for obj in context.scene.objects if obj.type == "MESH"]
+            list(context.selected_objects) if self.selected_only else list(context.scene.objects)
         )
+        exported_ids = {obj.name for obj in objects}
+        # Stable parent-before-child order so the file reads top-down; the
+        # parser resolves parents by id regardless of file order.
+        objects.sort(key=_hierarchy_depth)
 
         used_names: set[str] = set()
         meshes: list[dict[str, object]] = []
-        instances: list[dict[str, object]] = []
+        nodes: list[dict[str, object]] = []
+        mesh_by_data: dict[str, str] = {}
+        warnings: list[str] = []
 
         for obj in objects:
-            obj_path = _obj_export_path(export_dir, obj.name, used_names)
-            _export_obj_file(obj, obj_path)
-            mesh_name = obj_path.stem
-            meshes.append({"name": mesh_name, "path": obj_path.name})
-            instances.append(_instance_block(obj, mesh_name))
+            parent_id = (
+                obj.parent.name
+                if obj.parent is not None and obj.parent.name in exported_ids
+                else None
+            )
+            mesh_name = None
+            if obj.type == "MESH":
+                # Shared mesh data (Blender instancing) is exported once and
+                # referenced by every node using it. Objects carrying their own
+                # modifiers bake object-specific geometry, so they always get
+                # their own OBJ instead of joining the data-sharing group.
+                shareable = not any(obj.modifiers)
+                data_key = obj.data.name if shareable else None
+                if data_key is not None and data_key in mesh_by_data:
+                    mesh_name = mesh_by_data[data_key]
+                else:
+                    obj_path = _obj_export_path(export_dir, obj.name, used_names)
+                    _export_obj_file(obj, obj_path)
+                    mesh_name = obj_path.stem
+                    meshes.append({"name": mesh_name, "path": obj_path.name})
+                    if data_key is not None:
+                        mesh_by_data[data_key] = mesh_name
+            nodes.append(_node_block(obj, mesh_name, parent_id, warnings))
+
+        for warning in warnings:
+            print(f"Aether export: {warning}")
+            self.report({"WARNING"}, warning)
 
         camera_reference = None
         if self.include_camera and context.scene.camera:
@@ -290,14 +387,14 @@ class AetherSceneExporter(Operator, ExportHelper):
         _write_scene_toml(
             scene_path,
             meshes,
-            instances,
+            nodes,
             camera_reference,
             material_libraries,
             render_reference,
             tonemap_reference,
         )
 
-        self.report({"INFO"}, f"Exported {len(meshes)} object(s) to {scene_path.name}")
+        self.report({"INFO"}, f"Exported {len(meshes)} mesh(es) / {len(nodes)} node(s) to {scene_path.name}")
         return {"FINISHED"}
 
 

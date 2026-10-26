@@ -13,20 +13,64 @@ Because Blender does not yet author OpenPBR natively, the intended workflow is:
 
 ## 1. Blender scene exporter (`blender_to_aether`)
 
-A Blender addon (File → Export → **Aether Scene (.scene.toml)**) that writes:
+A Blender addon for **Blender 5.2 or newer** (`bl_info` declares
+`blender = (5, 2, 0)`; File → Export → **Aether Scene (.scene.toml)**) that
+writes:
 
-1. `<name>.scene.toml` — a `[[mesh]]` block (name + `.obj` path) and a matching
-   `[[instance]]` block (TRS from the object's world transform, plus material)
-   per mesh object, an optional `material_libraries` list, and `[render]` /
-   `[camera]` / `[tonemap]` references.
+1. `<name>.scene.toml` — one `[[mesh]]` block per unique mesh (name + `.obj`
+   path) and one `[[node]]` block per exported object (`id`, optional
+   `parent`, a `translate` / `rotate` / `scale` TRS, and for mesh objects the
+   `mesh` reference plus material binding), an optional `material_libraries`
+   list, and `[render]` / `[camera]` / `[tonemap]` references. The Aether
+   parser validates the node graph (duplicate ids, unknown parents, cycles)
+   and compounds the parent transforms into its flat instance list itself.
 2. `<name>.camera.toml` — a camera preset (`translate`, `rotate`,
    `vertical_field_of_view`, `ev100`) referenced from the scene's `[camera]`
    section.
-3. One `.obj` per mesh object (geometry only; **materials are not exported**).
+3. One `.obj` per unique mesh (geometry only; **materials are not exported**).
 
 It deliberately does **not** convert Blender materials to OpenPBR — Blender has
 no OpenPBR surface yet, so materials are authored in TOML (by hand or via the
 converter below) and referenced from the scene file.
+
+### Hierarchy mapping (NH4)
+
+The exporter emits the NH1 node graph. **Design decision: every object becomes
+exactly one `[[node]]` — a single code path, no flat `[[instance]]` fallback**
+(hand- or tool-written `[[instance]]` blocks still parse in Aether, they are
+just no longer emitted by this exporter).
+
+* `id` = the Blender object name; `parent` = the Blender parent's name, but
+  **only when that parent is itself exported** (it always is in full-scene
+  exports). With `selected_only`, a selected object whose parent is not
+  exported is re-rooted: the `parent` key is dropped and the node carries the
+  world transform instead, so placement is preserved.
+* Transform: the local matrix relative to the Blender parent
+  (`obj.matrix_local`, which includes Blender's parent inverse; parentless
+  objects use `matrix_world`), conjugated Blender Z-up → Aether Y-up
+  (`CONV @ M @ CONV⁻¹`) and decomposed into `translate` / `rotate`
+  (quaternion `[qx,qy,qz,qw]`) / `scale`. The conjugation distributes over
+  composition, so the parser's per-level T×R×S compounding reproduces the
+  Blender world transforms. Shear is not representable in a quaternion TRS:
+  when the decomposed parts do not round-trip the matrix — this can happen
+  for a re-rooted `selected_only` node whose Blender world contains shear
+  (non-uniform parent scale × child rotation) — a warning is printed and the
+  nearest TRS is exported, a documented limitation. A negative (mirrored)
+  scale round-trips exactly but is warned about, because it flips triangle
+  winding downstream.
+* Mesh objects additionally bind `mesh` (the `[[mesh]]` name) and, when the
+  object has an active material, `material` — exactly the instance semantics.
+* Objects sharing one mesh datablock (Blender instancing) export **one**
+  OBJ/`[[mesh]]` and become multiple nodes referencing that one mesh name;
+  Aether instances the mesh per node. The first exported object using the
+  data names the mesh. A data-shared object carrying its own modifiers always
+  gets its own OBJ, because the baked geometry would differ.
+* Objects without mesh data — empties, collection instances (which are
+  empties), lights, the scene camera — become **meshless grouping nodes**;
+  children still parent to them. `scene.objects` already spans all
+  collections, so collection membership needs no extra mapping.
+* Nodes are emitted parents-first (stable topological order); the parser
+  resolves parents by id regardless of file order.
 
 **Install:** copy `blender_to_aether/` into your Blender addons folder and
 enable *Aether Scene Exporter*, or run it headless:
