@@ -3,6 +3,7 @@
 
 #include <filesystem>
 #include <optional>
+#include <string>
 
 #include "aether/types/SceneDesc.hpp"
 
@@ -66,6 +67,32 @@ namespace aether {
 ///     translate, rotate ([qx,qy,qz,qw]), rotate_x, rotate_y, rotate_z,
 ///     scale (number or [x,y,z])   (rotate wins over Euler; XYZ order)
 ///
+/// NODE GRAPH (optional hierarchy, NH1)
+/// ────────────────────────────────────
+///   [[node]]   optional ordered array of scene-graph nodes
+///     id = "..."                           (required, unique; child `parent`
+///                                          refs address nodes by it)
+///     parent = "..."                       (optional; absent/empty = root)
+///     translate, rotate, rotate_x/y/z, scale   (the same shared TRS keys as
+///                                          an instance block; same semantics)
+///     mesh = "name"                        (optional; absent = pure grouping
+///                                          node that places nothing itself)
+///     material / materials                 (optional, exactly the instance
+///                                          material bindings)
+///
+/// Resolution: the parser validates the graph — duplicate node id, unknown
+/// parent id, or a parent cycle are parse ERRORS naming the offending id
+/// (reported through the std::string* overload below; parse() then returns
+/// nullopt) — and compounds parent * child TRS depth-first, following the
+/// instance convention (T × R × S; world = parent_world * local, so the child
+/// translation is rotated and scaled into the parent frame). Every node with
+/// a mesh becomes one flat instance with its world-space TRS; several nodes
+/// may reference the same mesh (instanced subtrees). COEXISTENCE: flat
+/// [[instance]] blocks always parse exactly as before and remain first in
+/// SceneDesc::instances (declaration order); node-derived instances are
+/// appended after them, depth-first with children in declaration order. A
+/// node-free scene resolves to the identical flat instance list as before.
+///
 /// Transform composition follows the glTF convention: T × R × S.
 /// Unknown keys / mesh types are silently ignored.
 ///
@@ -77,6 +104,13 @@ class SceneParser {
     /// Parse @p sceneFile into a SceneDesc.
     /// Returns std::nullopt only if the file cannot be opened.
     [[nodiscard]] static std::optional<SceneDesc> parse(const std::filesystem::path& sceneFile);
+
+    /// As parse(), additionally reporting the reason for a structural rejection
+    /// in @p errorMessage (node-graph errors: duplicate node id, unknown parent,
+    /// cycle — each naming the offending node id). File-open failures leave
+    /// @p errorMessage untouched.
+    [[nodiscard]] static std::optional<SceneDesc> parse(const std::filesystem::path& sceneFile,
+                                                        std::string* errorMessage);
 };
 
 } // namespace aether

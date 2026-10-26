@@ -30,7 +30,7 @@ CPU structs; consumers (Harmonia and the renderers) handle all GPU upload.
 
 | Parses | Into |
 |--------|------|
-| `<name>.scene.toml` (TOML scene description) | `aether::SceneDesc` (camera, render settings, env, tonemapper, post-tonemap renderer, geometry blocks with TRS + material refs, material-library references) |
+| `<name>.scene.toml` (TOML scene description) | `aether::SceneDesc` (camera, render settings, env, tonemapper, post-tonemap renderer, geometry blocks with TRS + material refs, node graph with compounded TRS, material-library references) |
 | `<name>.materials.toml` (TOML OpenPBR material library) | `aether::MaterialDesc` (OpenPBR Surface v1.1.1 parameters + texture references) |
 | Wavefront OBJ (geometry only — **triangles only**; OBJ material directives ignored) | `aether::MeshData` / `aether::MeshGroup` (deduplicated vertices + indices, local space) |
 
@@ -85,6 +85,35 @@ faithful to OpenPBR — the sweet spot glTF and USD each sit to one side of.
   may select the scene-referred **working color space** via `working_color_space =
   "lin_rec2020_scene" | "lin_rec709_scene"` (absent → consumer default, Rec.2020);
   consumers convert all assets to it on load.
+* **Node graph** (optional `[[node]]` array): parent/child nodes that compound transforms.
+  A node has a unique `id`, an optional `parent` (absent/empty = root), the same TRS keys
+  as an instance (`translate`, `rotate` quaternion or `rotate_x`/`rotate_y`/`rotate_z`
+  Euler, `scale`), and optional `mesh` + `material`/`materials` bindings — a node without
+  a mesh is a pure transform grouping node. The parser validates the graph (duplicate id,
+  unknown parent, cycle are errors naming the offending id) and resolves it into the flat
+  instance list: world = parent_world × local (T × R × S), one instance per meshed node,
+  so several nodes may reference the same mesh (instanced subtrees). Flat `[[instance]]`
+  blocks keep parsing exactly as before and stay first in the instance list; node-derived
+  instances are appended after them — both may coexist in one scene.
+
+  ```toml
+  [[mesh]]
+  name = "ball"
+  type = "sphere"
+  radius = 0.5
+
+  [[node]]
+  id = "arm"
+  translate = [0.0, 1.0, 0.0]
+  rotate_y = 30.0
+
+  [[node]]
+  id = "grip"
+  parent = "arm"
+  mesh = "ball"
+  translate = [0.5, 0.0, 0.0]   # world placement compounds the arm's TRS
+  material = "Ceramic"
+  ```
 * **Camera preset** (`<name>.camera.toml`): a small standalone preset file with
   `translate`, rotation (`rotate` quaternion or `rotate_x`/`rotate_y`/`rotate_z`
   Euler), `vertical_field_of_view` and `ev100` keys. It is meant to be referenced

@@ -97,6 +97,31 @@ struct InstanceDesc {
     std::unordered_map<std::string, std::string> groupMaterials;
 };
 
+/// A scene-graph node: a named, optionally parented TRS placement.
+///
+/// Authoring-layer data (NH1): the parser validates the graph (duplicate id,
+/// unknown parent, cycle) and compounds parent transforms down the tree,
+/// emitting fully resolved world-space `InstanceDesc`s — the SAME flat list
+/// the renderers consume today. `SceneDesc::instances` is therefore the only
+/// resolved output; `nodes` carries the hierarchy as authored (local TRS), so
+/// animation/authoring tooling can address nodes by `id`. A node without a
+/// `meshName` is a pure transform/grouping node: it places nothing itself but
+/// compounds into its children's world transforms.
+struct NodeDesc {
+    std::string id;     ///< unique within the scene; addressed by child `parent` refs
+    std::string parent; ///< parent node id; empty = root
+
+    Vec3 translation{0.0F};
+    Quat rotation{0.0F, 0.0F, 0.0F, 1.0F}; ///< identity, slang-math order (x, y, z, w)
+    Vec3 scale{1.0F};
+
+    std::string meshName; ///< references a MeshDesc::name; empty = grouping node
+    /// Material bindings, exactly the instance semantics: `material` overrides
+    /// the whole mesh, `groupMaterials` overrides per OBJ group/object name.
+    std::string materialName;
+    std::unordered_map<std::string, std::string> groupMaterials;
+};
+
 /// Fully parsed `.scene.toml` file — pure CPU data, no GPU/renderer types.
 ///
 /// References (mtllibs, OBJ paths, env map) are recorded as relative paths; the
@@ -147,8 +172,13 @@ struct SceneDesc {
 
     std::map<std::string, LinkMeta> links; ///< [meta.link] summaries keyed by relative path
 
-    std::vector<std::string> mtllibs;    ///< referenced .materials.toml libraries (relative paths)
-    std::vector<MeshDesc> meshes;        ///< declared meshes, deduplicated by name
+    std::vector<std::string> mtllibs; ///< referenced .materials.toml libraries (relative paths)
+    std::vector<MeshDesc> meshes;     ///< declared meshes, deduplicated by name
+    /// Authoring hierarchy (NH1), in declaration order. Resolved by the parser:
+    /// nodes with a mesh are appended to `instances` with their compounded
+    /// world-space TRS (depth-first, parents before children). Empty unless the
+    /// scene declares `[[node]]` entries — node-free scenes are unaffected.
+    std::vector<NodeDesc> nodes;
     std::vector<InstanceDesc> instances; ///< placed instances, in declaration order
 };
 

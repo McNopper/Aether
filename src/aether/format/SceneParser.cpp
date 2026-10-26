@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <optional>
 #include <slang-math/slang-math.hpp>
 #include <string>
@@ -226,6 +227,43 @@ void parseMetaLinks(const toml::table& root, SceneDesc& desc) {
     }
 }
 
+// ── Geometry-block helpers ──────────────────────────────────────────────────
+// [[instance]] and [[node]] blocks share their placement and material keys;
+// both read them through the helpers below so the semantics stay identical.
+
+/// A fully defaulted TRS placement (identity where a key is absent) — exactly
+/// what a flat instance carries.
+struct Trs {
+    Vec3 translation{0.0F, 0.0F, 0.0F};
+    Quat rotation{0.0F, 0.0F, 0.0F, 1.0F}; ///< slang-math order (x, y, z, w)
+    Vec3 scale{1.0F, 1.0F, 1.0F};
+};
+
+/// Read the shared TRS keys (translate, rotate/[Euler], scale) from @p tbl via
+/// parseTRS, defaulting to identity placement.
+[[nodiscard]] Trs readTrs(const toml::table& tbl) {
+    std::optional<Vec3> translation;
+    std::optional<Quat> rotation;
+    std::optional<Vec3> scale;
+    parseTRS(tbl, translation, rotation, scale);
+    return {translation.value_or(Vec3{0.0F, 0.0F, 0.0F}),
+            rotation.value_or(Quat{0.0F, 0.0F, 0.0F, 1.0F}),
+            scale.value_or(Vec3{1.0F, 1.0F, 1.0F})};
+}
+
+/// Read the shared material bindings from @p tbl: a whole-mesh `material`
+/// override plus the per-OBJ-group `materials` map.
+void readMaterials(const toml::table& tbl,
+                   std::string& materialName,
+                   std::unordered_map<std::string, std::string>& groupMaterials) {
+    if (const toml::table* mats = tbl["materials"].as_table()) {
+        for (auto&& [name, mat] : *mats) {
+            groupMaterials.insert_or_assign(std::string{name.str()}, mat.value_or<std::string>(""));
+        }
+    }
+    materialName = tbl["material"].value_or<std::string>("");
+}
+
 void parseMesh(const toml::table& m, SceneDesc& desc) {
     MeshDesc mesh{};
     mesh.name = m["name"].value_or<std::string>("");
@@ -281,28 +319,171 @@ void parseInstance(const toml::table& t, SceneDesc& desc) {
     }
 
     // Material assignment — either a single whole-mesh override or a per-group map.
-    if (const toml::table* mats = t["materials"].as_table()) {
-        for (auto&& [name, mat] : *mats) {
-            inst.groupMaterials.insert_or_assign(std::string{name.str()}, mat.value_or<std::string>(""));
-        }
-    }
-    inst.materialName = t["material"].value_or<std::string>("");
+    readMaterials(t, inst.materialName, inst.groupMaterials);
 
     // Placement TRS (same shared keys / semantics as the camera block).
-    std::optional<Vec3> translation;
-    std::optional<Quat> rotation;
-    std::optional<Vec3> scale;
-    parseTRS(t, translation, rotation, scale);
-    inst.translation = translation.value_or(Vec3{0.0F, 0.0F, 0.0F});
-    inst.rotation = rotation.value_or(Quat{0.0F, 0.0F, 0.0F, 1.0F});
-    inst.scale = scale.value_or(Vec3{1.0F, 1.0F, 1.0F});
+    const Trs trs = readTrs(t);
+    inst.translation = trs.translation;
+    inst.rotation = trs.rotation;
+    inst.scale = trs.scale;
 
     desc.instances.push_back(std::move(inst));
+}
+
+/// Parse one [[node]] entry: a named, optionally parented TRS placement with
+/// optional mesh + material bindings (all keys exactly the instance ones).
+/// An entry without `id` is skipped, like an unnamed mesh — it could never be
+/// addressed by a child `parent` ref.
+void parseNode(const toml::table& t, SceneDesc& desc) {
+    NodeDesc node{};
+    node.id = t["id"].value_or<std::string>("");
+    if (node.id.empty()) {
+        return; // a node must be named so children and resolution can address it
+    }
+    node.parent = t["parent"].value_or<std::string>(""); // empty = root
+
+    node.meshName = t["mesh"].value_or<std::string>("");
+    readMaterials(t, node.materialName, node.groupMaterials);
+
+    const Trs trs = readTrs(t);
+    node.translation = trs.translation;
+    node.rotation = trs.rotation;
+    node.scale = trs.scale;
+
+    desc.nodes.push_back(std::move(node));
+}
+
+/// Sentinel parent index for root nodes.
+constexpr std::size_t kNoParent = std::numeric_limits<std::size_t>::max();
+
+/// Validate and resolve the node graph (NH1): compound parent transforms down
+/// the tree and append one flat instance per meshed node, so SceneDesc keeps
+/// exposing the same fully-resolved flat instance list the consumers read.
+///
+/// Errors (reported in @p error with the offending id named; @c false return):
+/// a duplicate node id, an unknown parent id, a parent cycle. Scenes without
+/// nodes are untouched — their flat instance list is exactly as authored.
+[[nodiscard]] bool resolveNodes(SceneDesc& desc, std::string* error) {
+    if (desc.nodes.empty()) {
+        return true;
+    }
+
+    // ── Validate: unique ids, known parents ─────────────────────────────────
+    std::unordered_map<std::string, std::size_t> index;
+    index.reserve(desc.nodes.size());
+    for (std::size_t i = 0; i < desc.nodes.size(); ++i) {
+        const auto [it, inserted] = index.emplace(desc.nodes[i].id, i);
+        if (!inserted) {
+            if (error != nullptr) {
+                *error = "duplicate node id '" + desc.nodes[i].id + "'";
+            }
+            return false;
+        }
+    }
+
+    std::vector<std::size_t> parentIndex(desc.nodes.size(), kNoParent);
+    for (std::size_t i = 0; i < desc.nodes.size(); ++i) {
+        const std::string& parent = desc.nodes[i].parent;
+        if (parent.empty()) {
+            continue; // root
+        }
+        const auto it = index.find(parent);
+        if (it == index.end()) {
+            if (error != nullptr) {
+                *error = "node '" + desc.nodes[i].id + "' references unknown parent '" + parent + "'";
+            }
+            return false;
+        }
+        parentIndex[i] = it->second;
+    }
+
+    // ── Validate: cycle-free (color-marked parent-chain walks) ──────────────
+    enum class Mark : std::uint8_t { Unvisited, InProgress, Done };
+    std::vector<Mark> marks(desc.nodes.size(), Mark::Unvisited);
+    for (std::size_t start = 0; start < desc.nodes.size(); ++start) {
+        if (marks[start] != Mark::Unvisited) {
+            continue;
+        }
+        std::vector<std::size_t> path;
+        std::size_t cur = start;
+        while (cur != kNoParent && marks[cur] == Mark::Unvisited) {
+            marks[cur] = Mark::InProgress;
+            path.push_back(cur);
+            cur = parentIndex[cur];
+        }
+        // InProgress can only stem from this same walk: the chain revisited it.
+        if (cur != kNoParent && marks[cur] == Mark::InProgress) {
+            if (error != nullptr) {
+                *error = "node cycle detected at '" + desc.nodes[cur].id + "'";
+            }
+            return false;
+        }
+        for (const std::size_t n : path) {
+            marks[n] = Mark::Done;
+        }
+    }
+
+    // ── Resolve: depth-first compound, emit meshed nodes as instances ───────
+    std::vector<std::vector<std::size_t>> children(desc.nodes.size());
+    std::vector<std::size_t> roots;
+    for (std::size_t i = 0; i < desc.nodes.size(); ++i) {
+        if (parentIndex[i] == kNoParent) {
+            roots.push_back(i);
+        } else {
+            children[parentIndex[i]].push_back(i);
+        }
+    }
+
+    // World = parent_world * local (T × R × S, the instance convention): the
+    // local translation is scaled then rotated into the parent frame, the
+    // local rotation composes on the parent's, the scales multiply per-axis.
+    std::vector<Vec3> worldT(desc.nodes.size());
+    std::vector<Quat> worldR(desc.nodes.size());
+    std::vector<Vec3> worldS(desc.nodes.size());
+
+    // Pre-order DFS (children in declaration order): a parent's world TRS is
+    // always stored before any of its children is visited.
+    std::vector<std::size_t> stack(roots.rbegin(), roots.rend());
+    while (!stack.empty()) {
+        const std::size_t i = stack.back();
+        stack.pop_back();
+
+        const std::size_t p = parentIndex[i];
+        const Vec3 pT = (p == kNoParent) ? Vec3{0.0F, 0.0F, 0.0F} : worldT[p];
+        const Quat pR = (p == kNoParent) ? Quat{0.0F, 0.0F, 0.0F, 1.0F} : worldR[p];
+        const Vec3 pS = (p == kNoParent) ? Vec3{1.0F, 1.0F, 1.0F} : worldS[p];
+
+        const NodeDesc& node = desc.nodes[i];
+        worldS[i] = pS * node.scale;
+        worldR[i] = pR * node.rotation;
+        worldT[i] = pT + pR * (pS * node.translation);
+
+        if (!node.meshName.empty()) {
+            InstanceDesc inst{};
+            inst.meshName = node.meshName;
+            inst.translation = worldT[i];
+            inst.rotation = worldR[i];
+            inst.scale = worldS[i];
+            inst.materialName = node.materialName;
+            inst.groupMaterials = node.groupMaterials;
+            desc.instances.push_back(std::move(inst));
+        }
+
+        for (std::size_t c = children[i].size(); c > 0; --c) {
+            stack.push_back(children[i][c - 1]); // reversed: pop-back keeps declaration order
+        }
+    }
+
+    return true;
 }
 
 } // namespace
 
 std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFile) {
+    return parse(sceneFile, nullptr);
+}
+
+std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFile, std::string* errorMessage) {
     toml::table root;
     try {
         root = toml::parse_file(sceneFile.string());
@@ -347,6 +528,18 @@ std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFi
             if (const toml::table* t = elem.as_table()) {
                 parseInstance(*t, desc);
             }
+        }
+    }
+
+    // ── Node graph (optional; resolves into the flat instance list) ──
+    if (const toml::array* nodes = root["node"].as_array()) {
+        for (const auto& elem : *nodes) {
+            if (const toml::table* t = elem.as_table()) {
+                parseNode(*t, desc);
+            }
+        }
+        if (!resolveNodes(desc, errorMessage)) {
+            return std::nullopt;
         }
     }
 
