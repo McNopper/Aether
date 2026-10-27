@@ -32,9 +32,10 @@ tools — never renderer code, never Vulkan. Sibling plans: `Harmonia/PLAN.md`,
   (ANI1, tick-based via `[animation_clock]`), hierarchical metadata (META1/2),
   and the `aether-validate` assembly gate are the documented, tested contract.
   Next phase: downstream consumption (renderers adopt evaluated flat lists).
-- **Release:** v0.7.8 (tag-synced with GitHub; NH1/ANI1/META2/NH4 landed on
-  main unreleased, ship with the next tag); consumed via FetchContent pins by
-  Harmonia -> Hyperion/Theia; the slang-math pin is bumped to v0.4.0.
+- **Release:** v0.8.0 (tag-synced with GitHub) - the **core-format release**
+  (NH1 node graph, ANI1 animation, META2 metadata, `aether-validate`); consumed
+  via FetchContent pins by Harmonia -> Hyperion/Theia; the slang-math pin is
+  bumped to v0.4.0.
 - **Last shipped (v0.7.8):** A-02 (one `obj_transform` CLI), A-05 (kw tables + pairing invariant), SM6 (`sm::saturate`); tests 44->45. Prior (v0.7.7): META1 `[meta]` block (agent-legible scene metadata),
   A-01 `_obj_transform` dedup (one parameterized `transform_vec3_line` + thin aliases),
   A-03 `parseMesh` guard clauses, output color-space shim removal, Q1 coverage lane
@@ -143,6 +144,11 @@ above plus `verify-full` (verify + format-check + clang-tidy + cppcheck).
 
 ## Baseline
 
+- **v0.8.0** (current): **core format release.** NH1 node graph (compounded TRS,
+  instanced subtrees, graph validation), ANI1 animation (`[[animation]]` tracks,
+  `[animation_clock]` fps, tick-based deterministic `evaluateAtTick`, parameter
+  registry with clamp/normalize validity), META2 (node descriptions/tags,
+  `[meta] assembly`), `aether-validate` CLI, robust meta parsing. 100/100 ctest.
 - **v0.7.8**: **tools + kw tables + SM6.** A-02 (one `tools/obj_transform.py` CLI, the seven per-axis scripts removed after a 13/13 byte-identity matrix), A-05 (dispatch tables hoisted to `MaterialKwTables.hpp` + pairing-invariant test), SM6 (material weight clamps via `sm::saturate`), slang-math pin v0.4.0, blocking coverage CI. 45/45 ctest, gate clean.
 - **v0.7.7**: **cleanup + quality.** A-01 dedup (the identical transform
   functions in `_obj_transform` -> one parameterized `transform_vec3_line` + thin aliases),
