@@ -628,7 +628,7 @@ id = "s"
 parent = "s"
 )toml"};
     EXPECT_FALSE(selfLoop.scene.has_value());
-    EXPECT_NE(selfLoop.error.find("s"), std::string::npos) << "error: " << selfLoop.error;
+    EXPECT_NE(selfLoop.error.find('s'), std::string::npos) << "error: " << selfLoop.error;
 }
 
 TEST(SceneParser, GroupingNodeEmitsNoInstance) {
