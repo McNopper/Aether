@@ -85,10 +85,12 @@ active action (or an action that drives none of those channels) emit none; a
 scene without animation is unchanged from the pre-NH4b output.
 
 * **Targets**: `nodes/<object name>/translation`, `.../rotation`,
-  `.../scale` (the object name is the `[[node]]` `id`). One scalar Blender
-  F-curve is ONE channel of a vector track. Emission order per object is
-  translation → rotation → scale; segment runs of one target stay
-  consecutive.
+  `.../scale` (the object name is the `[[node]]` `id`), plus the registry's
+  scalar component targets `.../<parameter>/<component>` for the
+  component-key-time mismatch case below. When component key frames agree,
+  one scalar Blender F-curve is ONE channel of a vector track. Emission
+  order per object is translation → rotation → scale; segment runs of one
+  target stay consecutive.
 * **Frames → seconds**: ANI1 times are seconds. Blender's frame-rate model is
   `render.fps` frames per `render.fps_base` seconds, so the effective rate is
   `fps / fps_base` and `time = frame · fps_base / fps` (negative frames give
@@ -128,23 +130,62 @@ scene without animation is unchanged from the pre-NH4b output.
   Blender ≥ 3.0's x-parameterized Bézier evaluation. A channel whose stored
   handle sits on its key (freshly keyed boundary keys headless) exports a
   zero tangent — faithful to what Blender itself evaluates.
-* **Registry limit (component key-time mismatch)**: the Aether ANI1 registry
-  has scalar component targets (`nodes/<id>/<parameter>/<component>`, which
-  parse and evaluate mixed component key times since the component-target
-  update), but this exporter does **not yet emit them** (a tracked follow-up).
-  A property is therefore still exported only when **all its component
-  F-curves share identical key frames** (the block-keyed common case; a
+* **Component key times — the block-keyed vector case**: a property exports
+  as ONE vector track per mode segment when all its present component
+  F-curves share identical key frames (the block-keyed common case; a
   missing component contributes its static value, which is exact — Blender
-  evaluates a channel without an F-curve as its static value). When component
-  key frames differ, this exporter cannot represent the property 1:1 without
-  resampling (forbidden): the animation of that property is **not exported**,
-  a warning names it, and the node's static TRS stands. If component curves
-  share key frames but disagree on per-key interpolation, the mode segments
-  follow the lowest-index channel (values at keys stay exact; a warning names
-  the deviation).
+  evaluates a channel without an F-curve as its static value). If such
+  block-keyed curves disagree on per-key interpolation, the mode segments
+  follow the lowest-index channel (values at keys stay exact; a warning
+  names the deviation).
+* **Component key-time mismatch → per-component scalar tracks**: when a
+  property's component F-curves key different frames, the property is no
+  longer skipped — each component F-curve exports as its own scalar ANI1
+  track(s) on the registry's component targets (`target =
+  "nodes/<id>/<parameter>/<component>"`): one `[[animation]]` entry per
+  same-mode run of the component's own segments (same segment-split rule,
+  same frame→second conversion), keyed **1:1 against that F-curve — no
+  resampling**. A property is never MIXED: it emits either vector tracks or
+  component tracks, because a whole-parameter track and component tracks on
+  one parameter would interact through the declaration-order precedence.
+  What maps to what:
+  - Blender `location` channels (x, y, z) drive `translation/x`,
+    `translation/z`, `translation/y` — the same CONV swizzle as the values,
+    and Blender Y negates into Aether Z (the negation applies to key values
+    and bezier-handle tangents alike); Blender `scale` channels drive
+    `scale/x`, `scale/z`, `scale/y`. Translation/scale components are exact
+    per key and carry their own curve's handle-derived tangents.
+  - Blender `rotation_quaternion` channels (w, x, y, z) drive `rotation/w`,
+    `rotation/x`, `rotation/y`, `rotation/z`. A quaternion component cannot
+    be conjugated in isolation (the conjugation mixes all four components):
+    a key's emitted scalar is the conjugated component of the **normalized
+    Blender pose at the key frame** — the keyed channel contributes its key
+    value, every other channel what Blender itself shows there (F-curve
+    evaluated and clamped, or the static value without a curve) — and its
+    tangents are one-sided differences of that emitted scalar. **Rotation
+    renormalization policy**: a rotation-component write renormalizes the
+    whole quaternion after the scalar write (Aether-side registry policy —
+    a scalar key cannot be normalized in isolation; the other components
+    come from the node's current rotation), so the emitted keys reconstruct
+    the normalized pose exactly whenever the sibling components stand at
+    their Blender values.
+  - Components without an F-curve emit no track — the node's static TRS
+    stands for them. Each component's key count, times, values and per-key
+    interpolation modes are its own curve's (no cross-component agreement
+    needed, unlike the vector path); components are emitted in Blender
+    channel-index order.
+  - **Precedence**: the per-track rule — a later-declared track wins from
+    its first key onwards — applies to the same-mode split runs of ONE
+    component target exactly as in the vector case (split boundaries share
+    their boundary key, so the concatenation reproduces the component curve
+    exactly and per-track key counts sum to `keys + runs − 1`). Different
+    components of one parameter are distinct registry targets and never
+    override each other.
 * **Rotation modes**: only the curves matching the object's `rotation_mode`
   drive the pose. `QUATERNION` uses the `rotation_quaternion` channels
-  (Blender order w, x, y, z → schema x, y, z, w). An Euler mode converts its
+  (Blender order w, x, y, z → schema x, y, z, w); when those channels key
+  different frames they export per-component scalar tracks (above) instead
+  of a vector track. An Euler mode converts its
   `rotation_euler` keys (in the object's rotation order) to quaternion keys
   at the **union** of the three curves' key frames — key count preserved, no
   resampling: at a foreign frame a channel contributes the value Blender

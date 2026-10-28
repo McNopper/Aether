@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Aether Scene Exporter",
     "author": "Aether Tools",
-    "version": (1, 2, 0),
+    "version": (1, 3, 0),
     "blender": (5, 2, 0),
     "location": "File > Export > Aether Scene (.scene.toml)",
     "description": "Export Blender scenes to Aether scene/animation/camera/OBJ files",
@@ -296,14 +296,24 @@ def _node_block(
 # (auto/clamped handles) and the same approximation every glTF exporter makes
 # against Blender ≥ 3.0's x-parameterized Bézier evaluation.
 #
-# Registry limit: the Aether ANI1 registry HAS scalar component targets
-# (nodes/<id>/<parameter>/<component>, including mixed component key times),
-# but this exporter does not yet emit them (a tracked follow-up). A property
-# is therefore still exported as ONE vector track per mode segment only when
-# its component F-curves share identical key frames (the block-keyed common
-# case); when component key frames differ the property cannot be represented
-# by this exporter without resampling (forbidden) and is NOT exported — a
-# warning names it and the node's static TRS stands.
+# Component key times: a property whose component F-curves share identical
+# key frames exports as ONE vector track per mode segment (the block-keyed
+# common case; a missing component contributes its static value, which is
+# exact — Blender evaluates a channel without an F-curve as its static
+# value). When component key frames differ, the property exports as
+# PER-COMPONENT scalar tracks on the registry's component targets
+# (nodes/<id>/<parameter>/<component> — translation/scale: x|y|z, rotation:
+# x|y|z|w): one track per same-mode run of each component's own curve,
+# keyed 1:1 (no resampling). A property is never MIXED — either vector
+# tracks or component tracks, because a whole-parameter track and component
+# tracks on one parameter would interact through declaration-order
+# precedence. A quaternion component cannot be conjugated in isolation, so
+# its keys are the conjugated component of the normalized Blender pose at
+# the key frame (the other channels contribute what Blender shows there)
+# and its tangents are one-sided differences of that scalar; translation/
+# scale components swizzle/negate exactly like their vector values.
+# Aether-side policy: a rotation-component write renormalizes the whole
+# quaternion after the scalar write.
 #
 # Rotation: only the curves matching the object's rotation_mode drive the pose
 # (QUATERNION → rotation_quaternion channels (w, x, y, z); an Euler mode →
@@ -317,6 +327,13 @@ def _node_block(
 
 _ANIM_INTERPOLATION = {"CONSTANT": "step", "LINEAR": "linear", "BEZIER": "cubic_spline"}
 _ANIM_ARITY = {"translation": 3, "rotation": 4, "scale": 3}
+
+
+def _target_arity(target: str) -> int:
+    # Whole-parameter targets end in the parameter name; component targets
+    # (nodes/<id>/<parameter>/<component>) are scalar — the registry's
+    # component rows are arity 1.
+    return _ANIM_ARITY.get(target.rsplit("/", 1)[1], 1)
 
 
 def _effective_fps(scene: bpy.types.Scene, warnings: list[str]) -> float:
@@ -414,7 +431,7 @@ def _animation_block(
 ) -> dict[str, object] | None:
     # Emit-time self-check against the ANI1 parse rules: the exporter must
     # never write a track the Aether parser would reject.
-    arity = _ANIM_ARITY[target.rsplit("/", 1)[1]]
+    arity = _target_arity(target)
     stride = arity * (3 if interpolation == "cubic_spline" else 1)
     if (
         not times
@@ -434,6 +451,24 @@ def _swizzle_translation(values: Sequence[float]) -> list[float]:
 
 def _swizzle_scale(values: Sequence[float]) -> list[float]:
     return [values[0], values[2], values[1]]
+
+
+def _passthrough_value(components: Sequence[float]) -> list[float]:
+    return list(components)
+
+
+def _passthrough_tangent(components: Sequence[float], tangent: Sequence[float]) -> list[float]:
+    return list(tangent)
+
+
+# Per-component emission (mismatched component key times): the Aether
+# component letter and value sign for each Blender array index, matching the
+# vector-path swizzles exactly — translation (x, y, z)_blender ->
+# (x, z, -y)_aether (Blender Y negates into Aether Z), scale -> (x, z, y).
+_COMPONENT_OF_INDEX = {
+    "translation": (("x", 1.0), ("z", -1.0), ("y", 1.0)),
+    "scale": (("x", 1.0), ("z", 1.0), ("y", 1.0)),
+}
 
 
 def _quaternion_value(components: Sequence[float]) -> list[float]:
@@ -466,7 +501,13 @@ def _run_tracks(
     warned_modes: set[str],
 ) -> list[dict[str, object]]:
     # One [[animation]] entry per same-mode run of segments (see the section
-    # comment for the split rule and the declaration-order precedence).
+    # comment for the split rule and the declaration-order precedence). A row
+    # carries the key's frame, per-component values and handle y-values
+    # ("in_y"/"out_y", None where the channel has no key here); a row MAY
+    # carry "rates" — per-component (in, out) tangents in value-per-second —
+    # instead, which replaces the handle derivation (used by the
+    # per-component quaternion path, whose scalar tangents are not
+    # handle-derivable).
     if len(rows) == 1:
         # A single key is a constant track (ANI1: one key holds everywhere —
         # the same constant Blender's clamped evaluation shows).
@@ -497,6 +538,14 @@ def _run_tracks(
                 in_tangent = []
                 out_tangent = []
                 for component in range(arity):
+                    rates = row.get("rates")
+                    if rates is not None:
+                        # Direct (in, out) rates per second, already in the
+                        # emitted value space.
+                        in_rate, out_rate = rates[component]
+                        in_tangent.append(in_rate)
+                        out_tangent.append(out_rate)
+                        continue
                     value = row["values"][component]
                     # Components without a key at this frame (static or
                     # union-evaluated) contribute zero tangents: constants.
@@ -529,8 +578,10 @@ def _scalar_property_tracks(
     warned_modes: set[str],
 ) -> list[dict[str, object]]:
     # location / scale: components in array-index order. Exported as vector
-    # tracks only when every present component curve keys the SAME frames
-    # (block-keyed); a missing component contributes its static value.
+    # tracks when every present component curve keys the SAME frames
+    # (block-keyed; a missing component contributes its static value);
+    # mismatched component key frames export per-component scalar tracks
+    # instead (see the section comment — a property is never mixed).
     target = f"nodes/{obj.name}/{parameter}"
     keys_by_index: dict[int, list[dict[str, float]]] = {}
     for index, fcurve in sorted(curves.items()):
@@ -544,16 +595,8 @@ def _scalar_property_tracks(
     reference_index = min(keys_by_index)
     reference_curve = curves[reference_index]
     frames = [key["frame"] for key in keys_by_index[reference_index]]
-    for index, keys in keys_by_index.items():
-        if [key["frame"] for key in keys] != frames:
-            warnings.append(
-                f"{obj.name}: {parameter} component F-curves key different frames — this exporter "
-                f"only emits vector tracks (the Aether registry's per-component scalar targets "
-                f"nodes/<id>/{parameter}/<component> are not emitted yet, a tracked follow-up), "
-                "block-keyed components are the supported case, and resampling is not allowed: this "
-                "property's animation is NOT exported and its static TRS stands"
-            )
-            return []
+    if any([key["frame"] for key in keys] != frames for keys in keys_by_index.values()):
+        return _component_property_tracks(obj, curves, keys_by_index, parameter, fps, warnings, warned_modes)
     modes = [key.interpolation for key in reference_curve.keyframe_points]
     for index, curve in curves.items():
         if index in keys_by_index and [key.interpolation for key in curve.keyframe_points] != modes:
@@ -594,6 +637,58 @@ def _scalar_property_tracks(
     )
 
 
+def _component_property_tracks(
+    obj: bpy.types.Object,
+    curves: dict[int, bpy.types.FCurve],
+    keys_by_index: dict[int, list[dict[str, float]]],
+    parameter: str,
+    fps: float,
+    warnings: list[str],
+    warned_modes: set[str],
+) -> list[dict[str, object]]:
+    # Mismatched component key times (location / scale): each component
+    # F-curve exports as its own scalar tracks on the registry's component
+    # target, keyed 1:1 against that curve — key frames, values, handles and
+    # per-key interpolation modes are the component curve's own (no
+    # resampling, no cross-component agreement needed). The swizzle and the
+    # translation's Y negation are applied to the values AND the handle
+    # y-values up front, so the tangent derivation matches the vector path
+    # exactly. Components without an F-curve emit no track — the node's
+    # static TRS stands for them (exact: Blender evaluates a channel without
+    # an F-curve at its static value). Components are emitted in Blender
+    # channel-index order; component tracks of DIFFERENT components never
+    # override each other (distinct registry targets).
+    tracks: list[dict[str, object]] = []
+    for index, keys in sorted(keys_by_index.items()):
+        letter, sign = _COMPONENT_OF_INDEX[parameter][index]
+        target = f"nodes/{obj.name}/{parameter}/{letter}"
+        modes = [key.interpolation for key in curves[index].keyframe_points]
+        rows = [
+            {
+                "frame": key["frame"],
+                "values": [sign * key["value"]],
+                "in_y": [sign * key["in_y"]],
+                "out_y": [sign * key["out_y"]],
+            }
+            for key in keys
+        ]
+        tracks.extend(
+            _run_tracks(
+                target,
+                rows,
+                modes[:-1],
+                fps,
+                _passthrough_value,
+                _passthrough_tangent,
+                1,
+                obj.name,
+                warnings,
+                warned_modes,
+            )
+        )
+    return tracks
+
+
 def _rotation_tracks(
     obj: bpy.types.Object,
     curves: dict[int, bpy.types.FCurve],
@@ -606,6 +701,9 @@ def _rotation_tracks(
     # (x, y, z, w) quaternion track per mode segment. Quaternion-mode objects
     # use the rotation_quaternion channels (w, x, y, z); Euler-mode objects
     # convert their euler keys at the UNION of the curves' key frames.
+    # Quaternion components keyed at DIFFERENT frames export per-component
+    # scalar tracks instead (below) — the euler union stays the euler path's
+    # contract unchanged.
     target = f"nodes/{obj.name}/rotation"
     arity = 4 if is_quaternion else 3
     keys_by_index: dict[int, list[dict[str, float]]] = {}
@@ -617,6 +715,10 @@ def _rotation_tracks(
         keys_by_index[index] = keys
     if not keys_by_index:
         return []
+    if is_quaternion:
+        reference_frames = [key["frame"] for key in keys_by_index[min(keys_by_index)]]
+        if any([key["frame"] for key in keys] != reference_frames for keys in keys_by_index.values()):
+            return _quaternion_component_tracks(obj, curves, keys_by_index, fps, warnings, warned_modes)
     union_frames = sorted({key["frame"] for keys in keys_by_index.values() for key in keys})
     keyed = {index: {key["frame"]: key for key in keys} for index, keys in keys_by_index.items()}
     static = obj.rotation_quaternion if is_quaternion else obj.rotation_euler
@@ -697,6 +799,77 @@ def _rotation_tracks(
         warnings,
         warned_modes,
     )
+
+
+def _quaternion_component_tracks(
+    obj: bpy.types.Object,
+    curves: dict[int, bpy.types.FCurve],
+    keys_by_index: dict[int, list[dict[str, float]]],
+    fps: float,
+    warnings: list[str],
+    warned_modes: set[str],
+) -> list[dict[str, object]]:
+    # rotation_quaternion components keyed at different frames: each channel
+    # exports as its own scalar tracks on the registry's rotation component
+    # targets, keyed 1:1 against its curve (no resampling — no
+    # union-of-times rewriting; the union stays the EULER path's contract).
+    # A quaternion component cannot be conjugated in isolation (the
+    # conjugation mixes all four components), so a key's emitted scalar is
+    # the Aether component of the normalized conjugated Blender pose at the
+    # key frame: the keyed channel contributes its key value, every other
+    # channel what Blender itself shows there (its F-curve evaluated and
+    # clamped, or the static channel value without a curve — the same
+    # contribution rule as the euler union). Tangents are one-sided
+    # differences of that emitted scalar, value per second — not
+    # handle-derivable for the same mixing reason. Aether renormalizes the
+    # whole quaternion after a component write (registry policy), so the
+    # emitted keys reconstruct the normalized pose exactly whenever the
+    # sibling components stand at their Blender values. Channels without a
+    # curve emit no track — the node's static TRS stands for them.
+    keyed = {index: {key["frame"]: key for key in keys} for index, keys in keys_by_index.items()}
+    static = obj.rotation_quaternion
+
+    def emitted_component(frame: float, channel: int) -> float:
+        parts = []
+        for index in range(4):
+            key = keyed.get(index, {}).get(frame)
+            if key is not None:
+                parts.append(key["value"])
+                continue
+            fcurve = curves.get(index)
+            parts.append(float(fcurve.evaluate(frame)) if fcurve is not None else float(static[index]))
+        # _quaternion_value conjugates the (w, x, y, z) pose into schema
+        # order (x, y, z, w); map the channel to its slot in that order.
+        return _quaternion_value(parts)[(3, 0, 1, 2)[channel]]
+
+    seconds_per_frame = 1.0 / fps
+    frame_epsilon = 1.0e-2  # frames; one-sided difference of the scalar
+    tracks: list[dict[str, object]] = []
+    for channel, keys in sorted(keys_by_index.items()):
+        target = f"nodes/{obj.name}/rotation/{'wxyz'[channel]}"
+        modes = [key.interpolation for key in curves[channel].keyframe_points]
+        rows: list[dict[str, object]] = []
+        for key in keys:
+            frame = key["frame"]
+            value = emitted_component(frame, channel)
+            in_rate = (value - emitted_component(frame - frame_epsilon, channel)) / (frame_epsilon * seconds_per_frame)
+            out_rate = (emitted_component(frame + frame_epsilon, channel) - value) / (frame_epsilon * seconds_per_frame)
+            rows.append({"frame": frame, "values": [value], "rates": [(in_rate, out_rate)]})
+        tracks.extend(
+            _run_tracks(
+                target,
+                rows,
+                modes[:-1],
+                fps,
+                _passthrough_value,
+                _passthrough_tangent,
+                1,
+                obj.name,
+                warnings,
+                warned_modes,
+            )
+        )
+    return tracks
 
 
 def _animation_tracks(obj: bpy.types.Object, fps: float, warnings: list[str]) -> list[dict[str, object]]:
