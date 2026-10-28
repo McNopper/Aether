@@ -106,7 +106,11 @@ against it). ctest `test_arch` runs the vendored `tools/check_arch.py` engine (l
 vocabulary consumes both; includes may only go **down** that order and there must be **no
 include cycles** (file-level SCC detection), declared edges only.
 
-**Sanitizer lane (Clang/GCC configures only):** `-DAETHER_SANITIZER=address|undefined|thread`.
+**
+
+**Dead-code gate:** `python tools/check_dead.py` - orphan headers, never-compiled sources (absent from `compile_commands.json` AND unreferenced by any CMake file), and FetchContent declare/consume mismatches. Also registered as ctest `test_dead` (label `analysis`; local only - registration is gated on the per-user check-dead skill install, so CI runners skip it). Justified findings go into `tools/check_dead.exceptions` with a reason; real dead code is deleted in a fix commit.
+
+Sanitizer lane (Clang/GCC configures only):** `-DAETHER_SANITIZER=address|undefined|thread`.
 Host-side FP is deterministic (`/fp:strict` / `-ffp-contract=off -fno-fast-math`).
 
 **Coverage lane (Clang/GCC configures only):** configure a separate build with
