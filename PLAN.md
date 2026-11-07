@@ -32,10 +32,10 @@ tools — never renderer code, never Vulkan. Sibling plans: `Harmonia/PLAN.md`,
   (ANI1, tick-based via `[animation_clock]`), hierarchical metadata (META1/2),
   and the `aether-validate` assembly gate are the documented, tested contract.
   Next phase: downstream consumption (renderers adopt evaluated flat lists).
-- **Release:** v0.8.0 (tag-synced with GitHub) - the **core-format release**
-  (NH1 node graph, ANI1 animation, META2 metadata, `aether-validate`); consumed
-  via FetchContent pins by Harmonia -> Hyperion/Theia; the slang-math pin is
-  bumped to v0.4.0.
+- **Release:** v0.8.1 (tag-synced with GitHub) - the slang-math pin bump
+  (v0.6.0 -> v0.8.0: additive SM1/SM2/SM3 API). **Prior (v0.8.0):** the
+  **core-format release** (NH1 node graph, ANI1 animation, META2 metadata,
+  `aether-validate`); consumed via FetchContent pins by Harmonia -> Hyperion/Theia.
 - **Last shipped (v0.7.8):** A-02 (one `obj_transform` CLI), A-05 (kw tables + pairing invariant), SM6 (`sm::saturate`); tests 44->45. Prior (v0.7.7): META1 `[meta]` block (agent-legible scene metadata),
   A-01 `_obj_transform` dedup (one parameterized `transform_vec3_line` + thin aliases),
   A-03 `parseMesh` guard clauses, output color-space shim removal, Q1 coverage lane
