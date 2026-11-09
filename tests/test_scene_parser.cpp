@@ -934,4 +934,163 @@ tags = ["rig", "end-effector"]
     }
 }
 
+// ── Link metadata (META1 remainder) ─────────────────────────────────────────
+// [meta.link."<path>"] summaries are pure agent context too: they land on
+// SceneDesc::links and never influence the resolved instance list. Lenient
+// like every meta key — absent or wrong-typed values keep their defaults.
+
+TEST(SceneParser, LinkMetaFullBlockLandsAllKeys) {
+    // Every documented link key lands: kind/description/triangles/groups/
+    // materials and the bounds incl. its frame + orientation quaternion.
+    NodeScene f{"link_meta_full",
+                R"toml([meta]
+title = "Link meta landing"
+
+[meta.link."x.obj"]
+kind = "mesh"
+description = "Test hero mesh - glossy ceramic, the scene's centerpiece."
+triangles = 2904
+groups = 3
+materials = ["ceramic_white", "snow"]
+bounds = { min = [-0.5, -0.31, -0.42], max = [0.5, 0.48, 0.31], frame = "object", orientation = [0.0, 0.7071, 0.0, 0.7071] }
+
+[[mesh]]
+name = "ball"
+type = "sphere"
+radius = 0.5
+
+[[instance]]
+mesh = "ball"
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_TRUE(f.scene->meta.has_value());
+    ASSERT_EQ(f.scene->links.size(), 1U);
+    const auto& link = f.scene->links.at("x.obj");
+    EXPECT_EQ(link.kind, "mesh");
+    EXPECT_EQ(link.description, "Test hero mesh - glossy ceramic, the scene's centerpiece.");
+    EXPECT_EQ(link.triangles, 2904U);
+    EXPECT_EQ(link.groups, 3U);
+    ASSERT_EQ(link.materials.size(), 2U);
+    EXPECT_EQ(link.materials[0], "ceramic_white");
+    EXPECT_EQ(link.materials[1], "snow");
+    ASSERT_TRUE(link.bounds.has_value());
+    EXPECT_FLOAT_EQ(link.bounds->min.x, -0.5F);
+    EXPECT_FLOAT_EQ(link.bounds->min.z, -0.42F);
+    EXPECT_FLOAT_EQ(link.bounds->max.x, 0.5F);
+    EXPECT_FLOAT_EQ(link.bounds->max.y, 0.48F);
+    EXPECT_EQ(link.bounds->frame, "object");
+    expectQuatNear(link.bounds->orientation, 0.0F, 0.7071F, 0.0F, 0.7071F);
+}
+
+TEST(SceneParser, WrongTypedLinkMetaIsLenientlyIgnored) {
+    // bounds = "wide" (not a table), groups = "three" (not an integer), a
+    // wrong-typed frame and a 3-float orientation: every one keeps its
+    // default — meta is pure context and can never fail the parse.
+    NodeScene f{"link_meta_wrong_type",
+                R"toml([meta.link."x.obj"]
+kind = "mesh"
+bounds = "wide"
+groups = "three"
+
+[meta.link."y.obj"]
+kind = "mesh"
+bounds = { min = [-1.0, 0.0, 0.0], max = [1.0, 0.0, 0.0], frame = 42, orientation = [0.0, 0.0, 0.7071] }
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_EQ(f.scene->links.size(), 2U);
+    const auto& x = f.scene->links.at("x.obj");
+    EXPECT_FALSE(x.bounds.has_value()); // non-table bounds parse as absent
+    EXPECT_EQ(x.groups, 0U);
+    const auto& y = f.scene->links.at("y.obj");
+    ASSERT_TRUE(y.bounds.has_value());    // valid min/max land…
+    EXPECT_EQ(y.bounds->frame, "object"); // …while wrong-typed keys default
+    expectQuatNear(y.bounds->orientation, 0.0F, 0.0F, 0.0F, 1.0F);
+}
+
+TEST(SceneParser, LinkMetaDoesNotChangeResolvedInstances) {
+    // The same flat scene with and without [meta]/[meta.link] annotations must
+    // resolve to identical instance lists: the summaries are authoring-layer.
+    NodeScene plain{"link_meta_plain",
+                    R"toml([[mesh]]
+name = "ball"
+type = "sphere"
+radius = 0.5
+
+[[instance]]
+mesh = "ball"
+translate = [1.0, 2.0, 3.0]
+)toml"};
+    NodeScene annotated{"link_meta_annotated",
+                        R"toml([meta]
+title = "Annotated twin"
+
+[meta.link."ball.obj"]
+kind = "mesh"
+description = "The one mesh."
+triangles = 12
+groups = 1
+materials = ["rubber"]
+bounds = { min = [-0.5, -0.5, -0.5], max = [0.5, 0.5, 0.5] }
+
+[[mesh]]
+name = "ball"
+type = "sphere"
+radius = 0.5
+
+[[instance]]
+mesh = "ball"
+translate = [1.0, 2.0, 3.0]
+)toml"};
+    ASSERT_TRUE(plain.scene.has_value()) << plain.error;
+    ASSERT_TRUE(annotated.scene.has_value()) << annotated.error;
+    // The summaries landed on the annotated copy (sanity: the scenes differ only in meta).
+    ASSERT_TRUE(annotated.scene->meta.has_value());
+    EXPECT_EQ(annotated.scene->links.at("ball.obj").kind, "mesh");
+    EXPECT_TRUE(plain.scene->links.empty());
+    EXPECT_FALSE(plain.scene->meta.has_value()); // no [meta] authored → no meta
+    ASSERT_EQ(plain.scene->instances.size(), annotated.scene->instances.size());
+    for (std::size_t i = 0; i < plain.scene->instances.size(); ++i) {
+        EXPECT_EQ(plain.scene->instances[i].meshName, annotated.scene->instances[i].meshName);
+        expectVec3Near(plain.scene->instances[i].translation,
+                       annotated.scene->instances[i].translation.x,
+                       annotated.scene->instances[i].translation.y,
+                       annotated.scene->instances[i].translation.z);
+        expectVec3Near(plain.scene->instances[i].scale,
+                       annotated.scene->instances[i].scale.x,
+                       annotated.scene->instances[i].scale.y,
+                       annotated.scene->instances[i].scale.z);
+        expectQuatNear(plain.scene->instances[i].rotation,
+                       annotated.scene->instances[i].rotation.x,
+                       annotated.scene->instances[i].rotation.y,
+                       annotated.scene->instances[i].rotation.z,
+                       annotated.scene->instances[i].rotation.w);
+    }
+}
+
+TEST(SceneParser, MeshlessSceneStillCarriesMeta) {
+    // A scene with no [[mesh]] at all (only [meta], a camera and a link
+    // summary) still parses its meta: the [meta] reads sit outside the mesh
+    // loop, exactly once per scene — a mesh-less scene dropped them entirely.
+    NodeScene f{"meta_meshless",
+                R"toml([meta]
+title = "Camera-only scene"
+description = "No geometry - the meta block must still land."
+
+[camera]
+translate = [0.0, 1.0, -5.0]
+vertical_field_of_view = 45.0
+
+[meta.link."env.exr"]
+kind = "env"
+description = "Studio IBL placeholder."
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_TRUE(f.scene->meta.has_value());
+    EXPECT_EQ(f.scene->meta->title, "Camera-only scene");
+    EXPECT_EQ(f.scene->meta->description, "No geometry - the meta block must still land.");
+    EXPECT_EQ(f.scene->links.at("env.exr").kind, "env");
+    EXPECT_TRUE(f.scene->meshes.empty());
+    EXPECT_TRUE(f.scene->instances.empty());
+}
+
 } // namespace

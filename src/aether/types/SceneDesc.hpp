@@ -191,20 +191,34 @@ struct AnimationTrack {
     std::vector<float> values; ///< flat key values (layout per the struct comment)
 };
 
-/// Fully parsed `.scene.toml` file — pure CPU data, no GPU/renderer types.
-///
-/// References (mtllibs, OBJ paths, env map) are recorded as relative paths; the
-/// consumer resolves and loads them. The tonemapper and post-tonemap renderer
-/// are carried as raw keyword tokens — mapping them to renderer modes is a
-/// Harmonia / renderer concern, not file-format data.
+/// Authored bounds for one linked file: the plain `Aabb` corner pair extended
+/// by the frame the box is expressed in and the orientation that resolves it.
+/// Kept separate from `Aabb` (which stays a pure min/max pair on `MeshDesc`,
+/// untouched for its consumers): a meta summary names *where* the box lives,
+/// not just its corners, so an agent can derive the world AABB from the
+/// instance TRS without opening the linked file.
+struct LinkBounds {
+    Vec3 min{0.0F};
+    Vec3 max{0.0F};
+    /// Coordinate frame of `min`/`max`: `"object"` (default — the linked
+    /// file's own space) or `"world"` (scene space).
+    std::string frame = "object";
+    /// Orientation (slang-math order x, y, z, w) resolving the object-frame
+    /// AABB into the frame above; identity = axis-aligned in that frame.
+    Quat orientation{0.0F, 0.0F, 0.0F, 1.0F};
+};
+
 /// Per-linked-file summary: tells an AI agent what the file contains
 /// without opening it. The consumer is an AI agent assembling scenes.
 struct LinkMeta {
-    std::string kind;           ///< "material-library" | "mesh" | "env" | "micromap" | "scene"
-    std::string description;    ///< agent-readable prose (e.g. "Suzanne — glossy ceramic")
-    std::optional<Aabb> bounds; ///< object-space AABB (frame + orientation from the instance TRS)
+    std::string kind;                 ///< "material-library" | "mesh" | "env" | "micromap" | "scene"
+    std::string description;          ///< agent-readable prose (e.g. "Suzanne — glossy ceramic")
+    std::optional<LinkBounds> bounds; ///< AABB + frame/orientation (see `LinkBounds`)
     std::uint32_t triangles = 0;
-    std::vector<std::string> materials;
+    /// Content count: how many groups (OBJ groups/objects, material slots) the
+    /// linked file holds — a size hint readable without opening the file.
+    std::uint32_t groups = 0;
+    std::vector<std::string> materials; ///< flat name list (per-material one-liners: deferred)
 };
 
 /// Optional agent-legible metadata, authored directly in the scene TOML.
@@ -227,6 +241,12 @@ struct SceneMeta {
     std::map<std::string, LinkMeta> links;
 };
 
+/// Fully parsed `.scene.toml` file — pure CPU data, no GPU/renderer types.
+///
+/// References (mtllibs, OBJ paths, env map) are recorded as relative paths; the
+/// consumer resolves and loads them. The tonemapper and post-tonemap renderer
+/// are carried as raw keyword tokens — mapping them to renderer modes is a
+/// Harmonia / renderer concern, not file-format data.
 struct SceneDesc {
     CameraDesc camera;
 

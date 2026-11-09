@@ -189,51 +189,76 @@ void parseMeta(const toml::table& root, SceneDesc& desc) {
     desc.meta = std::move(m);
 }
 
-/// Parse [meta.link."<path>"] tables: per-linked-file AI summaries.
+/// Parse one link summary table into a `LinkMeta` under @p path. Lenient
+/// node_view reads throughout: absent or wrong-typed keys keep their defaults.
+void parseLinkTable(const toml::table& linkTbl, const std::string& path, SceneDesc& desc) {
+    LinkMeta lm;
+    if (const auto v = linkTbl["kind"].value<std::string>()) {
+        lm.kind = *v;
+    }
+    if (const auto v = linkTbl["description"].value<std::string>()) {
+        lm.description = *v;
+    }
+    if (const auto v = linkTbl["triangles"].value<std::int64_t>()) {
+        lm.triangles = static_cast<std::uint32_t>(*v);
+    }
+    if (const auto v = linkTbl["groups"].value<std::int64_t>()) {
+        lm.groups = static_cast<std::uint32_t>(*v);
+    }
+    if (const toml::array* mats = linkTbl["materials"].as_array()) {
+        for (auto&& mat : *mats) {
+            if (const auto m = mat.value<std::string>()) {
+                lm.materials.push_back(*m);
+            }
+        }
+    }
+    if (const toml::table* bounds = linkTbl["bounds"].as_table()) {
+        const auto mn = bounds->get("min");
+        const auto mx = bounds->get("max");
+        const auto mnVec = mn ? asVec3(*mn) : std::nullopt;
+        const auto mxVec = mx ? asVec3(*mx) : std::nullopt;
+        if (mnVec && mxVec) {
+            LinkBounds lb{*mnVec, *mxVec};
+            if (const auto v = (*bounds)["frame"].value<std::string>()) {
+                lb.frame = *v;
+            }
+            // A wrong-typed or short orientation (e.g. 3 floats) keeps the
+            // identity default: meta summaries are lenient, never an error.
+            const auto* orient = bounds->get("orientation");
+            if (const auto q = orient != nullptr ? asQuat(*orient) : std::nullopt) {
+                lb.orientation = *q;
+            }
+            lm.bounds = std::move(lb);
+        }
+    }
+    desc.links[path] = std::move(lm);
+}
+
+/// Parse [meta.link."<path>"] tables: per-linked-file AI summaries. Both
+/// authoring shapes land identically: the header form nests the per-path
+/// tables under a `link` sub-table of [meta], while an inline quoted key
+/// ("link.<path>") sits directly inside [meta].
 void parseMetaLinks(const toml::table& root, SceneDesc& desc) {
     const toml::table* meta = root["meta"].as_table();
     if (meta == nullptr) {
         return;
     }
+    // Header form: [meta.link."<path>"] — one sub-table per linked file.
+    if (const toml::table* linkRoot = (*meta)["link"].as_table()) {
+        for (auto&& [key, node] : *linkRoot) {
+            if (const toml::table* linkTbl = node.as_table()) {
+                parseLinkTable(*linkTbl, std::string{key.str()}, desc);
+            }
+        }
+    }
+    // Inline form: "link.<path>" = { ... } keys directly inside [meta].
     for (auto&& [key, node] : *meta) {
         if (!key.str().starts_with("link.")) {
             continue;
         }
-        const toml::table* linkTbl = node.as_table();
-        if (linkTbl == nullptr) {
-            continue;
+        if (const toml::table* linkTbl = node.as_table()) {
+            parseLinkTable(*linkTbl, std::string{key.str().substr(5)}, desc);
         }
-        const std::string path{key.str().substr(5)};
-        LinkMeta lm;
-        // null-safe node_view reads: linkTbl->get(...)->value(...) dereferences
-        // nullptr for absent keys (the pre-existing crash the META2 pass fixed in
-        // parseMeta; this twin got the same treatment).
-        if (const auto v = (*linkTbl)["kind"].value<std::string>()) {
-            lm.kind = *v;
-        }
-        if (const auto v = (*linkTbl)["description"].value<std::string>()) {
-            lm.description = *v;
-        }
-        if (const auto v = (*linkTbl)["triangles"].value<std::int64_t>()) {
-            lm.triangles = static_cast<std::uint32_t>(*v);
-        }
-        if (const toml::array* mats = (*linkTbl)["materials"].as_array()) {
-            for (auto&& mat : *mats) {
-                if (const auto m = mat.value<std::string>()) {
-                    lm.materials.push_back(*m);
-                }
-            }
-        }
-        if (const toml::table* bounds = (*linkTbl)["bounds"].as_table()) {
-            const auto mn = bounds->get("min");
-            const auto mx = bounds->get("max");
-            const auto mnVec = mn ? asVec3(*mn) : std::nullopt;
-            const auto mxVec = mx ? asVec3(*mx) : std::nullopt;
-            if (mnVec && mxVec) {
-                lm.bounds = Aabb{*mnVec, *mxVec};
-            }
-        }
-        desc.links[path] = std::move(lm);
     }
 }
 
@@ -416,12 +441,17 @@ std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFi
     resolveSection(root, "tonemap", baseDir, desc, applyTonemap);
     resolveSection(root, "post_tonemap", baseDir, desc, applyPostTonemap);
 
+    // ── Agent metadata ([meta] / [meta.link]) — pure AI context ─────────────
+    // Parsed exactly once per scene, independent of [[mesh]] presence: the
+    // calls used to sit inside the mesh loop below, so a mesh-less scene
+    // silently dropped its meta block entirely.
+    parseMeta(root, desc);
+    parseMetaLinks(root, desc);
+
     // ── Meshes (unique declarations) + instances (placements) ──
     if (const toml::array* meshes = root["mesh"].as_array()) {
         for (const auto& elem : *meshes) {
             if (const toml::table* m = elem.as_table()) {
-                parseMeta(root, desc);
-                parseMetaLinks(root, desc);
                 parseMesh(*m, desc);
             }
         }

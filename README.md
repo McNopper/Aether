@@ -122,8 +122,10 @@ faithful to OpenPBR — the sweet spot glTF and USD each sit to one side of.
   `schema`, `version`, `model`, `title`, `description`, `units`, `generator`, plus
   `assembly` (prose: how the scene fits together — what the parts are and how they
   connect). Per linked file: `[meta.link."<path>"]` summaries (`kind`, `description`,
-  `bounds`, `triangles`, `materials`) so an agent can understand the scene without
-  opening the links. One compact example:
+  `bounds` = `{ min, max, frame = "object", orientation = [x,y,z,w] }` — AABB with its
+  coordinate frame and resolving orientation quaternion, both defaulting to object
+  space / identity, `triangles`, `groups` content count, `materials`) so an agent can
+  understand the scene without opening the links. One compact example:
 
   ```toml
   [meta]

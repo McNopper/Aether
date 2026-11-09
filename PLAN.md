@@ -36,17 +36,20 @@ tools — never renderer code, never Vulkan. Sibling plans: `Harmonia/PLAN.md`,
   (v0.6.0 -> v0.8.0: additive SM1/SM2/SM3 API). **Prior (v0.8.0):** the
   **core-format release** (NH1 node graph, ANI1 animation, META2 metadata,
   `aether-validate`); consumed via FetchContent pins by Harmonia -> Hyperion/Theia.
-- **Last shipped (v0.7.8):** A-02 (one `obj_transform` CLI), A-05 (kw tables + pairing invariant), SM6 (`sm::saturate`); tests 44->45. Prior (v0.7.7): META1 `[meta]` block (agent-legible scene metadata),
-  A-01 `_obj_transform` dedup (one parameterized `transform_vec3_line` + thin aliases),
-  A-03 `parseMesh` guard clauses, output color-space shim removal, Q1 coverage lane
-  (83.48% lines), architecture gate orphan-free.
+- **Last shipped (v0.7.8):** META1 `[meta]` block (agent-legible scene metadata;
+  previously mis-attributed to v0.7.7 here — `git tag --contains` starts at
+  v0.7.8), A-02 (one `obj_transform` CLI), A-05 (kw tables + pairing invariant),
+  SM6 (`sm::saturate`); tests 44->45. Prior (v0.7.7): A-01 `_obj_transform` dedup
+  (one parameterized `transform_vec3_line` + thin aliases), A-03 `parseMesh` guard
+  clauses, output color-space shim removal, Q1 coverage lane (83.48% lines),
+  architecture gate orphan-free.
 - **Quality gates (family-uniform):** blocking lint (Q2-Q6) on every push -
   clang-format pinned 22.1.3, ruff contract in `ruff.toml` (identical x5), cppcheck,
   bandit, actionlint 1.7.12, yamllint; plus **blocking coverage CI** (`coverage (Q1)`).
-- **Next:** META1 (agent-legible `[meta]` block, marked *next* in its table
-  below). NH1 (node graph) and ANI1 (keyframed transform channels) are done —
-  the animation track now unblocks renderer-side time sampling across the
-  family.
+- **Next:** nothing queued in Aether itself — NH1 (node graph), ANI1 (keyframed
+  transform channels) and the META track (META1/META2 agent-legible metadata) are
+  done; the next phase is downstream consumption (renderers adopt the evaluated
+  flat lists, see *Context*).
 
 ## How to continue
 
@@ -62,7 +65,7 @@ summary to reason about it). Unblocked and independent of AR1/NH1.
 
 | ID | Task | Deps | Status |
 |----|------|------|--------|
-| META1 | **`[meta]` block in the scene/material TOML** — optional, backward compatible (existing scenes parse unchanged; unknown tables already ignored). `[meta]`: `schema`/`version`, `model = "openpbr"`, `title`, `description` (agent-readable prose), `units`, `generator`. **`[meta.link."<path>"]` per linked file** — `kind` (`material-library` \| `mesh` \| `env` \| `micromap` \| `scene`), `description` (e.g. *"Suzanne the monkey — glossy ceramic, this is the snow-scene hero"*), plus the skip-the-file summary: `bounds` = AABB **with frame/orientation** (`{ min, max, frame = "object", orientation = [x,y,z,w] }` — object-space AABB + the instance TRS already in the scene makes the world AABB derivable), content counts (`triangles`, `groups`, `materials = [...]`), and per-material one-liners where useful. Parser stores it (`SceneDesc.meta` / `LinkMeta` in `src/aether/types/`); generators populate it (`blender_to_aether`, `mtlx_to_aether`, `omm_bake`); nothing consumes it yet — the consumer is the agent. | — | **next** |
+| META1 | **`[meta]` block in the scene TOML** — optional, backward compatible (existing scenes parse unchanged; unknown tables already ignored). **Landed:** `[meta]` keys — `schema`/`version`, `model = "openpbr"`, `title`, `description` (agent-readable prose), `units`, `generator`, META2 `assembly` — and `[meta.link."<path>"]` per linked file: `kind` (`material-library` \| `mesh` \| `env` \| `micromap` \| `scene`), `description` (e.g. *"Suzanne the monkey — glossy ceramic, this is the snow-scene hero"*), the skip-the-file summary `bounds` = AABB **with frame/orientation** (`{ min, max, frame = "object", orientation = [x,y,z,w] }` — object-space AABB + the instance TRS already in the scene makes the world AABB derivable), content counts (`triangles`, `groups`), and `materials = [...]` (flat name list). Lenient parse (absent/wrong-typed keys keep defaults, never an error), parsed exactly once per scene so mesh-less scenes carry meta too; stored as `SceneMeta`/`LinkMeta`/`LinkBounds` in `src/aether/types/SceneDesc.hpp`, parsed in `SceneParser.cpp`, tests in `tests/test_scene_parser.cpp`. Nothing consumes it yet — the consumer is the agent. The release header once mis-attributed this landing to v0.7.7 — `git tag --contains` starts at **v0.7.8**. **Deferred:** per-material one-liners, material-TOML `[meta]` storage (the material-side half of this row's original scope), generator population (`blender_to_aether`, `mtlx_to_aether`, `omm_bake`). | — | **done (v0.7.8)** |
 | META2 | **Hierarchical agent-legible metadata (node level)** — extends META1 to the NH1 graph: `[[node]]` gains `description` (what this node/subtree IS) and `tags` (categorization), and `[meta]` gains `assembly` (prose: how the scene fits together — what the parts are and how they connect). All pure AI context — absent or wrong-typed keys parse leniently and never affect the resolved flat instance list or validation (`NodeDesc`/`SceneMeta` in `src/aether/types/SceneDesc.hpp`, parsed in `SceneParser.cpp`; tests in `tests/test_scene_parser.cpp` cover landing, empty defaults, wrong-type leniency and instance-list invariance). The real consumer exists: **the NH1 node graph is the consumer — hierarchical agent legibility** (an agent reading the TOML understands each subtree and how to assemble the scene). The previous META2 scope (generator-side population + docs) remains deferred. | META1 | **done** |
 
 Schema sketch (scene TOML):
@@ -88,7 +91,7 @@ kind = "mesh"
 description = "Suzanne the monkey - glossy ceramic, the snow-scene hero."
 bounds = { min = [-0.50, -0.31, -0.42], max = [0.50, 0.48, 0.31], frame = "object", orientation = [0, 0, 0, 1] }
 triangles = 2904
-groups = ["default"]
+groups = 1
 ```
 
 ### Node hierarchy track (NH) — Aether slice
