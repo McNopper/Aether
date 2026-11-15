@@ -34,14 +34,14 @@ struct TextureRef {
     [[nodiscard]] bool empty() const noexcept { return path.empty(); }
 };
 
-/// Parsed OpenPBR Surface v1.1.1 material — pure CPU data, no GPU types.
+/// Parsed OpenPBR Surface v1.1.2 material — pure CPU data, no GPU types.
 ///
 /// Color-valued fields (base_color, specular_color, …) are stored in the space
 /// declared by `inputColorSpace`; non-color data (subsurface_radius_scale,
 /// transmission_scatter) is never color-converted by the consumer.
 ///
-/// Field names are the exact OpenPBR Surface 1.1.1 input names (no abbreviation
-/// or aliasing). Default values follow the OpenPBR Surface 1.1.1 specification,
+/// Field names are the exact OpenPBR Surface 1.1.2 input names (no abbreviation
+/// or aliasing). Default values follow the OpenPBR Surface 1.1.2 specification,
 /// matching a diffuse-gray material when default-constructed.
 struct MaterialDesc {
     // ── base ───────────────────────────────────────────────────────────────
@@ -60,7 +60,9 @@ struct MaterialDesc {
     // ── transmission ───────────────────────────────────────────────────────
     float transmission_weight = 0.0F;
     Vec3 transmission_color{1.0F, 1.0F, 1.0F};
-    float transmission_depth = 0.0F; ///< Beer-law depth (world units); 0 = no absorption
+    float transmission_depth = 0.0F; ///< Beer-law depth; 0 = no absorption. OpenPBR 1.1.2 (#331):
+                                     ///< default unit cm unless metadata overrides — consumed
+                                     ///< unit-agnostically (sigma_t = -ln(color)/depth)
     Vec3 transmission_scatter{0.0F, 0.0F, 0.0F};
     float transmission_scatter_anisotropy = 0.0F; ///< HG mean cosine g ∈ [-1,1]
     float transmission_dispersion_scale = 0.0F;   ///< chromatic dispersion strength; 0 = off
@@ -72,7 +74,7 @@ struct MaterialDesc {
     Vec3 coat_color{1.0F, 1.0F, 1.0F};
     float coat_roughness = 0.3F;
     float coat_roughness_anisotropy = 0.0F;
-    float coat_ior = 1.6F;       ///< OpenPBR v1.1.1 §coat default (1.6)
+    float coat_ior = 1.6F;       ///< OpenPBR v1.1.2 §coat default (1.6)
     float coat_darkening = 1.0F; ///< energy darkening at base/coat interface
 
     // ── fuzz / sheen ───────────────────────────────────────────────────────
@@ -82,22 +84,23 @@ struct MaterialDesc {
 
     // ── thin film ──────────────────────────────────────────────────────────
     float thin_film_weight = 0.0F;
-    float thin_film_thickness = 500.0F; ///< nm; OpenPBR v1.1.1 §thin_film default 0.5 µm ///< nm; 0–2000 typical range
-    float thin_film_ior = 1.4F;         ///< OpenPBR v1.1.1 §thin_film default (1.4)
+    float thin_film_thickness = 500.0F; ///< nm; OpenPBR v1.1.2 §thin_film default 0.5 µm ///< nm; 0–2000 typical range
+    float thin_film_ior = 1.4F;         ///< OpenPBR v1.1.2 §thin_film default (1.4)
 
     // ── emission ───────────────────────────────────────────────────────────
     Vec3 emission_color{1.0F, 1.0F, 1.0F};
     float emission_luminance = 0.0F;
     bool emission_as_light_source = true; ///< false = visible emission only (skip NEE/light synthesis)
 
-    // ── subsurface (OpenPBR Surface 1.1.1 names & types) ───────────────────
+    // ── subsurface (OpenPBR Surface 1.1.2 names & types) ───────────────────
     float subsurface_weight = 0.0F;
     Vec3 subsurface_color{0.8F, 0.8F, 0.8F};
-    float subsurface_radius = 1.0F;                  ///< scalar mean-free-path length (OpenPBR float, default 1.0)
+    float subsurface_radius = 1.0F;                  ///< scalar mean-free-path length (OpenPBR float, default 1.0;
+                                                     ///< 1.1.2 #331: default unit cm unless metadata overrides)
     Vec3 subsurface_radius_scale{1.0F, 0.5F, 0.25F}; ///< per-channel RGB MFP multiplier (OpenPBR color3)
     float subsurface_scatter_anisotropy = 0.0F;      ///< HG mean cosine g ∈ [-1,1]
 
-    // ── geometry (OpenPBR Surface 1.1.1 names) ─────────────────────────────
+    // ── geometry (OpenPBR Surface 1.1.2 names) ─────────────────────────────
     float geometry_opacity = 1.0F;
     bool geometry_thin_walled = false; ///< double-sided infinitesimally-thin shell
 

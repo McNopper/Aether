@@ -21,7 +21,7 @@ flowchart LR
     H --> T["Theia<br/>real-time · games-grade"]
 ```
 
-The family's material standard is OpenPBR: currently **1.1.1**, bumping to **1.1.2** (patch) on its release via C16 in `Harmonia/PLAN.md`; the **1.2** minor spec is a separate later track (C15). After the 1.1.2 bump, older versions are unsupported by declaration, with Theia converging to
+The family's material standard is OpenPBR: currently **1.1.2** (the patch bump landed 2026-11-15 via C16 in `Harmonia/PLAN.md` — older 1.1.x versions are unsupported by declaration); the **1.2** minor spec is a separate later track (C15). Theia converges to
 Hyperion's unbiased ground truth. Aether carries the scene/material/mesh **data** and the authoring
 tools — never renderer code, never Vulkan. Sibling plans: `Harmonia/PLAN.md`,
 `Hyperion/PLAN.md`, `Theia/PLAN.md`, `slang-math/PLAN.md` in the sibling clones.

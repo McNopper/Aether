@@ -2,7 +2,7 @@
 #
 # Both shaderballs carry the SAME hero material, CheckerBall, which declares a
 # checkerboard opacity texture on the **material** (`map_opacity =
-# checker_opacity.png`). The opacity mask is an OpenPBR Surface 1.1.1 geometry
+# checker_opacity.png`). The opacity mask is an OpenPBR Surface 1.1.2 geometry
 # feature (`geometry_opacity` connected to an image) — it works on its own in
 # every renderer, and the Vulkan opacity micromap is only an ACCELERATION of the
 # same decision:

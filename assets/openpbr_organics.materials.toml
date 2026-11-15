@@ -2,7 +2,7 @@
 # 
 # Source: AcademySoftwareFoundation/OpenPBR examples (open_pbr_*.mtlx)
 # Materials with subsurface scattering, thin-film, or fuzz lobes.
-# subsurface_radius_scale is the per-channel scatter-radius multiplier; subsurface_radius is the scalar mean-free-path (OpenPBR 1.1.1).
+# subsurface_radius_scale is the per-channel scatter-radius multiplier; subsurface_radius is the scalar mean-free-path (OpenPBR 1.1.2).
 # Color values are linear Rec.709; Hyperion converts to linear Rec.2020 on load.
 # 
 # Standard MTL keywords (Kd, Ks, Ka, …) are SILENTLY IGNORED.

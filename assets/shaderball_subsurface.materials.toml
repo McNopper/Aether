@@ -3,7 +3,7 @@
 # Row 0 sweeps subsurface_weight on a fixed skin-tone base; row 1 shows named
 # organic materials at full subsurface_weight.
 # subsurface_radius_scale is the per-channel scatter-radius multiplier;
-# subsurface_radius is the scalar mean-free-path (OpenPBR 1.1.1).
+# subsurface_radius is the scalar mean-free-path (OpenPBR 1.1.2; default unit cm per #331).
 # Source: AcademySoftwareFoundation/OpenPBR examples (open_pbr_*.mtlx).
 # Color values are linear Rec.709; Hyperion/Theia convert to linear Rec.2020 on load.
 #

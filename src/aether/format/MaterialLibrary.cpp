@@ -12,7 +12,7 @@
 namespace aether {
 namespace {
 
-/// Map an OpenPBR Surface 1.1.1 keyword to the texture-slot struct field that
+/// Map an OpenPBR Surface 1.1.2 keyword to the texture-slot struct field that
 /// holds it. Scalar/color material parameters use the **verbatim OpenPBR field
 /// name** (no translation, no abbreviation); only the `geometry_*` normal/tangent
 /// *vector* inputs are realised as the renderer's texture-map slots, so just

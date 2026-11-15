@@ -31,7 +31,7 @@ CPU structs; consumers (Harmonia and the renderers) handle all GPU upload.
 | Parses | Into |
 |--------|------|
 | `<name>.scene.toml` (TOML scene description) | `aether::SceneDesc` (camera, render settings, env, tonemapper, post-tonemap renderer, geometry blocks with TRS + material refs, node graph with compounded TRS, material-library references) |
-| `<name>.materials.toml` (TOML OpenPBR material library) | `aether::MaterialDesc` (OpenPBR Surface v1.1.1 parameters + texture references) |
+| `<name>.materials.toml` (TOML OpenPBR material library) | `aether::MaterialDesc` (OpenPBR Surface v1.1.2 parameters + texture references) |
 | Wavefront OBJ (geometry only — **triangles only**; OBJ material directives ignored) | `aether::MeshData` / `aether::MeshGroup` (deduplicated vertices + indices, local space) |
 
 Geometry stays in OBJ (bulk vertex/index data); every other element — scene, camera,
@@ -65,7 +65,7 @@ Aether deliberately takes the best of both and stays small and **agentic-friendl
   container (glTF's buffers, but simpler and ubiquitous), kept separate from the text.
 * **Lightweight composition** — scene/camera/render/tonemap presets referenced and
   overridden (a small nod to USD layering) without USD's machinery.
-* **OpenPBR verbatim** — material parameters use the exact OpenPBR Surface 1.1.1 names,
+* **OpenPBR verbatim** — material parameters use the exact OpenPBR Surface 1.1.2 names,
   rather than glTF's or USD's own material models, so nothing is lost in translation.
 
 The result: files small enough to diff and hand-edit, structured enough to compose, and
@@ -151,7 +151,7 @@ faithful to OpenPBR — the sweet spot glTF and USD each sit to one side of.
   share `presets/cornell.camera.toml` and `presets/preview.render.toml`). References resolve
   relative to the scene directory.
 * **Materials** (`<name>.materials.toml`): one TOML table per material (keyed by name), using
-  [OpenPBR Surface v1.1.1](https://academysoftwarefoundation.github.io/OpenPBR/) parameter names
+  [OpenPBR Surface v1.1.2](https://academysoftwarefoundation.github.io/OpenPBR/) parameter names
   verbatim; optional top-level `colorspace` and `model` (default `"openpbr"` — the material
   model tag, anticipating additional material models in the future). Texture bindings use
   Aether's `map_*` keys.
@@ -212,7 +212,7 @@ Hyperion, Theia and Harmonia pull Aether via CMake `FetchContent` and link the
 The material model follows the OpenPBR Surface specification; MaterialX is the
 canonical node reference used by the `tools/` MaterialX→TOML converter.
 
-* **OpenPBR Surface v1.1.1** — Academy Software Foundation.
+* **OpenPBR Surface v1.1.2** — Academy Software Foundation.
   <https://academysoftwarefoundation.github.io/OpenPBR/> ·
   [reference repo](https://github.com/AcademySoftwareFoundation/OpenPBR)
 * **MaterialX** — specification and node library (OpenPBR `open_pbr_surface`).
