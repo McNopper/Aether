@@ -30,3 +30,21 @@ Hyperion v0.8.0 consume.
 
 ## Release mechanics
 - Local commits only: **tag `v0.9.0` and push commits + tag together** (consumer pins move to it).
+
+## Also in this release (added after the notes assembly)
+
+- **Blender deformation export** (blender_to_aether v1.4.0): armature bones as
+  `<arm>::<bone>` NH1 nodes, `[[skin]]` (top-4 same-named vertex-group
+  weights, `blend = "lbs" | "dqs"`), `[[morph]]` shape-key deltas +
+  `morphs/<mesh>/<key>` weight tracks - rows expanded in ObjImporter's
+  deduplicated import order (6 face corners -> 4 imported vertices), pinned by
+  `tests/test_blender_roundtrip.cpp` against committed fixtures (commit 603042c).
+- **ANI8 camera-from-node** (v1.5.0): `[camera] node = "<id>"` +
+  `SceneAnimator::evaluateCamera(AtTick)`; camera-node locals PRE-multiplied
+  (`CONV @ R`) so `forward = rotation * (0, 0, -1)` is the true aim; example
+  scenes `camera_orbit` / `skinned_orbit` with the `--frame` seek chain
+  (commit bc8e4eb).
+- **Gathered MaterialX OpenPBR materials**: the ten official MaterialX
+  `OpenPbr` examples, flat-verified (zero nodegraphs), merged into
+  `assets/openpbr_mtlx.materials.toml` + the `openpbr_mtlx` showcase scene;
+  converter goldens 17/17 (commit 9ee4e7a).
