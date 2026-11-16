@@ -272,6 +272,49 @@ correct:
   too. A camera parented to ANOTHER camera breaks the telescoping product and
   is not supported (documented).
 
+### Scene-level options, metadata and bindings (1.6.0)
+
+* **Config keys, never material data.** `samples_per_pixel`, `max_depth`,
+  `working_color_space`, `environment_map`, `environment_unit_nits` write
+  inline `[render]` keys, `tonemapper` writes `[tonemap] tonemapper`,
+  `post_tonemap_renderer` / `post_tonemap_reference` write `[post_tonemap]`,
+  and `meta_title` / `meta_description` write `[meta]` (`meta_title` defaults
+  to the scene filename stem, so every export carries a title). Inline keys
+  **override** the `render_reference` / `tonemap_reference` presets ("local
+  wins"); unset values (0 / empty / `omit`) are not written at all. Blender
+  **materials are never converted** - they are not OpenPBR and may carry
+  arbitrary node graphs; material assignment stays name-binding only, authored
+  in TOML.
+* **Multi-material meshes = per-group NAME bindings.** An object with more
+  than one material slot exports its OBJ with `usemtl` group lines (the
+  sidecar `.mtl` is dropped - Aether ignores `mtllib` and treats `usemtl`
+  purely as the group boundary) and the node carries
+  `materials = { "<group>" = "<name>" }` identity bindings next to the
+  single `material` fallback. Single-slot objects keep the plain
+  `material = "<name>"` binding.
+* **Mesh bounds (BV1).** Every OBJ mesh block gets
+  `bounds = { min = [...], max = [...] }` - the object-space AABB computed
+  from the exported file (post axis-conversion, post modifiers), so the
+  renderers cull instead of re-deriving.
+* **META2 node context.** Custom properties on any object: `description`
+  (string) -> `[[node]] description`, and `tags` (comma-separated string or
+  list) -> `[[node]] tags` - agent-legible context that never affects
+  rendering.
+* **Skeletal pose-bone animation.** `pose.bones["<bone>"].<channel>` F-curves
+  (the skeletal animation authored in Blender) export as whole-parameter ANI1
+  tracks on the `<arm>::<bone>` nodes: each key composes the pose basis onto
+  the bone's rest local (`t + R * swizzle(t)`, `q_rest (x) conjugate(q)`,
+  `s * swizzle(s)`), which is exact because the maps are linear per channel
+  group and left quaternion multiplication commutes with slerp and the Hermite
+  basis - so Aether's interpolation reproduces `rest (x) interpolate(basis)`
+  (Blender-verified formula, tested against Blender's own depsgraph-evaluated
+  vertices in `BlenderRoundTrip.PoseBoneAnimationMatchesBlenderGroundTruth`).
+  Per parameter group all keyed components must share key frames and
+  interpolation modes (unkeyed components take their saved pose value);
+  otherwise the group is skipped with a warning - keys stay 1:1, never
+  sampled. Pose tracks are only emitted when the armature's bone nodes exist
+  (a skinned mesh referenced the armature).
+
 **Install:** copy `blender_to_aether/` into your Blender addons folder and
 enable *Aether Scene Exporter*, or run it headless:
 
@@ -283,7 +326,11 @@ blender --background --python-expr "import sys; sys.path.append('tools'); \
 
 **Export options:** `selected_only`, `include_camera`, `material_libraries`
 (comma-separated), `render_reference`, `tonemap_reference`, `camera_ev100`,
-`skin_blend` (`lbs` | `dqs` - the `[[skin]]` blend mode).
+`skin_blend` (`lbs` | `dqs` - the `[[skin]]` blend mode), plus the scene-level
+format keys below: `samples_per_pixel`, `max_depth`, `working_color_space`,
+`environment_map`, `environment_unit_nits`, `tonemapper`,
+`post_tonemap_renderer`, `post_tonemap_reference`, `meta_title`,
+`meta_description`.
 
 ---
 
@@ -548,7 +595,7 @@ and exports them through the addon - the NH4 verification oracle:
 ```text
 blender --background --python tools/test_scenes.py -- \
         --scene hierarchy|animated|simple|instancing|skinned|skinned_dqs| \
-             camera_orbit|skinned_orbit --out <dir>
+             camera_orbit|skinned_orbit|feature_matrix|skinned_pose --out <dir>
 ```
 
 Each run writes `<scene>.scene.toml` plus `<scene>.expected.json`
@@ -563,13 +610,20 @@ weight track). `camera_orbit` (static cube + orbiting camera) and
 `skinned_orbit` (the skinned fixture + the same orbit rig) exercise the
 ANI8 camera contract: they turn on `include_camera` (the `[camera] node`
 binding) and take the meadow IBL preset - factory-empty scenes carry no
-lights, so a direct-light-only preset would render black.
+lights, so a direct-light-only preset would render black. `feature_matrix`
+exercises the 1.6.0 surface (META2 description/tags, a two-slot material
+object with usemtl groups, computed bounds, and every scene-level inline
+option) and `skinned_pose` the pose-bone path (root location + child euler
+rotation keys), including Blender's depsgraph-evaluated vertices at frames 0
+and 30 as the ground-truth oracle in `_pose_truth`.
 
-The two `skinned` exports are **committed as fixtures** (`assets/skinned*.scene.toml`
-+ the shared `assets/SkinnedQuad.obj`; regenerate with the command above and
-re-copy) and consumed by `tests/test_blender_roundtrip.cpp` - the C++ suite
-that parses them with the real `ObjImporter`/`SceneParser` and proves the
-exporter's deformation rows match the importer's deduplicated vertex space.
+The committed fixtures (`assets/skinned*.scene.toml`,
+`assets/feature_matrix.scene.toml`, `assets/skinned_pose.scene.toml` + the
+shared OBJs; regenerate with the command above and re-copy) are consumed by
+`tests/test_blender_roundtrip.cpp` - the C++ suite that parses them with the
+real `ObjImporter`/`SceneParser` and proves the exporter's deformation rows
+match the importer's deduplicated vertex space, every scene-level key parses,
+and the pose tracks reproduce Blender's evaluated vertices.
 
 ## References
 

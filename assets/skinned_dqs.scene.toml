@@ -5,11 +5,13 @@ reference = "presets/preview.render.toml"
 reference = "presets/aces.tonemap.toml"
 
 [meta]
-generator = "blender_to_aether/1.4.0"
+generator = "blender_to_aether/1.6.0"
+title = "skinned_dqs.scene"
 
 [[mesh]]
 name = "SkinnedQuad"
 path = "SkinnedQuad.obj"
+bounds = { min = [0.0, 0.0, -1.0], max = [1.0, 0.0, 0.0] }
 
 [[node]]
 id = "Rig"

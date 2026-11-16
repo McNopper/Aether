@@ -1,0 +1,35 @@
+[render]
+reference = "presets/preview.render.toml"
+samples_per_pixel = 128
+max_depth = 5
+working_color_space = "lin_rec709_scene"
+environment_map = "meadow_2_4k.exr"
+environment_unit_nits = 10000.0
+
+[tonemap]
+reference = "presets/aces.tonemap.toml"
+tonemapper = "agx"
+
+[post_tonemap]
+renderer = "green_screen"
+
+[meta]
+generator = "blender_to_aether/1.6.0"
+title = "Feature Matrix"
+description = "Exporter feature-matrix fixture"
+
+[[mesh]]
+name = "FeatureCube"
+path = "FeatureCube.obj"
+bounds = { min = [-1.0, -1.0, -1.0], max = [1.0, 1.0, 1.0] }
+
+[[node]]
+id = "FeatureCube"
+translate = [0.0, 0.0, 0.0]
+rotate = [0.0, 0.0, 0.0, 1.0]
+scale = [1.0, 1.0, 1.0]
+mesh = "FeatureCube"
+material = "MatAlpha"
+materials = { MatAlpha = "MatAlpha", MatBeta = "MatBeta" }
+description = "Feature-matrix cube (META2 node description)"
+tags = ["showcase", "feature-matrix"]

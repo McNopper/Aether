@@ -7,7 +7,9 @@
 # Usage (headless):
 #   blender --background --python tools/test_scenes.py -- --scene <name> --out <dir>
 #   (scene names: hierarchy | animated | simple | instancing; repeatable runs
-#   skinned | skinned_dqs | camera_orbit | skinned_orbit; repeatable runs
+#   skinned | skinned_dqs | camera_orbit | skinned_orbit | feature_matrix |
+#   skinned_pose;
+#   repeatable runs
 #    are deterministic - same scene name, same output bytes)
 #
 # The addon (tools/blender_to_aether) is imported from this script's directory
@@ -20,6 +22,7 @@ import sys
 from pathlib import Path
 
 import bpy
+import mathutils
 from mathutils import Matrix, Vector
 
 TOOL_DIR = str(Path(__file__).resolve().parent)
@@ -282,6 +285,88 @@ def build_skinned_orbit():
     _orbit_rig()
     return out
 
+def build_feature_matrix():
+    """Exporter feature matrix (blender_to_aether 1.6.0): every format key
+    beyond the core node/animation path - META2 node description + tags (Blender
+    custom properties), a two-slot material object (per-group `materials` name
+    map + usemtl groups in the OBJ - NAME bindings only, Blender materials are
+    never converted), the computed mesh bounds (BV1 AABB), and the scene-level
+    [render]/[tonemap]/[post_tonemap]/[meta] inline options passed via
+    SCENE_OPS. Materials here are bare NAMES (no parameters) on purpose."""
+    _clear_scene()
+    bpy.context.scene.render.fps = 30
+
+    cube = _add_cube("FeatureCube")
+    cube["description"] = "Feature-matrix cube (META2 node description)"
+    cube["tags"] = " showcase, feature-matrix "
+    cube.data.materials.append(bpy.data.materials.new("MatAlpha"))
+    cube.data.materials.append(bpy.data.materials.new("MatBeta"))
+    for polygon in cube.data.polygons:
+        polygon.material_index = polygon.index % 2
+
+    return {"meshed": ["FeatureCube"]}
+
+def build_skinned_pose():
+    """Skeletal pose-bone animation fixture (the Blender side of the pose
+    export): the two-bone rig + blocky-weighted quad (NO shape keys, so the
+    expected deformation is exact), with POSE-bone channels keyed - the root's
+    location (0 -> 0.5 along the bone over frames 1..30) and the child's euler
+    rotation (0 -> 90 degrees about local X over frames 1..30). The pose is
+    reset to rest after keying so the exported OBJ stays at the bind pose
+    (Blender evaluates the armature modifier with the CURRENT pose). The
+    expectations carry Blender's own depsgraph-evaluated vertices at frames 0
+    and 30 (in the Aether frame) - the ground truth the C++ round-trip compares
+    the exported pipeline against."""
+    _clear_scene()
+    bpy.context.scene.render.fps = 30
+
+    bpy.ops.object.armature_add(location=(0.0, 0.0, 0.0))
+    arm = bpy.context.active_object
+    arm.name = "Rig"
+    arm.data.name = "RigBones"
+    bpy.ops.object.mode_set(mode="EDIT")
+    root = arm.data.edit_bones["Bone"]
+    root.name = "Bone.Root"
+    root.head = (0.0, 0.0, 0.0)
+    root.tail = (0.0, 0.0, 1.0)
+    child = arm.data.edit_bones.new("Bone.Child")
+    child.head = (0.0, 0.0, 1.0)
+    child.tail = (0.0, 0.0, 2.0)
+    child.parent = root
+    child.use_connect = True
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    mesh = bpy.data.meshes.new("SkinnedQuad")
+    verts = [(0.0, 0.0, 0.0), (0.0, 1.0, 0.0), (1.0, 1.0, 0.0), (1.0, 0.0, 0.0)]
+    mesh.from_pydata(verts, [], [(0, 1, 2), (0, 2, 3)])
+    mesh.update()
+    obj = bpy.data.objects.new("SkinnedQuad", mesh)
+    bpy.context.collection.objects.link(obj)
+    lower = obj.vertex_groups.new(name="Bone.Root")
+    lower.add([0, 1], 1.0, "REPLACE")
+    upper = obj.vertex_groups.new(name="Bone.Child")
+    upper.add([2, 3], 1.0, "REPLACE")
+    modifier = obj.modifiers.new("Armature", "ARMATURE")
+    modifier.object = arm
+
+    # POSE-bone channels (data_path pose.bones["<name>"].<channel>).
+    pose_root = arm.pose.bones["Bone.Root"]
+    pose_root.location = (0.0, 0.0, 0.0)
+    pose_root.keyframe_insert(data_path="location", frame=1)
+    pose_root.location = (0.0, 0.5, 0.0)  # along the bone (Blender local Y)
+    pose_root.keyframe_insert(data_path="location", frame=30)
+    pose_root.location = (0.0, 0.0, 0.0)
+
+    pose_child = arm.pose.bones["Bone.Child"]
+    pose_child.rotation_mode = "XYZ"
+    pose_child.rotation_euler = (0.0, 0.0, 0.0)
+    pose_child.keyframe_insert(data_path="rotation_euler", frame=1)
+    pose_child.rotation_euler = (math.radians(90.0), 0.0, 0.0)
+    pose_child.keyframe_insert(data_path="rotation_euler", frame=30)
+    pose_child.rotation_euler = (0.0, 0.0, 0.0)
+
+    return {"meshed": ["SkinnedQuad"], "pose_frames": [0, 30]}
+
 
 SCENES = {
     "hierarchy": build_hierarchy,
@@ -292,6 +377,8 @@ SCENES = {
     "skinned_dqs": build_skinned,
     "camera_orbit": build_camera_orbit,
     "skinned_orbit": build_skinned_orbit,
+    "feature_matrix": build_feature_matrix,
+    "skinned_pose": build_skinned_pose,
 }
 
 # Extra operator kwargs per scene (skin_blend rides the exporter option so the
@@ -308,6 +395,19 @@ SCENE_OPS = {
     "skinned_orbit": {
         "include_camera": True,
         "render_reference": "presets/meadow_64spp_8bounce.render.toml",
+    },
+    # Scene-level inline options: they OVERRIDE the preset reference (local
+    # wins), which the round-trip test asserts key by key.
+    "feature_matrix": {
+        "samples_per_pixel": 128,
+        "max_depth": 5,
+        "working_color_space": "lin_rec709_scene",
+        "environment_map": "meadow_2_4k.exr",
+        "environment_unit_nits": 10000.0,
+        "tonemapper": "agx",
+        "post_tonemap_renderer": "green_screen",
+        "meta_title": "Feature Matrix",
+        "meta_description": "Exporter feature-matrix fixture",
     },
 }
 
@@ -344,6 +444,26 @@ def main() -> int:
             "world": [list(row) for row in _world_of(obj)],
             "parent": obj.parent.name if obj.parent else "",
         }
+    if "pose_frames" in expected:
+        # Blender ground truth: evaluate the armature modifier at each frame
+        # (depsgraph) and write the vertex positions CONV-ed into the Aether
+        # frame - the oracle the C++ round-trip compares against.
+        scene = bpy.context.scene
+        saved_frame = scene.frame_current
+        mesh_obj = bpy.data.objects[expected["meshed"][0]]
+        truth: dict[str, list[list[float]]] = {}
+        for frame in expected["pose_frames"]:
+            scene.frame_set(frame)
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            evaluated = mesh_obj.evaluated_get(depsgraph)
+            evaluated_mesh = evaluated.to_mesh()
+            truth[str(frame)] = [
+                list(CONV @ mathutils.Vector(vertex.co)) for vertex in evaluated_mesh.vertices
+            ]
+            evaluated.to_mesh_clear()
+        scene.frame_set(saved_frame)
+        expectations["_pose_truth"] = truth
+
     if "deformation" in expected:
         deformation = dict(expected["deformation"])
         with open(scene_path, encoding="utf-8") as handle:

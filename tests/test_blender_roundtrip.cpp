@@ -262,3 +262,136 @@ TEST(BlenderRoundTrip, MorphWeightTrackDrivesDeform) {
     EXPECT_NEAR(out->positions[0].y, mesh.vertices[0].position.y, kEps);
     EXPECT_NEAR(out->positions[1].y, mesh.vertices[1].position.y, kEps);
 }
+
+TEST(BlenderRoundTrip, FeatureMatrixExportsEveryFormatKey) {
+    // blender_to_aether 1.6.0 feature matrix: every format key beyond the
+    // core node/animation path, asserted key by key through the real parser
+    // against the committed fixture (assets/feature_matrix.scene.toml).
+    const auto scene = aether::SceneParser::parse(assetsDir() / "feature_matrix.scene.toml");
+    ASSERT_TRUE(scene.has_value());
+
+    // [render] inline keys override the preset reference ("local wins").
+    ASSERT_TRUE(scene->spp.has_value());
+    EXPECT_EQ(*scene->spp, 128U);
+    ASSERT_TRUE(scene->maxDepth.has_value());
+    EXPECT_EQ(*scene->maxDepth, 5U);
+    ASSERT_TRUE(scene->workingColorSpace.has_value());
+    EXPECT_EQ(*scene->workingColorSpace, "lin_rec709_scene");
+    ASSERT_TRUE(scene->envMapFile.has_value());
+    EXPECT_EQ(*scene->envMapFile, "meadow_2_4k.exr");
+    ASSERT_TRUE(scene->envUnitNits.has_value());
+    EXPECT_FLOAT_EQ(*scene->envUnitNits, 10000.0F);
+
+    // [tonemap] / [post_tonemap]
+    ASSERT_TRUE(scene->tonemapper.has_value());
+    EXPECT_EQ(*scene->tonemapper, "agx");
+    ASSERT_TRUE(scene->postTonemapRenderer.has_value());
+    EXPECT_EQ(*scene->postTonemapRenderer, "green_screen");
+
+    // [meta] provenance
+    ASSERT_TRUE(scene->meta.has_value());
+    EXPECT_EQ(scene->meta->title, "Feature Matrix");
+    EXPECT_EQ(scene->meta->description, "Exporter feature-matrix fixture");
+    EXPECT_NE(scene->meta->generator.find("blender_to_aether"), std::string::npos);
+
+    // [[mesh]] BV1 bounds - object space of the exported OBJ (the cube is +-1)
+    ASSERT_EQ(scene->meshes.size(), 1U);
+    const aether::MeshDesc& mesh = scene->meshes[0];
+    ASSERT_TRUE(mesh.bounds.has_value());
+    EXPECT_FLOAT_EQ(mesh.bounds->min.x, -1.0F);
+    EXPECT_FLOAT_EQ(mesh.bounds->min.y, -1.0F);
+    EXPECT_FLOAT_EQ(mesh.bounds->min.z, -1.0F);
+    EXPECT_FLOAT_EQ(mesh.bounds->max.x, 1.0F);
+    EXPECT_FLOAT_EQ(mesh.bounds->max.y, 1.0F);
+    EXPECT_FLOAT_EQ(mesh.bounds->max.z, 1.0F);
+
+    // [[node]] META2 context + NAME-only material bindings (Blender material
+    // parameters are never converted - the map keys are the usemtl groups).
+    ASSERT_EQ(scene->nodes.size(), 1U);
+    const aether::NodeDesc& node = scene->nodes[0];
+    EXPECT_EQ(node.id, "FeatureCube");
+    EXPECT_EQ(node.description, "Feature-matrix cube (META2 node description)");
+    ASSERT_EQ(node.tags.size(), 2U);
+    EXPECT_EQ(node.tags[0], "showcase");
+    EXPECT_EQ(node.tags[1], "feature-matrix");
+    EXPECT_EQ(node.materialName, "MatAlpha");
+    ASSERT_EQ(node.groupMaterials.size(), 2U);
+    EXPECT_EQ(node.groupMaterials.at("MatAlpha"), "MatAlpha");
+    EXPECT_EQ(node.groupMaterials.at("MatBeta"), "MatBeta");
+}
+
+TEST(BlenderRoundTrip, PoseBoneAnimationMatchesBlenderGroundTruth) {
+    // Skeletal pose-bone export (blender_to_aether 1.6.0): the fixture keys
+    // pose.bones channels (root location, child euler rotation) and the
+    // exporter composes them onto each bone node's rest local. The expected
+    // vertices are BLENDER'S OWN depsgraph evaluation at frames 0 and 30
+    // (CONV'd into the Aether frame) as dumped by tools/test_scenes.py for
+    // the skinned_pose builder - the pose formula (Blender-verified:
+    // pose(child) = pose(parent) @ (rest(parent)^-1 @ rest(child)) @ basis)
+    // must reproduce them through parse -> evaluateSkinsAtTick ->
+    // deformSkinLbs.
+    const auto scene = aether::SceneParser::parse(assetsDir() / "skinned_pose.scene.toml");
+    ASSERT_TRUE(scene.has_value());
+    ASSERT_EQ(scene->skins.size(), 1U);
+
+    // Both composed whole-parameter pose tracks must exist.
+    bool hasTranslation = false;
+    bool hasRotation = false;
+    for (const aether::AnimationTrack& track : scene->animations) {
+        if (track.target == "nodes/Rig::Bone.Root/translation") {
+            hasTranslation = true;
+        }
+        if (track.target == "nodes/Rig::Bone.Child/rotation") {
+            hasRotation = true;
+        }
+    }
+    EXPECT_TRUE(hasTranslation) << "root location pose track missing";
+    EXPECT_TRUE(hasRotation) << "child rotation pose track missing";
+
+    const auto groups = aether::ObjImporter::parse(assetsDir() / "SkinnedQuad.obj");
+    ASSERT_TRUE(groups.has_value());
+    const aether::MeshData& mesh = groups->at(0).mesh;
+    ASSERT_EQ(mesh.vertices.size(), 4U);
+
+    std::string error;
+    const std::unordered_map<std::string, std::size_t> counts{{"SkinnedQuad", 4}};
+    ASSERT_TRUE(aether::validateSkinVertexCounts(*scene, counts, &error)) << error;
+
+    struct Truth {
+        float x, y, z;
+    };
+    // frame 0 (= rest) and frame 30 (= t 1 s: root +0.5 along the bone,
+    // child rotated 90 degrees about its local X) from Blender's evaluation.
+    const Truth rest[4] = {
+        {0.0F, 0.0F, 0.0F},
+        {0.0F, -4.37113883e-08F, -1.0F},
+        {1.0F, -4.37113883e-08F, -1.0F},
+        {1.0F, 0.0F, 0.0F},
+    };
+    const Truth posed[4] = {
+        {0.0F, 0.5F, -2.18556941e-08F},
+        {0.0F, 0.49999997F, -1.0F},
+        {1.0F, 2.5F, -1.0F},
+        {1.0F, 1.5F, -1.00000012F},
+    };
+
+    const auto checkTick = [&](std::uint64_t tick, const Truth* expected) {
+        const auto poses = aether::SceneAnimator::evaluateSkinsAtTick(*scene, tick);
+        ASSERT_EQ(poses.size(), 1U);
+        ASSERT_EQ(poses[0].skinMatrices.size(), 2U);
+        if (tick == 30) {
+            // The animation must actually move a joint (not stay at rest).
+            EXPECT_GT(std::abs(poses[0].skinMatrices[1][1][1] - 1.0F), 0.5F)
+                << "tick 30: child joint did not rotate";
+        }
+        const auto out = aether::deformSkinLbs(mesh, scene->skins[0], poses[0].skinMatrices);
+        ASSERT_TRUE(out.has_value());
+        for (std::size_t v = 0; v < 4; ++v) {
+            EXPECT_NEAR(out->positions[v].x, expected[v].x, 1.0e-3F) << "tick " << tick << " v" << v << " x";
+            EXPECT_NEAR(out->positions[v].y, expected[v].y, 1.0e-3F) << "tick " << tick << " v" << v << " y";
+            EXPECT_NEAR(out->positions[v].z, expected[v].z, 1.0e-3F) << "tick " << tick << " v" << v << " z";
+        }
+    };
+    checkTick(0, rest);
+    checkTick(30, posed);
+}

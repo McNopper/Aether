@@ -622,8 +622,8 @@ std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFi
     // the existence check has to run here, next to the other graph bindings).
     if (desc.camera.nodeId) {
         const std::string& want = *desc.camera.nodeId;
-        const auto it = std::find_if(desc.nodes.begin(), desc.nodes.end(),
-                                     [&want](const NodeDesc& node) { return node.id == want; });
+        const auto it = std::find_if(
+            desc.nodes.begin(), desc.nodes.end(), [&want](const NodeDesc& node) { return node.id == want; });
         if (it == desc.nodes.end()) {
             if (errorMessage != nullptr) {
                 *errorMessage = "camera references unknown node '" + want + "'";

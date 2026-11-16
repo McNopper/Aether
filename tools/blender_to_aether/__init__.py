@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Aether Scene Exporter",
     "author": "Aether Tools",
-    "version": (1, 5, 0),
+    "version": (1, 6, 0),
     "blender": (5, 2, 0),
     "location": "File > Export > Aether Scene (.scene.toml)",
     "description": "Export Blender scenes to Aether scene/animation/camera/OBJ files",
@@ -19,7 +19,7 @@ from typing import ClassVar
 from pathlib import Path
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty, FloatProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, StringProperty
 from bpy.types import Operator
 from bpy_extras.io_utils import ExportHelper
 from mathutils import Euler, Matrix, Quaternion, Vector
@@ -87,6 +87,9 @@ def _format_value(value) -> str:
         return _quote(value)
     if isinstance(value, Path):
         return _quote(str(value))
+    if isinstance(value, dict):
+        # TOML inline table: { k = v, ... } (the [[mesh]] bounds block).
+        return "{ " + ", ".join(f"{key} = {_format_value(v)}" for key, v in value.items()) + " }"
     if isinstance(value, Sequence):
         return "[" + ", ".join(_format_value(item) for item in value) + "]"
     raise TypeError(f"Unsupported TOML value: {type(value)!r}")
@@ -125,7 +128,38 @@ def _select_only(objects: Iterable[bpy.types.Object]) -> None:
         obj.select_set(True)
 
 
-def _export_obj_file(obj: bpy.types.Object, obj_path: Path) -> None:
+def _obj_bounds(obj_path: Path) -> tuple[list[float], list[float]] | None:
+    """Object-space AABB (BV1) of the exported OBJ - min/max over its `v`
+    lines. Computed from the FILE (post axis-conversion, post modifiers) so the
+    bounds match the mesh object space the renderers cull in. None when the
+    file has no vertices."""
+    lo = [math.inf, math.inf, math.inf]
+    hi = [-math.inf, -math.inf, -math.inf]
+    seen = 0
+    try:
+        with open(obj_path, encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                if not line.startswith("v "):
+                    continue
+                parts = line.split()
+                if len(parts) < 4:
+                    continue
+                try:
+                    xyz = [float(parts[1]), float(parts[2]), float(parts[3])]
+                except ValueError:
+                    continue
+                seen += 1
+                for axis in range(3):
+                    lo[axis] = min(lo[axis], xyz[axis])
+                    hi[axis] = max(hi[axis], xyz[axis])
+    except OSError:
+        return None
+    if seen == 0:
+        return None
+    return [lo, hi]
+
+
+def _export_obj_file(obj: bpy.types.Object, obj_path: Path, export_materials: bool = False) -> None:
     prev_active = bpy.context.view_layer.objects.active
     prev_selected = [o for o in bpy.context.selected_objects]
     # Export the mesh in LOCAL space (not baked): temporarily clear the world
@@ -148,7 +182,10 @@ def _export_obj_file(obj: bpy.types.Object, obj_path: Path) -> None:
                 forward_axis="NEGATIVE_Z",
                 up_axis="Y",
                 path_mode="AUTO",
-                export_materials=False,
+                # Multi-slot objects need the usemtl group lines - they are the
+                # keys of the [[node]] materials map (single-slot objects keep
+                # the plain node-level material binding instead).
+                export_materials=export_materials,
                 apply_modifiers=True,
                 # Parity with aether::ObjImporter (triangles only) - the
                 # deformation row expansion re-reads this file's faces.
@@ -161,12 +198,25 @@ def _export_obj_file(obj: bpy.types.Object, obj_path: Path) -> None:
                 axis_forward="-Z",
                 axis_up="Y",
                 path_mode="AUTO",
-                use_materials=False,
+                use_materials=export_materials,
                 use_mesh_modifiers=True,
                 use_triangulation=True,
             )
         else:
             raise RuntimeError("No OBJ exporter is available in this Blender build")
+        if export_materials:
+            # The usemtl lines are all Aether needs (ObjImporter treats them as
+            # group boundaries and ignores materials by design). The sidecar
+            # .mtl is Blender's non-OpenPBR dump - materials are authored in
+            # TOML, so the file is dropped and its dangling mtllib line removed.
+            mtl_path = obj_path.with_suffix(".mtl")
+            if mtl_path.exists():
+                mtl_path.unlink()
+            text = obj_path.read_text(encoding="utf-8", errors="replace")
+            filtered = "".join(
+                line for line in text.splitlines(keepends=True) if not line.startswith("mtllib ")
+            )
+            obj_path.write_text(filtered, encoding="utf-8", newline="")
     finally:
         obj.matrix_world = saved_matrix
         bpy.context.view_layer.update()
@@ -290,8 +340,32 @@ def _node_block(
     block["scale"] = [scale.x, scale.y, scale.z]
     if mesh_name is not None:
         block["mesh"] = mesh_name
-        if obj.active_material:
+        slots = [m for m in obj.data.materials if m is not None]
+        if len(slots) > 1:
+            # NAME-only bindings (NEVER parameters - Blender materials are not
+            # OpenPBR and are deliberately not converted, see tools/README):
+            # the per-group map keys are the OBJ usemtl group names, which are
+            # exactly the Blender material-slot names.
+            block["material"] = (
+                obj.active_material.name if obj.active_material else slots[0].name
+            )
+            block["materials"] = {m.name: m.name for m in slots}
+        elif obj.active_material:
             block["material"] = obj.active_material.name
+    # META2 (agent-legible context, never affects rendering): custom property
+    # `description` (string) and `tags` (comma-separated string or list).
+    raw_description = obj.get("description")
+    if isinstance(raw_description, str) and raw_description.strip():
+        block["description"] = raw_description.strip()
+    raw_tags = obj.get("tags")
+    if raw_tags:
+        tag_list = (
+            [tag.strip() for tag in raw_tags.split(",") if tag.strip()]
+            if isinstance(raw_tags, str)
+            else [str(tag) for tag in raw_tags]
+        )
+        if tag_list:
+            block["tags"] = tag_list
     return block
 
 
@@ -970,21 +1044,49 @@ def _write_scene_toml(
     tonemap_reference: str | None,
     skins: list[dict[str, object]] | None = None,
     morphs: list[dict[str, object]] | None = None,
+    render_keys: dict[str, object] | None = None,
+    tonemap_keys: dict[str, object] | None = None,
+    post_tonemap_reference: str | None = None,
+    post_tonemap_keys: dict[str, object] | None = None,
+    meta_keys: dict[str, object] | None = None,
 ) -> None:
     lines: list[str] = []
     if material_libraries:
         lines.append(f'material_libraries = [{", ".join(_quote(item) for item in material_libraries)}]')
         lines.append("")
-    if render_reference:
-        lines.extend(["[render]", f"reference = {_quote(render_reference)}", ""])
+    # Inline keys OVERRIDE the referenced preset (the parser applies the
+    # reference first, then the local keys - "local wins").
+    if render_reference or render_keys:
+        lines.append("[render]")
+        if render_reference:
+            lines.append(f"reference = {_quote(render_reference)}")
+        for key, value in (render_keys or {}).items():
+            lines.append(f"{key} = {_format_value(value)}")
+        lines.append("")
     if camera_reference:
         lines.extend(["[camera]", f"reference = {_quote(camera_reference)}", ""])
-    if tonemap_reference:
-        lines.extend(["[tonemap]", f"reference = {_quote(tonemap_reference)}", ""])
+    if tonemap_reference or tonemap_keys:
+        lines.append("[tonemap]")
+        if tonemap_reference:
+            lines.append(f"reference = {_quote(tonemap_reference)}")
+        for key, value in (tonemap_keys or {}).items():
+            lines.append(f"{key} = {_format_value(value)}")
+        lines.append("")
+    if post_tonemap_reference or post_tonemap_keys:
+        lines.append("[post_tonemap]")
+        if post_tonemap_reference:
+            lines.append(f"reference = {_quote(post_tonemap_reference)}")
+        for key, value in (post_tonemap_keys or {}).items():
+            lines.append(f"{key} = {_format_value(value)}")
+        lines.append("")
     if meshes or nodes:
         # Provenance for agents reading the file: which tool wrote it. Only
         # when the scene has content (an empty export stays headerless).
-        lines.extend(["[meta]", f'generator = {_quote(_generator_field())}', ""])
+        lines.append("[meta]")
+        lines.append(f"generator = {_quote(_generator_field())}")
+        for key, value in (meta_keys or {}).items():
+            lines.append(f"{key} = {_format_value(value)}")
+        lines.append("")
     for mesh in meshes:
         lines.append("[[mesh]]")
         for key, value in mesh.items():
@@ -1023,6 +1125,254 @@ def _write_scene_toml(
 
 
 # ════════════════════════════════════════════════════════════════════════════
+# Skeletal pose-bone animation export (blender_to_aether 1.6.0):
+#   Blender `pose.bones["<bone>"].<channel>` F-curves (the skeletal animation
+#   an animator authors) become whole-parameter ANI1 tracks on the exported
+#   bone nodes. A bone node's animated local is rest_local @ matrix_basis(t)
+#   (glTF-style pose composition), which is EXACTLY expressible per key:
+#     translation = t_rest + R_rest * swizzle(t_basis)
+#     rotation    = q_rest (x) conjugate(q_basis)
+#     scale       = s_rest * swizzle(s_basis)
+#   because the maps are linear (affine) in each channel group - and left
+#   quaternion multiplication commutes with BOTH slerp and the Hermite basis,
+#   so Aether's interpolation of the composed keys reproduces
+#   rest (x) interpolate(basis) exactly (tangents map through the same linear
+#   map; the euler path central-differences the composed map like the object
+#   path does). Per parameter group all KEYED components must share key frames
+#   and interpolation modes (unkeyed components take their saved pose value);
+#   otherwise the group is skipped with a warning - the NH4b never-sample
+#   contract holds: keys stay 1:1 with Blender's.
+# ════════════════════════════════════════════════════════════════════════════
+
+_POSE_PATH = re.compile(r'pose\.bones\["([^"]+)"\]\.(location|rotation_euler|rotation_quaternion|scale)$')
+
+
+def _all_action_fcurves(animation_data: bpy.types.AnimData, obj_name: str, warnings: list[str]):
+    # Blender 4.4+ slotted actions keep pose channels in a DIFFERENT slot than
+    # the object transform, so every channelbag of the first layer is scanned
+    # (the object-TRS path keeps using its own slot via _action_fcurves).
+    action = animation_data.action
+    layers = getattr(action, "layers", None)
+    if layers:
+        if len(layers) > 1:
+            warnings.append(f"{obj_name}: layered action - only the first layer's pose F-curves are exported")
+        curves: list[bpy.types.FCurve] = []
+        for strip in layers[0].strips:
+            channelbags = getattr(strip, "channelbags", None)
+            if channelbags:
+                for bag in channelbags:
+                    curves.extend(bag.fcurves)
+        return curves
+    fcurves = getattr(action, "fcurves", None)
+    return list(fcurves) if fcurves else []
+
+
+def _left_compose_rotation(rest_xyzw, quat_xyzw):
+    """q_rest (x) q - Hamilton product with both quaternions in (x, y, z, w)."""
+    left = (rest_xyzw[3], rest_xyzw[0], rest_xyzw[1], rest_xyzw[2])
+    right = (quat_xyzw[3], quat_xyzw[0], quat_xyzw[1], quat_xyzw[2])
+    out = _quat_product(left, right)
+    return [out[1], out[2], out[3], out[0]]
+
+
+def _pose_tracks(
+    arm: "bpy.types.Object",
+    arm_exported: bool,
+    fps: float,
+    warnings: list[str],
+    warned_modes: set[str],
+) -> list[dict[str, object]]:
+    """Skeletal pose-bone animation: compose `pose.bones[...]` channels onto
+    each bone node's rest local (see the section comment) and emit the result
+    as whole-parameter ANI1 tracks through the shared _run_tracks machinery."""
+    animation_data = arm.animation_data
+    if animation_data is None or animation_data.action is None:
+        return []
+    if len(animation_data.nla_tracks):
+        warnings.append(f"{arm.name}: NLA tracks present - only the active action's pose F-curves are exported")
+
+    grouped: dict[tuple[str, str], dict[int, bpy.types.FCurve]] = {}
+    for fcurve in _all_action_fcurves(animation_data, arm.name, warnings):
+        match = _POSE_PATH.match(fcurve.data_path)
+        if match is None:
+            if fcurve.data_path.startswith("pose."):
+                warnings.append(f"{arm.name}: unsupported pose F-curve path '{fcurve.data_path}' (skipped)")
+            continue
+        grouped.setdefault((match.group(1), match.group(2)), {})[fcurve.array_index] = fcurve
+
+    tracks: list[dict[str, object]] = []
+    rotation_exported: set[str] = set()
+    for (bone_name, param), components in grouped.items():
+        bone = arm.data.bones.get(bone_name)
+        pose_bone = arm.pose.bones.get(bone_name)
+        if bone is None or pose_bone is None:
+            warnings.append(f"{arm.name}: pose channel for unknown bone '{bone_name}' skipped")
+            continue
+
+        if param in ("rotation_euler", "rotation_quaternion"):
+            # The channel name carries the mode (the regex captures it whole).
+            quat_mode = param == "rotation_quaternion"
+            static = list(pose_bone.rotation_quaternion) if quat_mode else list(pose_bone.rotation_euler)
+            arity = 4 if quat_mode else 3
+            target_param = "rotation"
+            if bone_name in rotation_exported:
+                warnings.append(
+                    f"{arm.name}: pose.{bone_name} has both euler and quaternion rotation curves - "
+                    "only the first mode is exported"
+                )
+                continue
+            rotation_exported.add(bone_name)
+        elif param == "location":
+            quat_mode = False
+            static = list(pose_bone.location)
+            arity = 3
+            target_param = "translation"
+        else:  # scale
+            quat_mode = False
+            static = list(pose_bone.scale)
+            arity = 3
+            target_param = "scale"
+
+        keys_by_index: dict[int, list[dict[str, float]]] = {}
+        for index, fcurve in sorted(components.items()):
+            keys = _fcurve_keys(fcurve)
+            if keys is None:
+                warnings.append(
+                    f"{arm.name}.pose.{bone_name}.{param}[{index}]: keyless or invalid F-curve skipped"
+                )
+                continue
+            keys_by_index[index] = keys
+        if not keys_by_index:
+            continue
+        reference = min(keys_by_index)
+        frames = [key["frame"] for key in keys_by_index[reference]]
+        if any([key["frame"] for key in keys] != frames for keys in keys_by_index.values()):
+            warnings.append(
+                f"{arm.name}: pose.{bone_name}.{param} components have mismatched key times - "
+                "group skipped (composition needs aligned keys, no sampling)"
+            )
+            continue
+        modes = [point.interpolation for point in components[reference].keyframe_points]
+        if any(
+            [point.interpolation for point in components[index].keyframe_points] != modes
+            for index in keys_by_index
+        ):
+            warnings.append(
+                f"{arm.name}: pose.{bone_name}.{param} components disagree on per-key interpolation - "
+                "group skipped"
+            )
+            continue
+
+        # Rows carry the RAW Blender values (unkeyed components take their
+        # saved-pose static, handles None -> zero tangent), exactly like the
+        # object whole-parameter path; the mappers below compose.
+        rows: list[dict[str, object]] = []
+        for position, frame in enumerate(frames):
+            values: list[float] = []
+            in_y: list[float | None] = []
+            out_y: list[float | None] = []
+            for index in range(arity):
+                key = keys_by_index[index][position] if index in keys_by_index else None
+                values.append(key["value"] if key is not None else float(static[index]))
+                in_y.append(key["in_y"] if key is not None else None)
+                out_y.append(key["out_y"] if key is not None else None)
+            rows.append({"frame": frame, "values": values, "in_y": in_y, "out_y": out_y})
+
+        rest = _bone_rest_local(arm, bone, arm_exported)
+        rest_t = rest.translation
+        rest_q = rest.to_quaternion()
+        rest_parts = [rest_q.x, rest_q.y, rest_q.z, rest_q.w]
+        rest_scale = rest.to_scale()
+        rot3 = rest.to_3x3()
+
+        if param == "location":
+
+            def to_value(components: Sequence[float]) -> list[float]:
+                swizzled = _swizzle_translation(list(components))
+                moved = rot3 @ Vector(swizzled)
+                return [rest_t.x + moved.x, rest_t.y + moved.y, rest_t.z + moved.z]
+
+            def to_tangent(components: Sequence[float], tangent: Sequence[float]) -> list[float]:
+                del components  # the map is affine: tangents see the linear part only
+                moved = rot3 @ Vector(_swizzle_translation(list(tangent)))
+                return [moved.x, moved.y, moved.z]
+
+        elif param == "scale":
+
+            def to_value(components: Sequence[float]) -> list[float]:
+                swizzled = _swizzle_scale(list(components))
+                return [rest_scale.x * swizzled[0], rest_scale.y * swizzled[1], rest_scale.z * swizzled[2]]
+
+            def to_tangent(components: Sequence[float], tangent: Sequence[float]) -> list[float]:
+                del components
+                swizzled = _swizzle_scale(list(tangent))
+                return [rest_scale.x * swizzled[0], rest_scale.y * swizzled[1], rest_scale.z * swizzled[2]]
+
+        elif quat_mode:
+
+            def to_value(components: Sequence[float]) -> list[float]:
+                w, x, y, z = components
+                norm = math.sqrt(w * w + x * x + y * y + z * z)
+                if norm == 0.0:
+                    conj = _conjugate_rotation(0.0, 0.0, 0.0, 1.0)
+                else:
+                    conj = _conjugate_rotation(x / norm, y / norm, z / norm, w / norm)
+                return _left_compose_rotation(rest_parts, conj)
+
+            def to_tangent(components: Sequence[float], tangent: Sequence[float]) -> list[float]:
+                del components  # linear map: no normalization on tangents
+                conj = _conjugate_rotation(tangent[1], tangent[2], tangent[3], tangent[0])
+                return _left_compose_rotation(rest_parts, conj)
+
+        else:  # euler rotation (Blender applies the angles in the pose mode's order)
+            euler_mode = pose_bone.rotation_mode
+
+            def quat_parts(angles: Sequence[float]) -> tuple[float, float, float, float]:
+                quat = Euler((angles[0], angles[1], angles[2]), euler_mode).to_quaternion()
+                return (quat.x, quat.y, quat.z, quat.w)
+
+            def compose(angles: Sequence[float]) -> list[float]:
+                conj = _conjugate_rotation(*quat_parts(angles))
+                return _left_compose_rotation(rest_parts, conj)
+
+            def to_value(components: Sequence[float]) -> list[float]:
+                return compose(list(components))
+
+            def to_tangent(components: Sequence[float], tangent: Sequence[float]) -> list[float]:
+                # Central difference of the COMPOSED map (same pattern as the
+                # object euler path - the composition is smooth in the angles).
+                h = 1e-4
+                derivative = [0.0, 0.0, 0.0, 0.0]
+                for index in range(3):
+                    plus = list(components)
+                    minus = list(components)
+                    plus[index] += h
+                    minus[index] -= h
+                    upper = compose(plus)
+                    lower = compose(minus)
+                    scale = 0.5 / h * float(tangent[index])
+                    derivative = [derivative[c] + (upper[c] - lower[c]) * scale for c in range(4)]
+                return derivative
+
+        target = f"nodes/{_bone_id(arm.name, bone_name)}/{target_param}"
+        tracks.extend(
+            _run_tracks(
+                target,
+                rows,
+                modes[:-1],
+                fps,
+                to_value,
+                to_tangent,
+                arity,
+                arm.name,
+                warnings,
+                warned_modes,
+            )
+        )
+    return tracks
+
+
+# ════════════════════════════════════════════════════════════════════════════
 # ANI4/ANI5 deformation export (blender_to_aether 1.4.0):
 #   * armature bones -> NH1 nodes (ids "<arm>::<bone>"; root bones parent to
 #     the armature object node, child bones to their parent bone; locals are
@@ -1055,6 +1405,19 @@ def _bone_parent_depth(bone: "bpy.types.Bone") -> int:
     return depth
 
 
+def _bone_rest_local(arm: "bpy.types.Object", bone: "bpy.types.Bone", arm_exported: bool) -> Matrix:
+    """The exported (CONV-conjugated) REST local of one bone - the bone node's
+    static TRS and the base every pose track composes onto. Root bones frame to
+    the armature object node when it is exported (its Aether world is always
+    CONV(arm.matrix_world), so the compound reproduces the armature-space rest
+    exactly); otherwise the armature world is baked like _node_block roots."""
+    if bone.parent is None:
+        raw = bone.matrix_local.copy() if arm_exported else arm.matrix_world @ bone.matrix_local
+    else:
+        raw = bone.parent.matrix_local.inverted() @ bone.matrix_local
+    return CONV @ raw @ CONV.inverted()
+
+
 def _armature_deform_setup(
     arm: "bpy.types.Object",
     arm_exported: bool,
@@ -1068,16 +1431,10 @@ def _armature_deform_setup(
     for bone in sorted(bones, key=_bone_parent_depth):
         parent_bone = bone.parent
         if parent_bone is None:
-            # Root bone: frame = the armature object's node when it is part of
-            # the export (its Aether world is always CONV(arm.matrix_world), so
-            # the compound below reproduces the armature-space rest exactly);
-            # otherwise bake the armature world like _node_block roots do.
             parent_id = arm.name if arm_exported else None
-            local = bone.matrix_local.copy() if arm_exported else arm.matrix_world @ bone.matrix_local
         else:
             parent_id = _bone_id(arm.name, parent_bone.name)
-            local = parent_bone.matrix_local.inverted() @ bone.matrix_local
-        local = CONV @ local @ CONV.inverted()
+        local = _bone_rest_local(arm, bone, arm_exported)
         location, rotation, scale = _decompose_checked(local, f"{arm.name}::{bone.name}", warnings)
         block: dict[str, object] = {"id": _bone_id(arm.name, bone.name)}
         if parent_id is not None:
@@ -1473,6 +1830,91 @@ class AetherSceneExporter(Operator, ExportHelper):
         default=12.0,
     )
 
+    # Scene-level format keys (config, not materials - Blender materials are
+    # never converted). Inline keys OVERRIDE the preset references ("local
+    # wins" in the Aether parser); 0 / empty / "omit" values are left out so
+    # the referenced preset decides.
+
+    samples_per_pixel: IntProperty(
+        name="Samples Per Pixel",
+        description="[render] samples_per_pixel (0 = omit, the preset decides)",
+        default=0,
+        min=0,
+    )
+
+    max_depth: IntProperty(
+        name="Max Depth",
+        description="[render] max_depth (0 = omit, the preset decides)",
+        default=0,
+        min=0,
+    )
+
+    working_color_space: EnumProperty(
+        name="Working Color Space",
+        description="[render] working_color_space (omit = the preset decides)",
+        items=(
+            ("omit", "From preset", "Do not write the key"),
+            ("lin_rec709_scene", "Linear Rec.709 scene", ""),
+            ("lin_rec2020_scene", "Linear Rec.2020 scene", ""),
+        ),
+        default="omit",
+    )
+
+    environment_map: StringProperty(
+        name="Environment Map",
+        description="[render] environment_map - equirect EXR filename, written "
+        "as-is and resolved against the assets dir (empty = omit)",
+        default="",
+    )
+
+    environment_unit_nits: FloatProperty(
+        name="Environment Nits",
+        description="[render] environment_unit_nits (0 = omit)",
+        default=0.0,
+        min=0.0,
+    )
+
+    tonemapper: EnumProperty(
+        name="Tonemapper",
+        description="[tonemap] tonemapper (omit = the preset decides)",
+        items=(
+            ("omit", "From preset", "Do not write the key"),
+            ("aces", "ACES", ""),
+            ("agx", "AgX", ""),
+            ("reinhard", "Reinhard", ""),
+            ("hable", "Hable", ""),
+        ),
+        default="omit",
+    )
+
+    post_tonemap_renderer: EnumProperty(
+        name="Post Tonemap Renderer",
+        description="[post_tonemap] renderer (omit = no post-tonemap stage)",
+        items=(
+            ("omit", "None", "Do not write the key"),
+            ("green_screen", "Green screen", ""),
+        ),
+        default="omit",
+    )
+
+    post_tonemap_reference: StringProperty(
+        name="Post Tonemap Reference",
+        description="[post_tonemap] reference preset (empty = omit)",
+        default="",
+    )
+
+    meta_title: StringProperty(
+        name="Meta Title",
+        description="[meta] title (empty = the scene filename stem)",
+        default="",
+    )
+
+    meta_description: StringProperty(
+        name="Meta Description",
+        description="[meta] description (empty = omit)",
+        default="",
+    )
+
     def draw(self, context):
         layout = self.layout
         layout.prop(self, "skin_blend")
@@ -1482,6 +1924,19 @@ class AetherSceneExporter(Operator, ExportHelper):
         layout.prop(self, "render_reference")
         layout.prop(self, "tonemap_reference")
         layout.prop(self, "camera_ev100")
+        col = layout.column(align=True)
+        col.prop(self, "samples_per_pixel")
+        col.prop(self, "max_depth")
+        col.prop(self, "working_color_space")
+        col.prop(self, "environment_map")
+        col.prop(self, "environment_unit_nits")
+        col = layout.column(align=True)
+        col.prop(self, "tonemapper")
+        col.prop(self, "post_tonemap_renderer")
+        col.prop(self, "post_tonemap_reference")
+        col = layout.column(align=True)
+        col.prop(self, "meta_title")
+        col.prop(self, "meta_description")
 
     def execute(self, context):
         scene_path = Path(self.filepath)
@@ -1527,9 +1982,16 @@ class AetherSceneExporter(Operator, ExportHelper):
                     mesh_name = mesh_by_data[data_key]
                 else:
                     obj_path = _obj_export_path(export_dir, obj.name, used_names)
-                    _export_obj_file(obj, obj_path)
+                    slots = [m for m in obj.data.materials if m is not None]
+                    _export_obj_file(obj, obj_path, export_materials=len(slots) > 1)
                     mesh_name = obj_path.stem
-                    meshes.append({"name": mesh_name, "path": obj_path.name})
+                    mesh_block: dict[str, object] = {"name": mesh_name, "path": obj_path.name}
+                    # BV1: object-space AABB computed from the exported OBJ
+                    # (the renderers cull against it instead of re-deriving).
+                    bounds = _obj_bounds(obj_path)
+                    if bounds is not None:
+                        mesh_block["bounds"] = {"min": bounds[0], "max": bounds[1]}
+                    meshes.append(mesh_block)
                     obj_paths[obj.name] = obj_path
                     if data_key is not None:
                         mesh_by_data[data_key] = mesh_name
@@ -1549,6 +2011,7 @@ class AetherSceneExporter(Operator, ExportHelper):
         skins: list[dict[str, object]] = []
         morphs: list[dict[str, object]] = []
         morph_animations: list[dict[str, object]] = []
+        armatures_with_bones: set[str] = set()
         exported_ids_for_bones = {obj.name for obj in objects}
         warned_modes: set[str] = set()
         for obj in objects:
@@ -1569,9 +2032,19 @@ class AetherSceneExporter(Operator, ExportHelper):
             skins.extend(skin_blocks)
             morphs.extend(morph_blocks)
             morph_animations.extend(tracks)
+            if skin_blocks:
+                # The armature's bone NODES exist only when a skinned mesh
+                # referenced it - pose tracks must not target absent nodes.
+                for modifier in obj.modifiers:
+                    if modifier.type == "ARMATURE" and modifier.object is not None:
+                        armatures_with_bones.add(modifier.object.name)
 
         for obj in objects:
             animations.extend(_animation_tracks(obj, scene_fps, warnings))
+            if obj.type == "ARMATURE" and obj.name in armatures_with_bones:
+                animations.extend(
+                    _pose_tracks(obj, obj.name in exported_ids_for_bones, scene_fps, warnings, warned_modes)
+                )
         animations.extend(morph_animations)
 
         for warning in warnings:
@@ -1597,6 +2070,30 @@ class AetherSceneExporter(Operator, ExportHelper):
         render_reference = self.render_reference.strip() or None
         tonemap_reference = self.tonemap_reference.strip() or None
 
+        # Scene-level inline keys (config only - material parameters are never
+        # exported). Unset values stay out of the file entirely.
+        render_keys: dict[str, object] = {}
+        if self.samples_per_pixel > 0:
+            render_keys["samples_per_pixel"] = int(self.samples_per_pixel)
+        if self.max_depth > 0:
+            render_keys["max_depth"] = int(self.max_depth)
+        if self.working_color_space != "omit":
+            render_keys["working_color_space"] = self.working_color_space
+        if self.environment_map.strip():
+            render_keys["environment_map"] = self.environment_map.strip()
+        if self.environment_unit_nits > 0.0:
+            render_keys["environment_unit_nits"] = float(self.environment_unit_nits)
+        tonemap_keys: dict[str, object] = {}
+        if self.tonemapper != "omit":
+            tonemap_keys["tonemapper"] = self.tonemapper
+        post_tonemap_keys: dict[str, object] = {}
+        if self.post_tonemap_renderer != "omit":
+            post_tonemap_keys["renderer"] = self.post_tonemap_renderer
+        post_tonemap_reference = self.post_tonemap_reference.strip() or None
+        meta_keys: dict[str, object] = {"title": self.meta_title.strip() or scene_path.stem}
+        if self.meta_description.strip():
+            meta_keys["description"] = self.meta_description.strip()
+
         _write_scene_toml(
             scene_path,
             meshes,
@@ -1609,6 +2106,11 @@ class AetherSceneExporter(Operator, ExportHelper):
             tonemap_reference,
             skins,
             morphs,
+            render_keys=render_keys,
+            tonemap_keys=tonemap_keys,
+            post_tonemap_reference=post_tonemap_reference,
+            post_tonemap_keys=post_tonemap_keys,
+            meta_keys=meta_keys,
         )
 
         self.report(
