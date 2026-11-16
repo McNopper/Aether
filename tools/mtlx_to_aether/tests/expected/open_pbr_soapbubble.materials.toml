@@ -1,0 +1,11 @@
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+[Soap_Bubble]
+specular_roughness = 0.0
+specular_ior = 1.0
+transmission_weight = 1.0
+thin_film_weight = 1.0
+thin_film_thickness = 0.5
+thin_film_ior = 1.4
+geometry_thin_walled = true

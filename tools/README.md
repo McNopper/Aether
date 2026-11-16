@@ -341,6 +341,39 @@ material names match the `shader_ball.obj` (5 zones) and `bunny.obj` scenes in
 python mtlx_to_toml.py examples/shader_ball.mtlx examples/shader_ball_openpbr.materials.toml
 ```
 
+### Gathered official examples (2026-11-16)
+
+The NH4 directive's material gathering took the **ten official MaterialX OpenPBR
+examples** from upstream `AcademySoftwareFoundation/MaterialX`,
+`resources/Materials/Examples/OpenPbr/*.mtlx` (main): default (the full
+parameter sweep), aluminum_brushed (anisotropy), carpaint (coat), glass
+(dispersion), honey (transmission scatter), ketchup (subsurface), lightbulb
+(emission), pearl (thin film + subsurface + coat), soapbubble (thin film +
+thin-walled) and velvet (fuzz).
+
+**Flatness was verified file by file before conversion** - every source has an
+`open_pbr_surface` root, every input is a literal value, and there are **zero
+`<nodegraph>` elements and zero nodedef/graph references** in all ten (the
+procedural-node-graph sources the directive excludes; Adobe's OpenPBR Shader
+Playground was surveyed as a second source but targets textured/procedural
+look-dev, so it was not gathered). All ten convert with **zero parameters
+dropped** (input-by-input diff).
+
+Landed as:
+
+* `assets/openpbr_mtlx.materials.toml` - the merged library (upstream names
+  kept for spec-conformance side by side with the MaterialX reference; **Glass /
+  Pearl / Velvet shadow same-named materials in other libraries** - the loader
+  is `insert_or_assign` = last library wins, so do not co-load those pairs),
+* `assets/openpbr_mtlx.scene.toml` - the showcase (10 spheres, 2 rows, IBL),
+  rendered by both renderers for parity testing,
+* `tests/fixtures/open_pbr_*.mtlx` + `tests/expected/open_pbr_*.materials.toml`
+  - the ten sources pinned as golden conversion tests (harness now 17/17).
+
+```bash
+python mtlx_to_toml.py tests/fixtures/open_pbr_carpaint.mtlx out.materials.toml
+```
+
 ---
 
 ## 3. OBJ transform CLI (`obj_transform.py`)

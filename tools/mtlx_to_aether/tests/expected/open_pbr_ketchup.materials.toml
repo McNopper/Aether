@@ -1,0 +1,10 @@
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+[Ketchup]
+base_color = [0.164, 0.006, 0.002]
+specular_roughness = 0.0
+specular_ior = 1.3
+subsurface_weight = 1.0
+subsurface_color = [0.164, 0.006, 0.002]
+subsurface_radius_scale = [0.476, 0.058, 0.039]

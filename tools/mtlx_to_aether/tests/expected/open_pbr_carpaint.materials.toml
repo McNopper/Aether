@@ -1,0 +1,10 @@
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+[Car_Paint]
+base_color = [0.1, 0.6, 0.9]
+specular_roughness = 0.3
+specular_ior = 1.6
+coat_weight = 1.0
+coat_roughness = 0.02
+coat_ior = 1.6

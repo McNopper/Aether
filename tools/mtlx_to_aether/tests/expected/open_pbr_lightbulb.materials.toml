@@ -1,0 +1,6 @@
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+[Light_Bulb]
+emission_color = [1.0, 0.415, 0.099]
+emission_luminance = 10000.0

@@ -1,0 +1,9 @@
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+[Velvet]
+base_color = [0.02, 0.02, 0.02]
+specular_roughness = 0.8
+fuzz_weight = 1.0
+fuzz_color = [0.4, 0.4, 0.4]
+fuzz_roughness = 0.5

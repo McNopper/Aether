@@ -1,0 +1,9 @@
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+[Glass]
+specular_roughness = 0.0
+specular_ior = 1.52
+transmission_weight = 1.0
+transmission_dispersion_scale = 1.0
+transmission_dispersion_abbe_number = 64.0

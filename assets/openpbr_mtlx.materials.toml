@@ -1,0 +1,141 @@
+# MaterialX OFFICIAL OpenPBR example materials (gathered 2026-11-16).
+#
+# Source: AcademySoftwareFoundation/MaterialX - resources/Materials/Examples/
+# OpenPbr/*.mtlx (main), converted 1:1 by tools/mtlx_to_aether/mtlx_to_toml.py
+# (no parameter dropped - verified input-by-input). Every source is FLAT by
+# inspection: open_pbr_surface root, all inputs literal values, ZERO nodegraphs
+# and ZERO nodedef/graph references - the procedural-node-graph sources the NH4
+# directive excludes were filtered out before conversion. The ten sources are
+# pinned as converter fixtures (tests/fixtures + tests/expected goldens).
+#
+# Each section keeps its upstream material name for spec-conformance side by
+# side with the MaterialX reference. NOTE: Glass / Pearl / Velvet shadow
+# same-named materials in OTHER asset libraries - insert_or_assign means the
+# LAST loaded library wins, so do not co-load those pairs in one scene.
+#
+# Color values are linear Rec.709 (file-level colorspace below).
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+# --- open_pbr_default.mtlx ------------------------------------------------------
+[Default]
+base_color = [0.8, 0.8, 0.8]
+base_weight = 1.0
+base_metalness = 0.0
+base_diffuse_roughness = 0.0
+specular_color = [1.0, 1.0, 1.0]
+specular_weight = 1.0
+specular_roughness = 0.3
+specular_roughness_anisotropy = 0.0
+specular_ior = 1.5
+transmission_weight = 0.0
+transmission_color = [1.0, 1.0, 1.0]
+transmission_depth = 0.0
+transmission_scatter = [0.0, 0.0, 0.0]
+transmission_scatter_anisotropy = 0.0
+transmission_dispersion_scale = 0.0
+transmission_dispersion_abbe_number = 20.0
+coat_weight = 0.0
+coat_color = [1.0, 1.0, 1.0]
+coat_roughness = 0.0
+coat_roughness_anisotropy = 0.0
+coat_ior = 1.6
+coat_darkening = 1.0
+fuzz_weight = 0.0
+fuzz_color = [1.0, 1.0, 1.0]
+fuzz_roughness = 0.5
+thin_film_weight = 0.0
+thin_film_thickness = 0.5
+thin_film_ior = 1.4
+emission_color = [1.0, 1.0, 1.0]
+emission_luminance = 0.0
+subsurface_weight = 0.0
+subsurface_color = [0.8, 0.8, 0.8]
+subsurface_radius = 1.0
+subsurface_radius_scale = [1.0, 0.5, 0.25]
+subsurface_scatter_anisotropy = 0.0
+geometry_opacity = 1.0
+geometry_thin_walled = false
+
+# --- open_pbr_aluminum_brushed.mtlx ------------------------------------------------------
+[Aluminum_Brushed]
+base_color = [0.912, 0.914, 0.92]
+base_metalness = 1.0
+specular_color = [0.97, 0.979, 0.988]
+specular_roughness = 0.2
+specular_roughness_anisotropy = 0.9
+
+# --- open_pbr_carpaint.mtlx ------------------------------------------------------
+[Car_Paint]
+base_color = [0.1, 0.6, 0.9]
+specular_roughness = 0.3
+specular_ior = 1.6
+coat_weight = 1.0
+coat_roughness = 0.02
+coat_ior = 1.6
+
+# --- open_pbr_glass.mtlx ------------------------------------------------------
+[Glass]
+specular_roughness = 0.0
+specular_ior = 1.52
+transmission_weight = 1.0
+transmission_dispersion_scale = 1.0
+transmission_dispersion_abbe_number = 64.0
+
+# --- open_pbr_honey.mtlx ------------------------------------------------------
+[Honey]
+specular_roughness = 0.0
+specular_ior = 1.504
+transmission_weight = 1.0
+transmission_color = [0.83, 0.4, 0.04]
+transmission_depth = 2.0
+transmission_scatter = [0.9, 0.9, 0.9]
+
+# --- open_pbr_ketchup.mtlx ------------------------------------------------------
+[Ketchup]
+base_color = [0.164, 0.006, 0.002]
+specular_roughness = 0.0
+specular_ior = 1.3
+subsurface_weight = 1.0
+subsurface_color = [0.164, 0.006, 0.002]
+subsurface_radius_scale = [0.476, 0.058, 0.039]
+
+# --- open_pbr_lightbulb.mtlx ------------------------------------------------------
+[Light_Bulb]
+emission_color = [1.0, 0.415, 0.099]
+emission_luminance = 10000.0
+
+# --- open_pbr_pearl.mtlx ------------------------------------------------------
+[Pearl]
+base_color = [0.8, 0.75, 0.7]
+specular_roughness = 0.35
+specular_ior = 1.5
+coat_weight = 1.0
+coat_roughness = 0.15
+coat_ior = 1.68
+thin_film_weight = 1.0
+thin_film_thickness = 0.42
+thin_film_ior = 2.0
+subsurface_weight = 1.0
+subsurface_color = [0.8, 0.75, 0.7]
+subsurface_radius_scale = [0.3, 0.5, 0.3]
+
+# --- open_pbr_soapbubble.mtlx ------------------------------------------------------
+[Soap_Bubble]
+specular_roughness = 0.0
+specular_ior = 1.0
+transmission_weight = 1.0
+thin_film_weight = 1.0
+thin_film_thickness = 0.5
+thin_film_ior = 1.4
+geometry_thin_walled = true
+
+# --- open_pbr_velvet.mtlx ------------------------------------------------------
+[Velvet]
+base_color = [0.02, 0.02, 0.02]
+specular_roughness = 0.8
+fuzz_weight = 1.0
+fuzz_color = [0.4, 0.4, 0.4]
+fuzz_roughness = 0.5
+

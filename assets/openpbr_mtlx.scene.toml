@@ -1,0 +1,95 @@
+# MaterialX Official OpenPBR Examples Showcase - gathered 2026-11-16
+# Source: AcademySoftwareFoundation/MaterialX resources/Materials/Examples/
+# OpenPbr/*.mtlx - all ten FLAT (open_pbr_surface root, literal inputs only,
+# zero nodegraphs), converted 1:1 by tools/mtlx_to_aether/mtlx_to_toml.py.
+# 10 spheres in 2 rows of 5 lit by the IBL panorama:
+#   row 0 (z = -1.0): Default, Aluminum_Brushed, Car_Paint, Glass, Honey
+#   row 1 (z = +1.5): Ketchup, Light_Bulb, Pearl, Soap_Bubble, Velvet
+# Materials from openpbr_mtlx.materials.toml (do NOT co-load it together with
+# libraries carrying Glass/Pearl/Velvet - see that file's header).
+
+material_libraries = ["openpbr_mtlx.materials.toml", "floor.materials.toml"]
+
+[render]
+reference = "presets/meadow_64spp_8bounce.render.toml"
+
+[camera]
+reference = "presets/openpbr_studio_wide.camera.toml"
+translate = [0.0, 2.5, -10.0]
+rotate_x = -9.2933
+rotate_y = 180.0000
+
+# Ground plane
+
+#  Meshes (declared once; object space) 
+
+[[mesh]]
+name = "box"
+type = "box"
+half_extents = [12.0, 0.1, 10.0]
+
+[[mesh]]
+name = "sphere"
+type = "sphere"
+radius = 0.7
+
+#  Instances (place a mesh with a transform + material) 
+
+[[instance]]
+mesh = "box"
+material = "NeutralFloor"
+translate = [0.0, -0.05, 1.0]
+
+#  Row 0  z = -1.0 
+
+[[instance]]
+mesh = "sphere"
+material = "Default"
+translate = [-5.0, 0.7, -1.0]
+
+[[instance]]
+mesh = "sphere"
+material = "Aluminum_Brushed"
+translate = [-2.5, 0.7, -1.0]
+
+[[instance]]
+mesh = "sphere"
+material = "Car_Paint"
+translate = [0.0, 0.7, -1.0]
+
+[[instance]]
+mesh = "sphere"
+material = "Glass"
+translate = [2.5, 0.7, -1.0]
+
+[[instance]]
+mesh = "sphere"
+material = "Honey"
+translate = [5.0, 0.7, -1.0]
+
+#  Row 1  z = +1.5 
+
+[[instance]]
+mesh = "sphere"
+material = "Ketchup"
+translate = [-5.0, 0.7, 1.5]
+
+[[instance]]
+mesh = "sphere"
+material = "Light_Bulb"
+translate = [-2.5, 0.7, 1.5]
+
+[[instance]]
+mesh = "sphere"
+material = "Pearl"
+translate = [0.0, 0.7, 1.5]
+
+[[instance]]
+mesh = "sphere"
+material = "Soap_Bubble"
+translate = [2.5, 0.7, 1.5]
+
+[[instance]]
+mesh = "sphere"
+material = "Velvet"
+translate = [5.0, 0.7, 1.5]
