@@ -320,6 +320,40 @@ TEST(BlenderRoundTrip, FeatureMatrixExportsEveryFormatKey) {
     EXPECT_EQ(node.groupMaterials.at("MatBeta"), "MatBeta");
 }
 
+TEST(BlenderRoundTrip, MetaLinksDescribeLinkedFilesForAgents) {
+    // [meta.link."..."] tables: agent summaries built ONLY from what the
+    // exporter knows - stats read back from the written OBJ, the explicitly
+    // provided environment map, and the referenced material library.
+    const auto scene = aether::SceneParser::parse(assetsDir() / "feature_matrix.scene.toml");
+    ASSERT_TRUE(scene.has_value());
+    ASSERT_TRUE(scene->meta.has_value());
+    const auto& links = scene->links; // parseLinkTable stores per-path LinkMeta here
+
+    // Mesh link: counts + object-space bounds + the node's description.
+    const auto meshIt = links.find("FeatureCube.obj");
+    ASSERT_NE(meshIt, links.end()) << "mesh link missing";
+    EXPECT_EQ(meshIt->second.kind, "mesh");
+    EXPECT_EQ(meshIt->second.triangles, 12U) << "triangulated Blender cube = 12 faces";
+    EXPECT_EQ(meshIt->second.groups, 2U) << "two usemtl group splits";
+    EXPECT_EQ(meshIt->second.description, "Feature-matrix cube (META2 node description)");
+    ASSERT_TRUE(meshIt->second.bounds.has_value());
+    EXPECT_FLOAT_EQ(meshIt->second.bounds->min.x, -1.0F);
+    EXPECT_FLOAT_EQ(meshIt->second.bounds->max.z, 1.0F);
+    EXPECT_EQ(meshIt->second.bounds->frame, "object");
+
+    // Env link (explicit operator prop) + material-library link.
+    const auto envIt = links.find("meadow_2_4k.exr");
+    ASSERT_NE(envIt, links.end()) << "env link missing";
+    EXPECT_EQ(envIt->second.kind, "env");
+    const auto libIt = links.find("openpbr_mtlx.materials.toml");
+    ASSERT_NE(libIt, links.end()) << "material-library link missing";
+    EXPECT_EQ(libIt->second.kind, "material-library");
+
+    // The library reference itself lands in material_libraries.
+    ASSERT_EQ(scene->mtllibs.size(), 1U);
+    EXPECT_EQ(scene->mtllibs[0], "openpbr_mtlx.materials.toml");
+}
+
 TEST(BlenderRoundTrip, PoseBoneAnimationMatchesBlenderGroundTruth) {
     // Skeletal pose-bone export (blender_to_aether 1.6.0): the fixture keys
     // pose.bones channels (root location, child euler rotation) and the
@@ -381,8 +415,7 @@ TEST(BlenderRoundTrip, PoseBoneAnimationMatchesBlenderGroundTruth) {
         ASSERT_EQ(poses[0].skinMatrices.size(), 2U);
         if (tick == 30) {
             // The animation must actually move a joint (not stay at rest).
-            EXPECT_GT(std::abs(poses[0].skinMatrices[1][1][1] - 1.0F), 0.5F)
-                << "tick 30: child joint did not rotate";
+            EXPECT_GT(std::abs(poses[0].skinMatrices[1][1][1] - 1.0F), 0.5F) << "tick 30: child joint did not rotate";
         }
         const auto out = aether::deformSkinLbs(mesh, scene->skins[0], poses[0].skinMatrices);
         ASSERT_TRUE(out.has_value());

@@ -128,35 +128,41 @@ def _select_only(objects: Iterable[bpy.types.Object]) -> None:
         obj.select_set(True)
 
 
-def _obj_bounds(obj_path: Path) -> tuple[list[float], list[float]] | None:
-    """Object-space AABB (BV1) of the exported OBJ - min/max over its `v`
-    lines. Computed from the FILE (post axis-conversion, post modifiers) so the
-    bounds match the mesh object space the renderers cull in. None when the
-    file has no vertices."""
+def _obj_stats(obj_path: Path) -> dict[str, object] | None:
+    """What the exported OBJ IS, read back from the FILE (post axis-conversion,
+    post modifiers): the BV1 object-space AABB over its `v` lines plus the
+    [meta.link] counts - triangle count (`f` lines; the export triangulates,
+    so every face is a triangle) and group count (usemtl splits, 1 when the
+    file carries none). None when the file has no vertices."""
     lo = [math.inf, math.inf, math.inf]
     hi = [-math.inf, -math.inf, -math.inf]
-    seen = 0
+    vertices = 0
+    triangles = 0
+    groups = 0
     try:
         with open(obj_path, encoding="utf-8", errors="replace") as handle:
             for line in handle:
-                if not line.startswith("v "):
-                    continue
-                parts = line.split()
-                if len(parts) < 4:
-                    continue
-                try:
-                    xyz = [float(parts[1]), float(parts[2]), float(parts[3])]
-                except ValueError:
-                    continue
-                seen += 1
-                for axis in range(3):
-                    lo[axis] = min(lo[axis], xyz[axis])
-                    hi[axis] = max(hi[axis], xyz[axis])
+                if line.startswith("v "):
+                    parts = line.split()
+                    if len(parts) < 4:
+                        continue
+                    try:
+                        xyz = [float(parts[1]), float(parts[2]), float(parts[3])]
+                    except ValueError:
+                        continue
+                    vertices += 1
+                    for axis in range(3):
+                        lo[axis] = min(lo[axis], xyz[axis])
+                        hi[axis] = max(hi[axis], xyz[axis])
+                elif line.startswith("f "):
+                    triangles += 1
+                elif line.startswith("usemtl "):
+                    groups += 1
     except OSError:
         return None
-    if seen == 0:
+    if vertices == 0:
         return None
-    return [lo, hi]
+    return {"min": lo, "max": hi, "triangles": triangles, "groups": max(1, groups)}
 
 
 def _export_obj_file(obj: bpy.types.Object, obj_path: Path, export_materials: bool = False) -> None:
@@ -1049,6 +1055,7 @@ def _write_scene_toml(
     post_tonemap_reference: str | None = None,
     post_tonemap_keys: dict[str, object] | None = None,
     meta_keys: dict[str, object] | None = None,
+    meta_links: list[tuple[str, dict[str, object]]] | None = None,
 ) -> None:
     lines: list[str] = []
     if material_libraries:
@@ -1087,6 +1094,15 @@ def _write_scene_toml(
         for key, value in (meta_keys or {}).items():
             lines.append(f"{key} = {_format_value(value)}")
         lines.append("")
+        # [meta.link."..."] per linked file: agent summaries the exporter
+        # actually knows (mesh stats from the written OBJ, explicitly-provided
+        # env, referenced material libraries) - never data it would have to
+        # guess.
+        for path, body in meta_links or []:
+            lines.append(f"[meta.link.{_quote(path)}]")
+            for key, value in body.items():
+                lines.append(f"{key} = {_format_value(value)}")
+            lines.append("")
     for mesh in meshes:
         lines.append("[[mesh]]")
         for key, value in mesh.items():
@@ -1957,6 +1973,7 @@ class AetherSceneExporter(Operator, ExportHelper):
         objects.sort(key=_hierarchy_depth)
 
         used_names: set[str] = set()
+        meta_links: list[tuple[str, dict[str, object]]] = []
         meshes: list[dict[str, object]] = []
         nodes: list[dict[str, object]] = []
         mesh_by_data: dict[str, str] = {}
@@ -1986,11 +2003,22 @@ class AetherSceneExporter(Operator, ExportHelper):
                     _export_obj_file(obj, obj_path, export_materials=len(slots) > 1)
                     mesh_name = obj_path.stem
                     mesh_block: dict[str, object] = {"name": mesh_name, "path": obj_path.name}
-                    # BV1: object-space AABB computed from the exported OBJ
-                    # (the renderers cull against it instead of re-deriving).
-                    bounds = _obj_bounds(obj_path)
-                    if bounds is not None:
-                        mesh_block["bounds"] = {"min": bounds[0], "max": bounds[1]}
+                    # BV1 + meta links: everything below is read back from
+                    # the exported OBJ (the renderers cull against the AABB;
+                    # agents get the [meta.link] summary without opening it).
+                    stats = _obj_stats(obj_path)
+                    if stats is not None:
+                        mesh_block["bounds"] = {"min": stats["min"], "max": stats["max"]}
+                        link: dict[str, object] = {
+                            "kind": "mesh",
+                            "triangles": stats["triangles"],
+                            "groups": stats["groups"],
+                            "bounds": {"min": stats["min"], "max": stats["max"], "frame": "object"},
+                        }
+                        raw_description = obj.get("description")
+                        if isinstance(raw_description, str) and raw_description.strip():
+                            link["description"] = raw_description.strip()
+                        meta_links.append((obj_path.name, link))
                     meshes.append(mesh_block)
                     obj_paths[obj.name] = obj_path
                     if data_key is not None:
@@ -2093,6 +2121,25 @@ class AetherSceneExporter(Operator, ExportHelper):
         meta_keys: dict[str, object] = {"title": self.meta_title.strip() or scene_path.stem}
         if self.meta_description.strip():
             meta_keys["description"] = self.meta_description.strip()
+        # Link tables cover only what the EXPORTER knows: the explicitly given
+        # environment map and the referenced material libraries (a preset-
+        # derived env is deliberately not linked - the link must not depend on
+        # which directory the scene gets exported into). Mesh links were
+        # appended per export above.
+        if render_keys.get("environment_map"):
+            meta_links.append((str(render_keys["environment_map"]), {"kind": "env"}))
+        for library in material_libraries:
+            meta_links.append((library, {"kind": "material-library"}))
+
+        # Honesty guard for [meta] units: geometry exports UNSCALED, so an
+        # Aether scene must be meter-based. Blender's own unit bookkeeping is
+        # checked and warned about (imperial or a scale_length != 1).
+        unit_settings = context.scene.unit_settings
+        if unit_settings.system == "IMPERIAL" or abs(float(unit_settings.scale_length) - 1.0) > 1.0e-9:
+            warnings.append(
+                "scene units are not meters (geometry exports unscaled; Aether assumes meters - "
+                "[meta] units stays the default 'm')"
+            )
 
         _write_scene_toml(
             scene_path,
@@ -2111,6 +2158,7 @@ class AetherSceneExporter(Operator, ExportHelper):
             post_tonemap_reference=post_tonemap_reference,
             post_tonemap_keys=post_tonemap_keys,
             meta_keys=meta_keys,
+            meta_links=meta_links,
         )
 
         self.report(

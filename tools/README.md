@@ -314,6 +314,35 @@ correct:
   otherwise the group is skipped with a warning - keys stay 1:1, never
   sampled. Pose tracks are only emitted when the armature's bone nodes exist
   (a skinned mesh referenced the armature).
+* **Link tables (`[meta.link."<path>"]`).** Every exported OBJ gets a mesh
+  link - `kind = "mesh"`, the triangle count and group count (`usemtl`
+  splits), the object-space `bounds` with `frame = "object"`, and the
+  object's `description` when set - plus an `env` link when
+  `environment_map` was given explicitly and a `material-library` link per
+  `material_libraries` entry. Agent summaries built ONLY from what the
+  exporter knows: a preset-derived environment is deliberately not linked
+  (the summary must not depend on the directory the scene is exported
+  into), and library material names stay in the library file itself.
+* **Units honesty guard.** Geometry exports UNSCALED: Aether scenes are
+  meter-based and `[meta] units` stays the parser default `"m"`. A Blender
+  scene with imperial units or `scale_length != 1` produces an export
+  warning (fix the scene scale rather than trusting the default).
+* **Deliberate non-DCC exclusions** - format features the exporter does not
+  emit, by design (each is authored in scene TOML or by its own tool):
+    * `type = "box"` / `type = "sphere"`: hand-authored analytic primitives
+      the renderers evaluate directly. DCC geometry always exports as a
+      real OBJ (`type = "object"`) - a Blender cube with modifiers and UVs
+      is not an axis-aligned analytic box.
+    * `opacity_micromaps`: produced by the separate `tools/omm_bake.py`
+      texture-bake pipeline and assembled in the scene TOML by hand, not by
+      DCC export.
+    * Flat `[[instance]]` blocks: the exporter emits the equivalent NH1
+      node graph instead (the parser compounds it into the same flat list -
+      see the Hierarchy mapping section).
+    * `[meta] schema` / `model` / `version` / `assembly`: left at the parser
+      defaults (`aether-scene`, `openpbr`, `1`, empty) - the material model
+      lives in the material libraries (each carries `model = "openpbr"`),
+      and `meta_title` / `meta_description` are the emitted agent levers.
 
 **Install:** copy `blender_to_aether/` into your Blender addons folder and
 enable *Aether Scene Exporter*, or run it headless:

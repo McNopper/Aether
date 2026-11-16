@@ -434,6 +434,8 @@ SCENE_OPS = {
         "post_tonemap_renderer": "green_screen",
         "meta_title": "Feature Matrix",
         "meta_description": "Exporter feature-matrix fixture",
+        # A real library reference - also exercises the material-library link.
+        "material_libraries": "openpbr_mtlx.materials.toml",
     },
 }
 
