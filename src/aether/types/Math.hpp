@@ -13,6 +13,10 @@ using Vec2 = sm::float2;
 using Vec3 = sm::float3;
 using Vec4 = sm::float4;
 using Quat = sm::quaternion; ///< stored as (x, y, z, w)
+/// Row-major affine matrix, `mul(M, v)` column-vector convention (the family's
+/// `trs` compose + Gauss-Jordan `inverse` live on the sm:: side). ANI4 uses it
+/// for the node world transforms and the skin matrices.
+using Mat4 = sm::float4x4;
 
 } // namespace aether
 #endif // AETHER_TYPES_MATH_HPP

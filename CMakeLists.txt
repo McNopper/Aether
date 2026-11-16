@@ -239,6 +239,7 @@ set(AETHER_SOURCES
     src/aether/format/OmmImporter.cpp
     src/aether/format/SceneAnimator.cpp
     src/aether/format/SceneParser.cpp
+    src/aether/format/Skinning.cpp
 )
 
 add_library(aether_project_options INTERFACE)

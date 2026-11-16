@@ -102,9 +102,10 @@ struct InstanceDesc {
 ///
 /// Authoring-layer data (NH1): the parser validates the graph (duplicate id,
 /// unknown parent, cycle) and compounds parent transforms down the tree,
-/// emitting fully resolved world-space `InstanceDesc`s — the SAME flat list
-/// the renderers consume today. `SceneDesc::instances` is therefore the only
-/// resolved output; `nodes` carries the hierarchy as authored (local TRS), so
+/// emitting fully resolved world-space `InstanceDesc`s - the SAME flat list
+/// the renderers consume today. `SceneDesc::instances` is the resolved output
+/// for placement and `SceneDesc::nodeWorlds` (ANI4) carries the world matrix of
+/// EVERY node (meshed and grouping); `nodes` carries the hierarchy as authored (local TRS), so
 /// animation/authoring tooling can address nodes by `id`. A node without a
 /// `meshName` is a pure transform/grouping node: it places nothing itself but
 /// compounds into its children's world transforms.
@@ -131,6 +132,26 @@ struct NodeDesc {
     /// ["arm", "kinematic"]). Pure AI context, like `description` - the
     /// renderer never reads it. Empty = not authored.
     std::vector<std::string> tags;
+};
+
+/// ANI4 - a skin binding: deforms the mesh placed by node `nodeId` with
+/// linear/dual-quaternion blending over `joints` (joint = any NH1 node id; the
+/// bone hierarchy IS the node graph, and joints animate through the ordinary
+/// ANI1 `[[animation]]` tracks).
+///
+/// All matrix data is row-major `mul(M, v)` (the family convention):
+/// - `inverseBind[j]` (16 floats): inverse of joint j's WORLD transform at the
+///   authored bind pose (world-space binds; matrices stored flat, row-major).
+/// - `boneIndices` / `boneWeights`: 4 entries per VERTEX of the node's mesh, in
+///   the imported vertex order (validated against the mesh at bind time, not at
+///   parse time). Weights are non-negative; they are renormalized at evaluation
+///   when their sum is positive (the glTF rule).
+struct SkinDesc {
+    std::string nodeId;                     ///< the skinned (meshed) node - unique per scene
+    std::vector<std::string> joints;        ///< joint node ids (validated against the node graph)
+    std::vector<float> inverseBind;         ///< 16 floats x joints.size(), row-major
+    std::vector<std::uint32_t> boneIndices; ///< 4 x vertexCount
+    std::vector<float> boneWeights;         ///< 4 x vertexCount
 };
 
 /// One keyframed animation track (ANI1): a timed float sequence driving one
@@ -273,6 +294,12 @@ struct SceneDesc {
     /// world-space TRS (depth-first, parents before children). Empty unless the
     /// scene declares `[[node]]` entries — node-free scenes are unaffected.
     std::vector<NodeDesc> nodes;
+    /// ANI4 - derived node world transforms, filled by `resolveNodes` alongside
+    /// `instances` (one row-major `mul(M, v)` matrix per node, in declaration
+    /// order - meshed AND grouping nodes). This is how the skin evaluation and
+    /// any tooling read the compounded hierarchy; `SceneAnimator::evaluate`
+    /// refreshes it with the stamped TRS, exactly like `instances`.
+    std::vector<Mat4> nodeWorlds;
     /// Keyframed animation tracks (ANI1), in declaration order. Empty unless
     /// the scene declares `[[animation]]` entries — animation-free scenes are
     /// unaffected. A parsed scene keeps `instances` resolved at the authored
@@ -291,6 +318,11 @@ struct SceneDesc {
     /// independent of the render rate.
     double animationFps = 30.0;
     std::vector<InstanceDesc> instances; ///< placed instances, in declaration order
+    /// ANI4 - skin bindings (optional; `[[skin]]` entries, declaration order).
+    /// Parsed against the completed node graph; consumed by
+    /// `SceneAnimator::evaluateSkins` + `deformSkinLbs` (the CPU reference).
+    /// Empty unless the scene declares `[[skin]]` - skin-free scenes unaffected.
+    std::vector<SkinDesc> skins;
 };
 
 } // namespace aether

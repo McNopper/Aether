@@ -54,6 +54,7 @@ add_executable(aether_tests
     test_opacity_micromap.cpp
     test_scene_animator.cpp
     test_scene_parser.cpp
+    test_skinning.cpp
 )
 
 target_link_libraries(aether_tests

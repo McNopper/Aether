@@ -1,5 +1,6 @@
 #include "aether/format/SceneParser.hpp"
 
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -7,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <toml++/toml.hpp>
+#include <unordered_map>
 
 #include "aether/format/NodeGraph.hpp"
 #include "aether/format/SceneAnimator.hpp"
@@ -400,6 +402,127 @@ void parseNode(const toml::table& t, SceneDesc& desc) {
     desc.nodes.push_back(std::move(node));
 }
 
+/// Parse the `[[skin]]` blocks (ANI4) against the completed node graph:
+/// `node` + `joints` must name existing nodes (one binding per skinned node),
+/// `inverse_bind` is one row-major 16-float matrix per joint (all finite), and
+/// the per-vertex `bone_indices` (4 ints inside the joint range) /
+/// `bone_weights` (4 finite, non-negative floats) rows must cover the same
+/// vertex set. The vertex COUNT is checked against the imported mesh later
+/// (validateSkinVertexCounts - the scene loader owns the imports).
+bool parseSkins(const toml::table& root, SceneDesc& desc, std::string* error) {
+    const toml::array* skins = root["skin"].as_array();
+    if (skins == nullptr) {
+        return true; // skin-free scenes
+    }
+
+    std::unordered_map<std::string, std::size_t> nodeIndex;
+    nodeIndex.reserve(desc.nodes.size());
+    for (std::size_t i = 0; i < desc.nodes.size(); ++i) {
+        nodeIndex.emplace(desc.nodes[i].id, i);
+    }
+
+    auto fail = [error](std::string message) {
+        if (error != nullptr) {
+            *error = std::move(message);
+        }
+        return false;
+    };
+
+    for (auto&& elem : *skins) {
+        const toml::table* t = elem.as_table();
+        if (t == nullptr) {
+            return fail("skin entry must be a table");
+        }
+        SkinDesc skin;
+        skin.nodeId = (*t)["node"].value_or<std::string>("");
+        if (skin.nodeId.empty()) {
+            return fail("skin entry is missing 'node'");
+        }
+        if (nodeIndex.find(skin.nodeId) == nodeIndex.end()) {
+            return fail("skin references unknown node '" + skin.nodeId + "'");
+        }
+        for (const SkinDesc& prior : desc.skins) {
+            if (prior.nodeId == skin.nodeId) {
+                return fail("node '" + skin.nodeId + "' has more than one [[skin]] binding");
+            }
+        }
+
+        const toml::array* joints = (*t)["joints"].as_array();
+        if (joints == nullptr || joints->empty()) {
+            return fail("skin '" + skin.nodeId + "' is missing 'joints'");
+        }
+        for (auto&& j : *joints) {
+            const auto s = j.value<std::string>();
+            if (!s || s->empty()) {
+                return fail("skin '" + skin.nodeId + "' has a non-string or empty joint id");
+            }
+            if (nodeIndex.find(*s) == nodeIndex.end()) {
+                return fail("skin '" + skin.nodeId + "' references unknown joint node '" + *s + "'");
+            }
+            skin.joints.emplace_back(*s);
+        }
+        const std::size_t jointCount = skin.joints.size();
+
+        const toml::array* ib = (*t)["inverse_bind"].as_array();
+        if (ib == nullptr || ib->size() != jointCount) {
+            return fail("skin '" + skin.nodeId + "' needs exactly one inverse_bind matrix (16 floats) per joint");
+        }
+        for (auto&& m : *ib) {
+            const toml::array* row = m.as_array();
+            if (row == nullptr || row->size() != 16) {
+                return fail("skin '" + skin.nodeId + "' inverse_bind matrix must hold exactly 16 floats");
+            }
+            for (auto&& v : *row) {
+                const auto d = v.value<double>();
+                if (!d || !std::isfinite(*d)) {
+                    return fail("skin '" + skin.nodeId + "' inverse_bind contains a non-finite value");
+                }
+                skin.inverseBind.push_back(static_cast<float>(*d));
+            }
+        }
+
+        const toml::array* bi = (*t)["bone_indices"].as_array();
+        if (bi == nullptr || bi->empty()) {
+            return fail("skin '" + skin.nodeId + "' is missing 'bone_indices'");
+        }
+        for (auto&& rowNode : *bi) {
+            const toml::array* row = rowNode.as_array();
+            if (row == nullptr || row->size() != 4) {
+                return fail("skin '" + skin.nodeId + "' bone_indices rows must hold exactly 4 joint indices");
+            }
+            for (auto&& v : *row) {
+                const auto i = v.value<std::int64_t>();
+                if (!i || *i < 0 || static_cast<std::size_t>(*i) >= jointCount) {
+                    return fail("skin '" + skin.nodeId +
+                                "' bone_indices entry is not an integer joint index inside [0, joints)");
+                }
+                skin.boneIndices.push_back(static_cast<std::uint32_t>(*i));
+            }
+        }
+
+        const toml::array* bw = (*t)["bone_weights"].as_array();
+        if (bw == nullptr || bw->size() != bi->size()) {
+            return fail("skin '" + skin.nodeId + "' needs bone_weights with the same row count as bone_indices");
+        }
+        for (auto&& rowNode : *bw) {
+            const toml::array* row = rowNode.as_array();
+            if (row == nullptr || row->size() != 4) {
+                return fail("skin '" + skin.nodeId + "' bone_weights rows must hold exactly 4 weights");
+            }
+            for (auto&& v : *row) {
+                const auto d = v.value<double>();
+                if (!d || !std::isfinite(*d) || *d < 0.0) {
+                    return fail("skin '" + skin.nodeId + "' bone_weights must be finite and >= 0");
+                }
+                skin.boneWeights.push_back(static_cast<float>(*d));
+            }
+        }
+
+        desc.skins.push_back(std::move(skin));
+    }
+    return true;
+}
+
 } // namespace
 
 std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFile) {
@@ -474,6 +597,11 @@ std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFi
         if (!resolveNodes(desc, errorMessage)) {
             return std::nullopt;
         }
+    }
+
+    // Skins (optional; ANI4 - bind against the completed node graph).
+    if (!parseSkins(root, desc, errorMessage)) {
+        return std::nullopt;
     }
 
     // ── Animations (optional; bind against the completed node graph) ──

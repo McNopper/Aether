@@ -17,6 +17,7 @@ constexpr std::size_t kNoParent = std::numeric_limits<std::size_t>::max();
 
 bool resolveNodes(SceneDesc& desc, std::string* error) {
     if (desc.nodes.empty()) {
+        desc.nodeWorlds.clear(); // no nodes -> no worlds (and nothing here can fail)
         return true;
     }
 
@@ -92,6 +93,9 @@ bool resolveNodes(SceneDesc& desc, std::string* error) {
     std::vector<Vec3> worldT(desc.nodes.size());
     std::vector<Quat> worldR(desc.nodes.size());
     std::vector<Vec3> worldS(desc.nodes.size());
+    // ANI4: every resolved world TRS is also kept as a row-major mul(M, v)
+    // matrix (the instance convention) for the skin evaluation.
+    desc.nodeWorlds.resize(desc.nodes.size());
 
     // Pre-order DFS (children in declaration order): a parent's world TRS is
     // always stored before any of its children is visited.
@@ -109,6 +113,7 @@ bool resolveNodes(SceneDesc& desc, std::string* error) {
         worldS[i] = pS * node.scale;
         worldR[i] = pR * node.rotation;
         worldT[i] = pT + pR * (pS * node.translation);
+        desc.nodeWorlds[i] = sm::trs(worldT[i], worldR[i], worldS[i]);
 
         if (!node.meshName.empty()) {
             InstanceDesc inst{};

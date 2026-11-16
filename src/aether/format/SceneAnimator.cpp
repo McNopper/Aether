@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "aether/format/NodeGraph.hpp"
@@ -316,11 +317,71 @@ SceneDesc SceneAnimator::evaluateAtTick(const SceneDesc& scene, std::uint64_t ti
     }
     // Integer tick → seconds in double precision, then the float the sampler
     // runs on. The conversion is a pure function of (tick, fps): the same
-    // tick always yields bit-identical times, so repeated evaluations — and
-    // evaluations across SceneDesc copies — produce identical instance lists
+    // tick always yields bit-identical times, so repeated evaluations - and
+    // evaluations across SceneDesc copies - produce identical instance lists
     // regardless of the render rate.
     const float timeSeconds = static_cast<float>(static_cast<double>(tick) / scene.animationFps);
     return evaluate(scene, timeSeconds);
+}
+
+std::vector<SkinPose> SceneAnimator::evaluateSkins(const SceneDesc& scene, float timeSeconds) {
+    if (scene.skins.empty()) {
+        return {}; // skin-free scenes: no poses for any t (mirrors evaluate)
+    }
+    // evaluate() stamps the joint node locals AND re-resolves nodeWorlds, so
+    // the world transforms read below are exactly the frame's.
+    const SceneDesc stamped = evaluate(scene, timeSeconds);
+    if (stamped.nodeWorlds.size() != stamped.nodes.size()) {
+        return {}; // hand-built scene without a resolved graph - nothing to read
+    }
+
+    std::unordered_map<std::string, std::size_t> nodeIndex;
+    nodeIndex.reserve(stamped.nodes.size());
+    for (std::size_t i = 0; i < stamped.nodes.size(); ++i) {
+        nodeIndex.emplace(stamped.nodes[i].id, i);
+    }
+
+    std::vector<SkinPose> poses;
+    poses.reserve(stamped.skins.size());
+    for (const SkinDesc& skin : stamped.skins) {
+        const auto nodeIt = nodeIndex.find(skin.nodeId);
+        if (nodeIt == nodeIndex.end()) {
+            continue; // unknown skinned node: parser-validated, defensive for hand-built
+        }
+        SkinPose pose;
+        pose.nodeId = skin.nodeId;
+        pose.skinMatrices.reserve(skin.joints.size());
+        bool complete = true;
+        const Mat4 invNodeWorld = sm::inverse(stamped.nodeWorlds[nodeIt->second]);
+        for (std::size_t j = 0; j < skin.joints.size(); ++j) {
+            const auto jointIt = nodeIndex.find(skin.joints[j]);
+            if (jointIt == nodeIndex.end()) {
+                complete = false;
+                break;
+            }
+            Mat4 inverseBind;
+            for (std::size_t r = 0; r < 4; ++r) {
+                const std::size_t base = j * 16 + r * 4;
+                inverseBind[r] = Vec4{skin.inverseBind[base + 0],
+                                      skin.inverseBind[base + 1],
+                                      skin.inverseBind[base + 2],
+                                      skin.inverseBind[base + 3]};
+            }
+            pose.skinMatrices.push_back(invNodeWorld * stamped.nodeWorlds[jointIt->second] * inverseBind);
+        }
+        if (complete) {
+            poses.push_back(std::move(pose));
+        }
+    }
+    return poses;
+}
+
+std::vector<SkinPose> SceneAnimator::evaluateSkinsAtTick(const SceneDesc& scene, std::uint64_t tick) {
+    if (!(scene.animationFps > 0.0)) {
+        return {};
+    }
+    const float timeSeconds = static_cast<float>(static_cast<double>(tick) / scene.animationFps);
+    return evaluateSkins(scene, timeSeconds);
 }
 
 } // namespace aether

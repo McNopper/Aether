@@ -309,7 +309,18 @@ splitAnimationTarget(std::string_view target, std::string_view& nodeId, std::str
 /// clock — its tracks stay empty and the clock, if valid, is inert.
 [[nodiscard]] bool parseAnimations(const toml::table& root, SceneDesc& desc, std::string* error);
 
-/// The evaluation API (the directive's deliverable — the renderers call
+/// ANI4 - the evaluated pose of one `[[skin]]` binding at a point in time.
+/// `skinMatrices[j]` is the LOCAL-space skin matrix of joint j,
+/// `inverse(nodeWorld) * jointWorld_j * inverseBind_j` (row-major, `mul(M, v)`):
+/// deformed vertices stay in the skinned mesh's own object space, so the
+/// renderer's instance transform and its BLAS/TLAS pipeline are untouched
+/// (the deformation is a per-frame BLAS refit of the vertex positions).
+struct SkinPose {
+    std::string nodeId;             ///< the skinned node (matches SkinDesc::nodeId)
+    std::vector<Mat4> skinMatrices; ///< one per joint, in SkinDesc joint order
+};
+
+/// The evaluation API (the directive's deliverable - the renderers call
 /// these; ANI1 ships `evaluate` with tests as its only caller, ANI2 adds the
 /// tick clock).
 class SceneAnimator {
@@ -342,6 +353,21 @@ class SceneAnimator {
     /// evaluates to the unchanged copy). Scenes without `[[animation]]`
     /// return the unchanged copy for any tick, like `evaluate`.
     [[nodiscard]] static SceneDesc evaluateAtTick(const SceneDesc& scene, std::uint64_t tick);
+
+    /// ANI4 - evaluate every `[[skin]]` binding at @p timeSeconds: stamps the
+    /// joint node locals (via `evaluate`), reads the resolved joint world
+    /// matrices out of `SceneDesc::nodeWorlds` and composes the LOCAL-space
+    /// skin matrices (documented in `SkinPose`). Returns poses in declaration
+    /// order; skins whose node or joint ids do not resolve (a hand-built
+    /// scene - the parser validates them) are skipped defensively. Empty for
+    /// skin-free scenes; for skin-carrying but animation-free scenes the
+    /// parse-time node worlds are used, exactly like `evaluate`.
+    [[nodiscard]] static std::vector<SkinPose> evaluateSkins(const SceneDesc& scene, float timeSeconds);
+
+    /// ANI4 - tick-clock mirror of `evaluateSkins` (`seconds = tick /
+    /// animationFps`, then `evaluateSkins`): the deterministic per-frame entry
+    /// point for the renderers' BLAS refit.
+    [[nodiscard]] static std::vector<SkinPose> evaluateSkinsAtTick(const SceneDesc& scene, std::uint64_t tick);
 };
 
 } // namespace aether
