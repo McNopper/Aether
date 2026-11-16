@@ -7,6 +7,7 @@
 # Usage (headless):
 #   blender --background --python tools/test_scenes.py -- --scene <name> --out <dir>
 #   (scene names: hierarchy | animated | simple | instancing; repeatable runs
+#   skinned | skinned_dqs; repeatable runs
 #    are deterministic - same scene name, same output bytes)
 #
 # The addon (tools/blender_to_aether) is imported from this script's directory
@@ -171,11 +172,82 @@ def build_instancing():
     return {"meshed": ["InstA", "InstB"]}
 
 
+def build_skinned():
+    """ANI4/ANI5 verification matrix: a two-bone armature (root + child), a
+    triangle-quad mesh with blocky vertex-group weights, and a 'Smile' shape
+    key animated 0 -> 1 over frames 1..30 (the morph weight track). The same
+    builder backs the 'skinned' (LBS) and 'skinned_dqs' (DQS) scenes - only the
+    operator's skin_blend differs."""
+    _clear_scene()
+    bpy.context.scene.render.fps = 30
+
+    # Armature: two bones along +Z (Bone.Root -> Bone.Child).
+    bpy.ops.object.armature_add(location=(0.0, 0.0, 0.0))
+    arm = bpy.context.active_object
+    arm.name = "Rig"
+    arm.data.name = "RigBones"
+    bpy.ops.object.mode_set(mode="EDIT")
+    root = arm.data.edit_bones["Bone"]
+    root.name = "Bone.Root"
+    root.head = (0.0, 0.0, 0.0)
+    root.tail = (0.0, 0.0, 1.0)
+    child = arm.data.edit_bones.new("Bone.Child")
+    child.head = (0.0, 0.0, 1.0)
+    child.tail = (0.0, 0.0, 2.0)
+    child.parent = root
+    child.use_connect = True
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    # Mesh: two triangles (import-parity: triangles only), blocky weights.
+    mesh = bpy.data.meshes.new("SkinnedQuad")
+    verts = [(0.0, 0.0, 0.0), (0.0, 1.0, 0.0), (1.0, 1.0, 0.0), (1.0, 0.0, 0.0)]
+    mesh.from_pydata(verts, [], [(0, 1, 2), (0, 2, 3)])
+    mesh.update()
+    obj = bpy.data.objects.new("SkinnedQuad", mesh)
+    bpy.context.collection.objects.link(obj)
+    lower = obj.vertex_groups.new(name="Bone.Root")
+    lower.add([0, 1], 1.0, "REPLACE")
+    upper = obj.vertex_groups.new(name="Bone.Child")
+    upper.add([2, 3], 1.0, "REPLACE")
+    modifier = obj.modifiers.new("Armature", "ARMATURE")
+    modifier.object = arm
+
+    # Shape key: 'Smile' lifts the upper row +z; animated as the weight track.
+    obj.shape_key_add(name="Basis", from_mix=False)
+    smile = obj.shape_key_add(name="Smile", from_mix=False)
+    for index, co in enumerate(smile.data):
+        base = verts[index]
+        smile.data[index].co = (base[0], base[1], base[2] + (0.25 if index >= 2 else 0.0))
+    smile.value = 0.0
+    smile.keyframe_insert(data_path="value", frame=1)
+    smile.value = 1.0
+    smile.keyframe_insert(data_path="value", frame=30)
+    smile.value = 0.0  # export-time default weight stays 0; the track drives it
+
+    return {
+        "meshed": ["SkinnedQuad"],
+        "deformation": {
+            "armature": "Rig",
+            "joints": ["Rig::Bone.Root", "Rig::Bone.Child"],
+            "morphs": ["Smile"],
+            "weight_track": None,  # filled by the test driver from the export
+        },
+    }
+
+
 SCENES = {
     "hierarchy": build_hierarchy,
     "animated": build_animated,
     "simple": build_simple,
     "instancing": build_instancing,
+    "skinned": build_skinned,
+    "skinned_dqs": build_skinned,
+}
+
+# Extra operator kwargs per scene (skin_blend rides the exporter option so the
+# same builder covers both blend modes).
+SCENE_OPS = {
+    "skinned_dqs": {"skin_blend": "dqs"},
 }
 
 
@@ -190,7 +262,8 @@ def export_scene(out_dir: Path, scene_name: str) -> Path:
     out.mkdir(parents=True, exist_ok=True)
     scene_path = out / f"{scene_name}.scene.toml"
     bpy.ops.export.aether_scene(filepath=str(scene_path), include_camera=False,
-                                check_existing=False)
+                                check_existing=False,
+                                **SCENE_OPS.get(scene_name, {}))
     return scene_path
 
 
@@ -211,6 +284,15 @@ def main() -> int:
             "world": [list(row) for row in _world_of(obj)],
             "parent": obj.parent.name if obj.parent else "",
         }
+    if "deformation" in expected:
+        deformation = dict(expected["deformation"])
+        with open(scene_path, encoding="utf-8") as handle:
+            text = handle.read()
+        # Provenance straight from the emitted file: the blend key and the
+        # morph weight track target actually present in the export.
+        deformation["blend_dqs_emitted"] = 'blend = "dqs"' in text
+        deformation["weight_track_present"] = 'target = "morphs/SkinnedQuad/Smile"' in text
+        expectations["_deformation"] = deformation
     with open(Path(args.out) / f"{args.scene}.expected.json", "w",
              encoding="utf-8") as f:
         json.dump(expectations, f, indent=1)

@@ -26,7 +26,9 @@ writes:
    this exporter and its version (`blender_to_aether/x.y.z` from `bl_info`).
    The Aether parser validates the node graph (duplicate ids, unknown
    parents, cycles) and compounds the parent transforms into its flat
-   instance list itself.
+   instance list itself. Deforming objects (armature modifier and/or shape
+   keys) add the ANI4 `[[skin]]` / ANI5 `[[morph]]` blocks and their weight
+   tracks - see *Deformation export* below.
 2. `<name>.camera.toml` — a camera preset (`translate`, `rotate`,
    `vertical_field_of_view`, `ev100`) referenced from the scene's `[camera]`
    section.
@@ -206,6 +208,42 @@ scene without animation is unchanged from the pre-NH4b output.
   and channel data paths other than the node TRS — each warning when present;
   the active action's plain F-curves are the 1:1 contract.
 
+### Deformation export (ANI4 / ANI5)
+
+Objects that carry an **armature modifier** and/or **shape keys** additionally
+emit the deformation schema (blender_to_aether 1.4.0):
+
+* **Bones -> NH1 nodes.** Every bone becomes a `[[node]]` with the id
+  `<armature>::<bone>` (`::` namespaces the bone); root bones parent to the
+  armature object's node, child bones to their parent bone. Locals are the
+  armature-space rest chains (`bone.matrix_local`, child relative to parent)
+  conjugated by `CONV`, so the compounded Aether worlds equal
+  `CONV(armature.matrix_world @ bone.matrix_local)` - which is exactly the
+  world the inverse binds are built from.
+* **`[[skin]]`** - `node` (the meshed object), `joints` in `arm.data.bones`
+  order, `inverse_bind` = inverse of that world (row-major 16 floats per
+  joint), and per-vertex `bone_indices` / `bone_weights`: vertex groups
+  matched to **same-named bones**, **top 4 influences per vertex**, rows in
+  the Aether OBJ import order (below). `blend = "lbs" | "dqs"` comes from the
+  export option (default `lbs`; DQS is rigid-by-design and drops scale/shear).
+* **`[[morph]]`** - one block per shape key (basis excluded): `mesh`, `name`
+  (`/` sanitized), `weight` (the key's value at export time) and `deltas` -
+  basis-relative vertex deltas rotated into the exported Y-up frame and
+  expanded **per imported vertex**. Shape-key value F-curves export as ANI1
+  weight tracks on `morphs/<mesh>/<name>` through the shared scalar
+  machinery (same-mode segment runs, cubic handles from the derivative
+  conversion).
+
+**Import-order contract:** Aether's `ObjImporter::flushMesh` deduplicates
+face corners on the resolved `(position, normal, uv)` values, so the fixture
+quad's two triangles import as **4 vertices, not 6 corners**. The exporter
+re-reads the OBJ it just wrote and expands every deformation row in exactly
+that deduplicated order (per `o`/`g`/`usemtl` group, first occurrence wins,
+binary32 component values) - which is what makes `validateSkinVertexCounts`
+/ `validateMorphVertexCounts` pass at load. `tests/test_blender_roundtrip.cpp`
+pins the contract against the committed `skinned` / `skinned_dqs` fixtures,
+including a 6-vs-4 negative control.
+
 **Install:** copy `blender_to_aether/` into your Blender addons folder and
 enable *Aether Scene Exporter*, or run it headless:
 
@@ -216,7 +254,8 @@ blender --background --python-expr "import sys; sys.path.append('tools'); \
 ```
 
 **Export options:** `selected_only`, `include_camera`, `material_libraries`
-(comma-separated), `render_reference`, `tonemap_reference`, `camera_ev100`.
+(comma-separated), `render_reference`, `tonemap_reference`, `camera_ev100`,
+`skin_blend` (`lbs` | `dqs` - the `[[skin]]` blend mode).
 
 ---
 
@@ -447,14 +486,24 @@ and exports them through the addon - the NH4 verification oracle:
 
 ```text
 blender --background --python tools/test_scenes.py -- \
-        --scene hierarchy|animated|simple|instancing --out <dir>
+        --scene hierarchy|animated|simple|instancing|skinned|skinned_dqs --out <dir>
 ```
 
 Each run writes `<scene>.scene.toml` plus `<scene>.expected.json`
 (Blender-computed world matrices per meshed node) - the oracle the
 round-trip verification compares against. `animated` exercises the
 NH4b contract: CONSTANT blocks, BEZIER tangents, and a
-mixed-interpolation location curve split into per-mode tracks.
+mixed-interpolation location curve split into per-mode tracks. `skinned`
+(LBS) and `skinned_dqs` (DQS - the same builder, `skin_blend` differs)
+exercise the deformation contract: two-bone armature, blocky vertex-group
+weights, and a `Smile` shape key keyframed over frames 1..30 (the morph
+weight track).
+
+The two `skinned` exports are **committed as fixtures** (`assets/skinned*.scene.toml`
++ the shared `assets/SkinnedQuad.obj`; regenerate with the command above and
+re-copy) and consumed by `tests/test_blender_roundtrip.cpp` - the C++ suite
+that parses them with the real `ObjImporter`/`SceneParser` and proves the
+exporter's deformation rows match the importer's deduplicated vertex space.
 
 ## References
 

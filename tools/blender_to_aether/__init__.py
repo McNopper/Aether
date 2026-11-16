@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Aether Scene Exporter",
     "author": "Aether Tools",
-    "version": (1, 3, 0),
+    "version": (1, 4, 0),
     "blender": (5, 2, 0),
     "location": "File > Export > Aether Scene (.scene.toml)",
     "description": "Export Blender scenes to Aether scene/animation/camera/OBJ files",
@@ -12,13 +12,14 @@ bl_info = {
 import json
 import math
 import re
+import struct
 from bisect import bisect_right
 from collections.abc import Iterable, Sequence
 from typing import ClassVar
 from pathlib import Path
 
 import bpy
-from bpy.props import BoolProperty, FloatProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, StringProperty
 from bpy.types import Operator
 from bpy_extras.io_utils import ExportHelper
 from mathutils import Euler, Matrix, Quaternion, Vector
@@ -141,6 +142,9 @@ def _export_obj_file(obj: bpy.types.Object, obj_path: Path) -> None:
                 path_mode="AUTO",
                 export_materials=False,
                 apply_modifiers=True,
+                # Parity with aether::ObjImporter (triangles only) - the
+                # deformation row expansion re-reads this file's faces.
+                export_triangulated_mesh=True,
             )
         elif hasattr(bpy.ops.export_scene, "obj"):
             bpy.ops.export_scene.obj(
@@ -151,6 +155,7 @@ def _export_obj_file(obj: bpy.types.Object, obj_path: Path) -> None:
                 path_mode="AUTO",
                 use_materials=False,
                 use_mesh_modifiers=True,
+                use_triangulation=True,
             )
         else:
             raise RuntimeError("No OBJ exporter is available in this Blender build")
@@ -928,6 +933,8 @@ def _write_scene_toml(
     material_libraries: list[str],
     render_reference: str | None,
     tonemap_reference: str | None,
+    skins: list[dict[str, object]] | None = None,
+    morphs: list[dict[str, object]] | None = None,
 ) -> None:
     lines: list[str] = []
     if material_libraries:
@@ -953,6 +960,18 @@ def _write_scene_toml(
         for key, value in block.items():
             lines.append(f"{key} = {_format_value(value)}")
         lines.append("")
+    # ANI4/ANI5: deformation blocks (the parser binds skins/morphs against the
+    # completed node + mesh lists regardless of section order).
+    for block in skins or []:
+        lines.append("[[skin]]")
+        for key, value in block.items():
+            lines.append(f"{key} = {_format_value(value)}")
+        lines.append("")
+    for block in morphs or []:
+        lines.append("[[morph]]")
+        for key, value in block.items():
+            lines.append(f"{key} = {_format_value(value)}")
+        lines.append("")
     if animations:
         # ANI2: the animation tick clock ([animation_clock] fps) — required
         # (positive) whenever [[animation]] tracks exist, and it is exactly
@@ -968,6 +987,400 @@ def _write_scene_toml(
     _write_simple_toml(scene_path, lines)
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# ANI4/ANI5 deformation export (blender_to_aether 1.4.0):
+#   * armature bones -> NH1 nodes (ids "<arm>::<bone>"; root bones parent to
+#     the armature object node, child bones to their parent bone; locals are
+#     the armature-space rest chains conjugated by CONV, so the compounded
+#     Aether worlds equal CONV(armature_world @ bone.matrix_local)) and a
+#     [[skin]] block (joints in arm.data.bones order, inverse_bind = inverse
+#     of that world in the Aether frame, per-imported-vertex top-4 vertex-group
+#     weights), with blend = "lbs" | "dqs" from the operator.
+#   * shape keys -> [[morph]] blocks (basis deltas in the OBJ/Y-up frame,
+#     expanded per Aether-imported vertex corner; the exported default weight
+#     is the key's value at export time) + ANI1 weight tracks
+#     (morphs/<mesh>/<name>, 1:1 from the shape-key action's value F-curves).
+# The per-imported-vertex expansion mirrors aether::ObjImporter: face order,
+# TRIANGLES only - it re-reads the OBJ the exporter just wrote.
+# ════════════════════════════════════════════════════════════════════════════
+
+_BONE_SEP = "::"
+
+
+def _bone_id(arm_name: str, bone_name: str) -> str:
+    return f"{arm_name}{_BONE_SEP}{bone_name}"
+
+
+def _bone_parent_depth(bone: "bpy.types.Bone") -> int:
+    depth = 0
+    parent = bone.parent
+    while parent is not None:
+        depth += 1
+        parent = parent.parent
+    return depth
+
+
+def _armature_deform_setup(
+    arm: "bpy.types.Object",
+    arm_exported: bool,
+    skin_blend: str,
+    warnings: list[str],
+) -> tuple[list[dict[str, object]], list[str], list[list[float]]]:
+    """Bone nodes (parents before children), the joint-id list in arm.data.bones
+    order, and that order's inverse_bind rows (16 row-major floats each)."""
+    bones = list(arm.data.bones)
+    nodes: list[dict[str, object]] = []
+    for bone in sorted(bones, key=_bone_parent_depth):
+        parent_bone = bone.parent
+        if parent_bone is None:
+            # Root bone: frame = the armature object's node when it is part of
+            # the export (its Aether world is always CONV(arm.matrix_world), so
+            # the compound below reproduces the armature-space rest exactly);
+            # otherwise bake the armature world like _node_block roots do.
+            parent_id = arm.name if arm_exported else None
+            local = bone.matrix_local.copy() if arm_exported else arm.matrix_world @ bone.matrix_local
+        else:
+            parent_id = _bone_id(arm.name, parent_bone.name)
+            local = parent_bone.matrix_local.inverted() @ bone.matrix_local
+        local = CONV @ local @ CONV.inverted()
+        location, rotation, scale = _decompose_checked(local, f"{arm.name}::{bone.name}", warnings)
+        block: dict[str, object] = {"id": _bone_id(arm.name, bone.name)}
+        if parent_id is not None:
+            block["parent"] = parent_id
+        block["translate"] = [location.x, location.y, location.z]
+        block["rotate"] = [rotation.x, rotation.y, rotation.z, rotation.w]
+        block["scale"] = [scale.x, scale.y, scale.z]
+        nodes.append(block)
+
+    joints = [_bone_id(arm.name, bone.name) for bone in bones]
+    # inverse_bind = inverse(joint world in the Aether frame). The conjugation
+    # distributes, so CONV(arm.matrix_world @ bone.matrix_local) is exactly the
+    # compounded Aether world of the emitted bone chain (either parent rule).
+    inverse_bind: list[list[float]] = []
+    arm_world = arm.matrix_world
+    for bone in bones:
+        joint_world = CONV @ (arm_world @ bone.matrix_local) @ CONV.inverted()
+        inverse = joint_world.inverted()
+        inverse_bind.append([inverse[row][col] for row in range(4) for col in range(4)])
+    return nodes, joints, inverse_bind
+
+
+def _round_f32(value: float) -> float:
+    """Round a float64 value to binary32 (round-to-nearest-even) - one IEEE
+    -754 single-precision operation, bit-exact with C++ float arithmetic."""
+    return struct.unpack("<f", struct.pack("<f", value))[0]
+
+
+def _f32(text: str) -> float:
+    """Parse a decimal component exactly like C++'s float extraction: the text
+    is exact in float64 (OBJ components carry <=17 significant digits), so the
+    final rounding to binary32 is the correctly-rounded from_chars/>>
+    result - the value dedup below must see the bits ObjImporter sees."""
+    return _round_f32(float(text))
+
+
+def _normalized(values: Sequence[float]) -> bytes:
+    """sm::normalize over binary32 components - every op rounded like float
+    arithmetic (products/sums of binary32 values are exact in float64, so a
+    single rounding per op reproduces the C++ result); zero-length input
+    yields (0,0,0), the len > 0 guard of slang-math's normalize. Packed to
+    bytes so -0.0f stays distinct from +0.0f exactly like VertexEqual's
+    memcmp (Python's == would merge them)."""
+    x, y, z = values
+    sx = _round_f32(x * x)
+    sy = _round_f32(y * y)
+    sz = _round_f32(z * z)
+    total = _round_f32(_round_f32(sx + sy) + sz)
+    length = _round_f32(math.sqrt(total))
+    if length > 0.0:
+        return struct.pack("<3f", x / length, y / length, z / length)
+    return struct.pack("<3f", 0.0, 0.0, 0.0)
+
+
+def _imported_source_vertices(obj_path: Path, label: str, warnings: list[str]) -> list[int] | None:
+    """Blender source-vertex index per AETHER-imported vertex - a faithful
+    mirror of aether::ObjImporter (parse + flushMesh). The [[skin]]/[[morph]]
+    row space must equal what the importer creates, or validateSkinVertexCounts
+    / validateMorphVertexCounts reject the scene at load:
+
+      * faces in file order, TRIANGLES ONLY - the importer drops every other
+        arity (a 4th token, e.g. a trailing comment, drops the face too),
+      * groups break on o / g / usemtl: dedup is PER GROUP with a fresh map,
+        first occurrence wins, first-occurrence order,
+      * the dedup key is the RESOLVED vertex VALUES in VertexEqual's memcmp
+        domain: binary32 components packed to bytes, normals normalized at
+        parse time like sm::normalize (zero-length -> (0,0,0)), missing
+        normal -> (0,1,0), missing uv -> (0,0),
+      * indices resolve like resolveIndex (>0 = 1-based, <0 = relative to the
+        current count, 0 = invalid); an out-of-range POSITION aborts the
+        parse (None), an out-of-range normal/uv falls back to the default.
+
+    Returns one 0-based Blender source-vertex index per imported vertex,
+    groups concatenated in file order. None on parse failure or no geometry.
+    """
+    positions: list[bytes] = []
+    normals: list[bytes] = []
+    texcoords: list[bytes] = []
+    out: list[int] = []
+    pending: list[tuple[int, bytes]] = []
+    skipped = 0
+    int32 = re.compile(r"-?[0-9]+$")
+
+    def flush() -> None:
+        seen: dict[bytes, int] = {}
+        for source, key in pending:
+            if key not in seen:
+                seen[key] = source  # first occurrence wins; dict order = import order
+        out.extend(seen.values())
+        pending.clear()
+
+    def resolve(idx: int, count: int) -> int:
+        if idx > 0:
+            return idx - 1
+        if idx < 0:
+            return count + idx
+        return -1
+
+    def field(fields: list[str], position: int) -> int | None:
+        # Absent or empty -> 0 (resolve -> -1 -> the default value); present
+        # but malformed -> None (parseInt nullopt aborts the whole import).
+        if position >= len(fields) or fields[position] == "":
+            return 0
+        text = fields[position]
+        if not int32.match(text):
+            return None
+        value = int(text)
+        return value if -(2**31) < value < 2**31 else None
+
+    def corner(token: str) -> tuple[int, bytes] | None:
+        # parseFaceVertex: 'p', 'p/t', 'p//n', 'p/t/n' (more than 3 fields =
+        # parseInt on a field containing '/' fails -> nullopt).
+        fields = token.split("/")
+        if len(fields) > 3:
+            return None
+        pos_raw = field(fields, 0)
+        tex_raw = field(fields, 1)
+        nrm_raw = field(fields, 2)
+        if pos_raw is None or tex_raw is None or nrm_raw is None:
+            return None
+        p = resolve(pos_raw, len(positions))
+        if p < 0 or p >= len(positions):
+            return None  # flushMesh returns false -> parse failure
+        t = resolve(tex_raw, len(texcoords))
+        n = resolve(nrm_raw, len(normals))
+        uv = texcoords[t] if 0 <= t < len(texcoords) else struct.pack("<2f", 0.0, 0.0)
+        normal = normals[n] if 0 <= n < len(normals) else struct.pack("<3f", 0.0, 1.0, 0.0)
+        return p, positions[p] + normal + uv
+
+    try:
+        with open(obj_path, encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                fields = stripped.split()
+                kw = fields[0]
+                if kw in ("v", "vn", "vt"):
+                    need = 2 if kw == "vt" else 3
+                    if len(fields) < need + 1:
+                        continue  # parseVec* fails -> the line is skipped
+                    try:
+                        values = [_f32(text) for text in fields[1 : need + 1]]
+                    except ValueError:
+                        continue  # non-numeric component -> the line is skipped
+                    if kw == "v":
+                        positions.append(struct.pack("<3f", *values))
+                    elif kw == "vn":
+                        normals.append(_normalized(values))
+                    else:
+                        texcoords.append(struct.pack("<2f", *values))
+                elif kw in ("o", "g", "usemtl"):
+                    flush()  # group boundary: dedup restarts per group
+                elif kw == "f":
+                    corners = fields[1:]
+                    if len(corners) != 3:
+                        skipped += 1  # non-triangle faces are dropped by the importer
+                        continue
+                    parsed: list[tuple[int, bytes]] = []
+                    for token in corners:
+                        item = corner(token)
+                        if item is None:
+                            warnings.append(
+                                f"{label}: OBJ face the Aether parser would reject - deformation skipped"
+                            )
+                            return None
+                        parsed.append(item)
+                    pending.extend(parsed)
+    except OSError as exc:
+        warnings.append(f"{label}: cannot re-read the exported OBJ ({exc})")
+        return None
+    flush()
+    if skipped:
+        warnings.append(f"{label}: {skipped} non-triangle face(s) skipped (Aether imports triangles only)")
+    if not out:
+        warnings.append(f"{label}: no triangle faces in the exported OBJ - deformation skipped")
+        return None
+    return out
+
+
+def _vertex_group_joints(
+    obj: bpy.types.Object, arm: bpy.types.Object, joints: list[str], warnings: list[str]
+) -> dict[int, int]:
+    """vertex-group index -> joint index (by matching the group name to the
+    armature bone of the same name - the Blender skinning convention). Unknown
+    groups are dropped with a warning (their weights simply never bind)."""
+    bone_index = {bone.name: index for index, bone in enumerate(arm.data.bones)}
+    mapping: dict[int, int] = {}
+    dropped: set[str] = set()
+    for group in obj.vertex_groups:
+        joint = bone_index.get(group.name)
+        if joint is not None:
+            mapping[group.index] = joint
+        else:
+            dropped.add(group.name)
+    if dropped:
+        warnings.append(
+            f"{obj.name}: vertex group(s) without a same-named bone skipped: {', '.join(sorted(dropped))}"
+        )
+    return mapping
+
+
+def _deformation_blocks(
+    obj: bpy.types.Object,
+    mesh_name: str,
+    obj_path: Path | None,
+    arm_exported: bool,
+    skin_blend: str,
+    fps: float,
+    warned_modes: set[str],
+    warnings: list[str],
+) -> tuple[list[dict[str, object]], list[dict[str, object]], list[dict[str, object]], list[dict[str, object]]]:
+    """(extra bone nodes, [[skin]] blocks, [[morph]] blocks, morph weight
+    tracks) for one exported mesh object; every list is empty when the object
+    carries neither an armature modifier nor shape keys."""
+    arm = next(
+        (m.object for m in obj.modifiers if m.type == "ARMATURE" and m.object is not None), None
+    )
+    shape_keys = getattr(obj.data, "shape_keys", None)
+    has_keys = shape_keys is not None and len(shape_keys.key_blocks) > 1
+    if arm is None and not has_keys:
+        return [], [], [], []
+    if obj_path is None:
+        warnings.append(f"{obj.name}: no exported OBJ of its own - deformation skipped")
+        return [], [], [], []
+    source = _imported_source_vertices(obj_path, obj.name, warnings)
+    if source is None:
+        return [], [], [], []
+
+    extra_nodes: list[dict[str, object]] = []
+    skins: list[dict[str, object]] = []
+    if arm is not None:
+        if not arm_exported:
+            warnings.append(
+                f"{obj.name}: armature '{arm.name}' is not in the export - its bones are "
+                "exported as world-rooted nodes"
+            )
+        extra_nodes, joints, inverse_bind = _armature_deform_setup(arm, arm_exported, skin_blend, warnings)
+        group_map = _vertex_group_joints(obj, arm, joints, warnings)
+        bone_indices: list[list[int]] = []
+        bone_weights: list[list[float]] = []
+        for source_vertex in source:
+            vertex = obj.data.vertices[source_vertex]
+            candidates = [
+                (group.group, group.weight)
+                for group in vertex.groups
+                if group.weight > 0.0 and group.group in group_map
+            ]
+            candidates.sort(key=lambda item: -item[1])
+            top = candidates[:4]
+            indices = [group_map[group_index] for group_index, _ in top]
+            weights = [weight for _, weight in top]
+            bone_indices.append(indices + [0] * (4 - len(indices)))
+            bone_weights.append(weights + [0.0] * (4 - len(weights)))
+        skins.append(
+            {
+                "node": obj.name,
+                "joints": joints,
+                "blend": skin_blend,
+                "inverse_bind": inverse_bind,
+                "bone_indices": bone_indices,
+                "bone_weights": bone_weights,
+            }
+        )
+
+    morphs: list[dict[str, object]] = []
+    morph_tracks: list[dict[str, object]] = []
+    if has_keys:
+        basis = shape_keys.key_blocks[0]  # Blender's basis key is always first
+        conv3 = CONV.to_3x3()
+        name_map: dict[str, str] = {}
+        for key in list(shape_keys.key_blocks)[1:]:
+            emitted = key.name.replace("/", "_")
+            if emitted != key.name:
+                warnings.append(f"{obj.name}: shape key '{key.name}' exported as '{emitted}' ('/' is not allowed)")
+            name_map[key.name] = emitted
+            deltas: list[list[float]] = []
+            for source_vertex in source:
+                delta = conv3 @ (key.data[source_vertex].co - basis.data[source_vertex].co)
+                deltas.append([delta.x, delta.y, delta.z])
+            morphs.append(
+                {
+                    "mesh": mesh_name,
+                    "name": emitted,
+                    "weight": float(key.value),
+                    "deltas": deltas,
+                }
+            )
+        morph_tracks = _morph_weight_tracks(obj, mesh_name, name_map, shape_keys, fps, warnings, warned_modes)
+    return extra_nodes, skins, morphs, morph_tracks
+
+
+def _morph_weight_tracks(
+    obj: bpy.types.Object,
+    mesh_name: str,
+    name_map: dict[str, str],
+    shape_keys: "bpy.types.ShapeKey",
+    fps: float,
+    warnings: list[str],
+    warned_modes: set[str],
+) -> list[dict[str, object]]:
+    """ANI1 weight tracks for shape-key value F-curves: 1:1 through the shared
+    scalar machinery (same-mode segment runs, cubic handles via the existing
+    derivative conversion) onto morphs/<mesh>/<emitted-key> targets."""
+    animation_data = shape_keys.animation_data
+    if animation_data is None or animation_data.action is None:
+        return []
+    if len(animation_data.nla_tracks):
+        warnings.append(f"{obj.name}: shape-key NLA tracks present - only the active action's F-curves are exported")
+    tracks: list[dict[str, object]] = []
+    for fcurve in _action_fcurves(animation_data, f"{obj.name}.shape_keys", warnings):
+        match = re.match(r'key_blocks\["([^"]+)"\]\.value$', fcurve.data_path)
+        if match is None:
+            warnings.append(
+                f"{obj.name}.shape_keys: unsupported F-curve path '{fcurve.data_path}' (only key value curves export)"
+            )
+            continue
+        key_name = match.group(1)
+        if key_name not in name_map:
+            continue  # basis keys and dropped targets carry no track
+        keys = _fcurve_keys(fcurve)
+        if keys is None:
+            warnings.append(f"{obj.name}.shape_keys.{key_name}: keyless or invalid F-curve is not exported")
+            continue
+        target = f"morphs/{mesh_name}/{name_map[key_name]}"
+        rows = [
+            {"frame": key["frame"], "values": [key["value"]], "in_y": [key["in_y"]], "out_y": [key["out_y"]]}
+            for key in keys
+        ]
+        modes = [point.interpolation for point in fcurve.keyframe_points]
+        tracks.extend(
+            _run_tracks(
+                target, rows, modes, fps, _passthrough_value, _passthrough_tangent, 1, obj.name, warnings, warned_modes
+            )
+        )
+    return tracks
+
+
 class AetherSceneExporter(Operator, ExportHelper):
     bl_idname = "export.aether_scene"
     bl_label = "Export Aether Scene"
@@ -975,6 +1388,17 @@ class AetherSceneExporter(Operator, ExportHelper):
 
     filename_ext = ".scene.toml"
     filter_glob: StringProperty(default="*.scene.toml", options={"HIDDEN"}, maxlen=255)
+
+    skin_blend: EnumProperty(
+        name="Skin Blend",
+        description="Blend mode written to [[skin]] blend (Aether ANI4: DQS is "
+        "rigid-by-design and drops scale/shear; LBS keeps it)",
+        items=(
+            ("lbs", "Linear (LBS)", "Matrix blend - preserves scale, collapses volume under rotation blends"),
+            ("dqs", "Dual-Quaternion (DQS)", "Rigid blend - correct rotation blends, drops scale/shear"),
+        ),
+        default="lbs",
+    )
 
     selected_only: BoolProperty(
         name="Selected Only",
@@ -1016,6 +1440,7 @@ class AetherSceneExporter(Operator, ExportHelper):
 
     def draw(self, context):
         layout = self.layout
+        layout.prop(self, "skin_blend")
         layout.prop(self, "selected_only")
         layout.prop(self, "include_camera")
         layout.prop(self, "material_libraries")
@@ -1045,6 +1470,8 @@ class AetherSceneExporter(Operator, ExportHelper):
         meshes: list[dict[str, object]] = []
         nodes: list[dict[str, object]] = []
         mesh_by_data: dict[str, str] = {}
+        obj_paths: dict[str, Path] = {}
+        data_paths: dict[str, Path] = {}
         warnings: list[str] = []
 
         for obj in objects:
@@ -1068,8 +1495,10 @@ class AetherSceneExporter(Operator, ExportHelper):
                     _export_obj_file(obj, obj_path)
                     mesh_name = obj_path.stem
                     meshes.append({"name": mesh_name, "path": obj_path.name})
+                    obj_paths[obj.name] = obj_path
                     if data_key is not None:
                         mesh_by_data[data_key] = mesh_name
+                        data_paths[data_key] = obj_path
             nodes.append(_node_block(obj, mesh_name, parent_id, warnings))
 
         # NH4b: one [[animation]] entry per same-mode F-curve segment run,
@@ -1077,8 +1506,38 @@ class AetherSceneExporter(Operator, ExportHelper):
         # nothing.
         scene_fps = _effective_fps(context.scene, warnings)
         animations: list[dict[str, object]] = []
+
+        # ANI4/ANI5: deformation (armature skins + shape-key morphs) for the
+        # exported mesh objects that carry either. Bone nodes join the node
+        # list; morph weight tracks join the animation list after the node
+        # tracks (distinct targets - precedence cannot collide).
+        skins: list[dict[str, object]] = []
+        morphs: list[dict[str, object]] = []
+        morph_animations: list[dict[str, object]] = []
+        exported_ids_for_bones = {obj.name for obj in objects}
+        warned_modes: set[str] = set()
+        for obj in objects:
+            if obj.type != "MESH":
+                continue
+            obj_path = obj_paths.get(obj.name) or data_paths.get(obj.data.name)
+            extra_nodes, skin_blocks, morph_blocks, tracks = _deformation_blocks(
+                obj,
+                obj_path.stem if obj_path else "",
+                obj_path,
+                obj.name in exported_ids_for_bones,
+                self.skin_blend,
+                scene_fps,
+                warned_modes,
+                warnings,
+            )
+            nodes.extend(extra_nodes)
+            skins.extend(skin_blocks)
+            morphs.extend(morph_blocks)
+            morph_animations.extend(tracks)
+
         for obj in objects:
             animations.extend(_animation_tracks(obj, scene_fps, warnings))
+        animations.extend(morph_animations)
 
         for warning in warnings:
             print(f"Aether export: {warning}")
@@ -1104,12 +1563,15 @@ class AetherSceneExporter(Operator, ExportHelper):
             material_libraries,
             render_reference,
             tonemap_reference,
+            skins,
+            morphs,
         )
 
         self.report(
             {"INFO"},
             f"Exported {len(meshes)} mesh(es) / {len(nodes)} node(s) / {len(animations)} animation "
-            f"track(s) to {scene_path.name}",
+            f"track(s) / {len(skins)} skin(s) / {len(morphs)} morph(s) [blend={self.skin_blend}] "
+            f"to {scene_path.name}",
         )
         return {"FINISHED"}
 

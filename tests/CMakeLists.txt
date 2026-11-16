@@ -49,6 +49,7 @@ if(NOT TARGET GTest::gtest_main AND TARGET gtest_main)
 endif()
 
 add_executable(aether_tests
+    test_blender_roundtrip.cpp
     test_material_library.cpp
     test_morphing.cpp
     test_obj_importer.cpp
