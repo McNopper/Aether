@@ -1,0 +1,84 @@
+[render]
+reference = "presets/meadow_64spp_8bounce.render.toml"
+
+[camera]
+reference = "skinned_orbit.camera.toml"
+
+[tonemap]
+reference = "presets/aces.tonemap.toml"
+
+[meta]
+generator = "blender_to_aether/1.5.0"
+
+[[mesh]]
+name = "SkinnedQuad"
+path = "SkinnedQuad.obj"
+
+[[node]]
+id = "Rig"
+translate = [0.0, 0.0, 0.0]
+rotate = [0.0, 0.0, 0.0, 1.0]
+scale = [1.0, 1.0, 1.0]
+
+[[node]]
+id = "SkinnedQuad"
+translate = [0.0, 0.0, 0.0]
+rotate = [0.0, 0.0, 0.0, 1.0]
+scale = [1.0, 1.0, 1.0]
+mesh = "SkinnedQuad"
+
+[[node]]
+id = "OrbitPivot"
+translate = [0.0, 0.0, 0.0]
+rotate = [0.0, 0.7071067690849304, -3.0908619663705394e-08, 0.7071067690849304]
+scale = [1.0, 1.0, 1.0]
+
+[[node]]
+id = "OrbitCam"
+parent = "OrbitPivot"
+translate = [0.0, 2.000000238418579, 6.0]
+rotate = [-0.16018232703208923, 0.0, 0.0, 0.9870874285697937]
+scale = [1.0, 1.0, 1.0]
+
+[[node]]
+id = "Rig::Bone.Root"
+parent = "Rig"
+translate = [0.0, 0.0, 0.0]
+rotate = [0.7071067690849304, 0.0, 0.0, 0.7071067690849304]
+scale = [1.0, 1.0, 1.0]
+
+[[node]]
+id = "Rig::Bone.Child"
+parent = "Rig::Bone.Root"
+translate = [0.0, -4.371138828673793e-08, -1.0]
+rotate = [0.0, 0.0, 0.0, 1.0]
+scale = [1.0, 1.0, 1.0]
+
+[[skin]]
+node = "SkinnedQuad"
+joints = ["Rig::Bone.Root", "Rig::Bone.Child"]
+blend = "lbs"
+inverse_bind = [[1.0, -0.0, 0.0, -0.0, -0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, -0.0, -0.0, 0.0, -0.0, 1.0], [1.0, -0.0, 0.0, -0.0, -0.0, 0.0, 1.0, 4.371138828673793e-08, 0.0, -1.0, 0.0, 1.0, -0.0, 0.0, -0.0, 1.0]]
+bone_indices = [[0, 0, 0, 0], [0, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0]]
+bone_weights = [[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]
+
+[[morph]]
+mesh = "SkinnedQuad"
+name = "Smile"
+weight = 0.0
+deltas = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.25, -1.0927847071684482e-08], [0.0, 0.25, -1.0927847071684482e-08]]
+
+[animation_clock]
+fps = 30.0
+
+[[animation]]
+target = "nodes/OrbitPivot/rotation"
+interpolation = "cubic_spline"
+times = [0.03333333333333333, 2.0]
+values = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0000000000000002, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.7071067690849305, 0.0, 0.7071067690849305, 0.0, 0.0, 0.0, 0.0]
+
+[[animation]]
+target = "morphs/SkinnedQuad/Smile"
+interpolation = "cubic_spline"
+times = [0.03333333333333333, 1.0]
+values = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0]

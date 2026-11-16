@@ -96,6 +96,33 @@ TEST(SceneParser, ReadsCameraParameters) {
     EXPECT_FLOAT_EQ(*scene->camera.vfov, 39.1F);
 }
 
+TEST(SceneParser, ReadsCameraNodeBinding) {
+    // ANI8: `[camera] node = "<id>"` binds against the completed node graph;
+    // the section's own TRS stays parsed alongside (static fallback/preview).
+    NodeScene f("cam_node", R"toml([camera]
+node = "orbit"
+translate = [0.0, 4.0, 8.0]
+vertical_field_of_view = 50.0
+
+[[node]]
+id = "orbit"
+)toml");
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_TRUE(f.scene->camera.nodeId.has_value());
+    EXPECT_EQ(*f.scene->camera.nodeId, "orbit");
+    ASSERT_TRUE(f.scene->camera.translation.has_value()) << "TRS parses alongside node";
+    EXPECT_FLOAT_EQ(f.scene->camera.translation->y, 4.0F);
+}
+
+TEST(SceneParser, RejectsUnknownCameraNode) {
+    NodeScene f("cam_badnode", R"toml([camera]
+node = "nope"
+vertical_field_of_view = 50.0
+)toml");
+    ASSERT_FALSE(f.scene.has_value());
+    EXPECT_NE(f.error.find("camera references unknown node 'nope'"), std::string::npos) << f.error;
+}
+
 TEST(SceneParser, ReadsGlobalRenderSettings) {
     const auto scene = aether::SceneParser::parse(assetsDir() / "cornell_classic.scene.toml");
     ASSERT_TRUE(scene.has_value());

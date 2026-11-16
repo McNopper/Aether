@@ -470,6 +470,60 @@ SceneDesc SceneAnimator::evaluateAtTick(const SceneDesc& scene, std::uint64_t ti
     return evaluate(scene, timeSeconds);
 }
 
+std::optional<CameraPose> SceneAnimator::evaluateCamera(const SceneDesc& scene, float timeSeconds) {
+    if (scene.camera.nodeId) {
+        // evaluate() stamps the node locals AND re-resolves nodeWorlds, so
+        // the world read below is exactly this frame's (same contract the
+        // skin evaluation relies on).
+        const SceneDesc stamped = evaluate(scene, timeSeconds);
+        const std::string& want = *scene.camera.nodeId;
+        const auto it = std::find_if(
+            stamped.nodes.begin(), stamped.nodes.end(), [&want](const NodeDesc& node) { return node.id == want; });
+        if (it == stamped.nodes.end()) {
+            return std::nullopt; // parse-validated; defensive for hand-built scenes
+        }
+        const auto index = static_cast<std::size_t>(it - stamped.nodes.begin());
+        if (index >= stamped.nodeWorlds.size()) {
+            return std::nullopt; // unresolved graph - no world to read
+        }
+        const Mat4& world = stamped.nodeWorlds[index];
+
+        CameraPose pose;
+        pose.position = Vec3{world[0][3], world[1][3], world[2][3]};
+        // Column-normalized basis: camera-node scale is ignored (the DQS
+        // rigid projection - sm::toQuaternion's input contract is orthonormal).
+        Vec3 col[3];
+        for (std::size_t j = 0; j < 3; ++j) {
+            col[j] = Vec3{world[0][j], world[1][j], world[2][j]};
+            const float len = sm::length(col[j]);
+            if (len <= 1.0e-20F) {
+                return std::nullopt; // degenerate basis: not a pose
+            }
+            col[j] = col[j] * (1.0F / len);
+        }
+        const sm::float3x3 rotation{
+            {col[0].x, col[1].x, col[2].x}, {col[0].y, col[1].y, col[2].y}, {col[0].z, col[1].z, col[2].z}};
+        pose.rotation = sm::toQuaternion(rotation);
+        return pose;
+    }
+
+    if (!scene.camera.translation && !scene.camera.rotation) {
+        return std::nullopt; // no placement authored (no node, no TRS)
+    }
+    CameraPose pose;
+    pose.position = scene.camera.translation.value_or(Vec3{0.0F, 0.0F, 0.0F});
+    pose.rotation = scene.camera.rotation.value_or(Quat{0.0F, 0.0F, 0.0F, 1.0F});
+    return pose;
+}
+
+std::optional<CameraPose> SceneAnimator::evaluateCameraAtTick(const SceneDesc& scene, std::uint64_t tick) {
+    if (!(scene.animationFps > 0.0)) {
+        return evaluateCamera(scene, 0.0F); // degenerate hand-built clock: static placement
+    }
+    const float timeSeconds = static_cast<float>(static_cast<double>(tick) / scene.animationFps);
+    return evaluateCamera(scene, timeSeconds);
+}
+
 std::vector<SkinPose> SceneAnimator::evaluateSkins(const SceneDesc& scene, float timeSeconds) {
     if (scene.skins.empty()) {
         return {}; // skin-free scenes: no poses for any t (mirrors evaluate)

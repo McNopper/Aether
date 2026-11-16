@@ -7,7 +7,7 @@
 # Usage (headless):
 #   blender --background --python tools/test_scenes.py -- --scene <name> --out <dir>
 #   (scene names: hierarchy | animated | simple | instancing; repeatable runs
-#   skinned | skinned_dqs; repeatable runs
+#   skinned | skinned_dqs | camera_orbit | skinned_orbit; repeatable runs
 #    are deterministic - same scene name, same output bytes)
 #
 # The addon (tools/blender_to_aether) is imported from this script's directory
@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 import bpy
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 
 TOOL_DIR = str(Path(__file__).resolve().parent)
 
@@ -235,6 +235,54 @@ def build_skinned():
     }
 
 
+def _orbit_rig():
+    """ANI8 orbit rig: an `OrbitPivot` empty at the origin with a camera child
+    at (0, -6, 2) Blender units looking at the origin (to_track_quat '-Z',
+    'Y'), and the pivot's whole-parameter Z rotation keyed 0 -> 90 deg over
+    frames 1..60 - the camera orbits the scene while keeping its aim, so every
+    tick renders a different angle. Registers the camera as the scene camera
+    (the exporter's include_camera path picks it up)."""
+    pivot = _add_empty("OrbitPivot")
+    cam_data = bpy.data.cameras.new("OrbitCam")
+    cam = bpy.data.objects.new("OrbitCam", cam_data)
+    bpy.context.collection.objects.link(cam)
+    cam.parent = pivot
+    cam.location = (0.0, -6.0, 2.0)
+    # Local (pivot-space) aim: -Z toward the pivot origin, Y up. Constant for
+    # the whole orbit - only the pivot's rotation animates.
+    cam.rotation_euler = (Vector((0.0, 0.0, 0.0)) - cam.location).to_track_quat("-Z", "Y").to_euler()
+
+    # All three rotation components keyed at the same frames -> the exporter's
+    # agreeing-component path emits ONE whole-parameter rotation track.
+    pivot.rotation_euler = (0.0, 0.0, 0.0)
+    pivot.keyframe_insert(data_path="rotation_euler", frame=1)
+    pivot.rotation_euler = (0.0, 0.0, math.radians(90.0))
+    pivot.keyframe_insert(data_path="rotation_euler", frame=60)
+
+    bpy.context.scene.camera = cam
+    return cam
+
+
+def build_camera_orbit():
+    """ANI8 matrix: a static cube under an orbiting camera (see _orbit_rig).
+    The [camera] section binds to the OrbitCam NODE, so the renderers must
+    follow the animated transform every tick (angles differ per frame)."""
+    _clear_scene()
+    bpy.context.scene.render.fps = 30
+    _add_cube("Subject")
+    _orbit_rig()
+    return {"meshed": ["Subject"]}
+
+
+def build_skinned_orbit():
+    """ANI8 example: the skinned/morphed fixture (build_skinned: two-bone rig,
+    blocky weights, animated Smile shape key) PLUS the orbiting camera - one
+    scene exercising deformation and the animated camera together."""
+    out = build_skinned()
+    _orbit_rig()
+    return out
+
+
 SCENES = {
     "hierarchy": build_hierarchy,
     "animated": build_animated,
@@ -242,12 +290,25 @@ SCENES = {
     "instancing": build_instancing,
     "skinned": build_skinned,
     "skinned_dqs": build_skinned,
+    "camera_orbit": build_camera_orbit,
+    "skinned_orbit": build_skinned_orbit,
 }
 
 # Extra operator kwargs per scene (skin_blend rides the exporter option so the
-# same builder covers both blend modes).
+# same builder covers both blend modes; the orbit scenes turn on the camera
+# export for the ANI8 [camera] node binding and take the meadow IBL preset -
+# factory-empty scenes carry no lights, so a direct-light-only preset would
+# render black).
 SCENE_OPS = {
     "skinned_dqs": {"skin_blend": "dqs"},
+    "camera_orbit": {
+        "include_camera": True,
+        "render_reference": "presets/meadow_64spp_8bounce.render.toml",
+    },
+    "skinned_orbit": {
+        "include_camera": True,
+        "render_reference": "presets/meadow_64spp_8bounce.render.toml",
+    },
 }
 
 
@@ -261,9 +322,8 @@ def export_scene(out_dir: Path, scene_name: str) -> Path:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     scene_path = out / f"{scene_name}.scene.toml"
-    bpy.ops.export.aether_scene(filepath=str(scene_path), include_camera=False,
-                                check_existing=False,
-                                **SCENE_OPS.get(scene_name, {}))
+    ops = {"include_camera": False, **SCENE_OPS.get(scene_name, {})}
+    bpy.ops.export.aether_scene(filepath=str(scene_path), check_existing=False, **ops)
     return scene_path
 
 

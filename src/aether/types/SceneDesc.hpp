@@ -42,6 +42,15 @@ struct CameraDesc {
     std::optional<Vec3> scale;    ///< parsed for parity with instances; unused by cameras
     std::optional<float> vfov;    ///< vertical field of view in degrees
     std::optional<float> ev100;   ///< physical camera EV100 override
+
+    /// Camera-from-node (ANI8): placement follows this NH1 node's WORLD
+    /// matrix, re-evaluated per animation tick through
+    /// `SceneAnimator::evaluateCamera` (position = world translation,
+    /// rotation = the column-normalized world basis - camera-node scale is
+    /// ignored, exactly like the DQS rigid projection). Validated against the
+    /// `[[node]]` list at parse time. The section's own translate/rotate stay
+    /// the static fallback / authored preview and are parsed regardless.
+    std::optional<std::string> nodeId;
 };
 
 /// A declared mesh — pure geometry, carrying **no transform and no material**.

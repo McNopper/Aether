@@ -368,6 +368,14 @@ struct SkinPose {
     std::vector<Mat4> skinMatrices; ///< one per joint, in SkinDesc joint order
 };
 
+/// ANI8 - the evaluated camera placement at a point in time (world space).
+/// The forward convention matches the static `[camera]` block consumers:
+/// forward = `rotation * (0, 0, -1)`, up = `rotation * (0, 1, 0)`.
+struct CameraPose {
+    Vec3 position; ///< world-space eye position
+    Quat rotation; ///< world orientation, slang-math order (x, y, z, w)
+};
+
 /// The evaluation API (the directive's deliverable - the renderers call
 /// these; ANI1 ships `evaluate` with tests as its only caller, ANI2 adds the
 /// tick clock).
@@ -401,6 +409,23 @@ class SceneAnimator {
     /// evaluates to the unchanged copy). Scenes without `[[animation]]`
     /// return the unchanged copy for any tick, like `evaluate`.
     [[nodiscard]] static SceneDesc evaluateAtTick(const SceneDesc& scene, std::uint64_t tick);
+
+    /// ANI8 - evaluate the camera placement at @p timeSeconds:
+    ///   * `[camera] node = "<id>"` - the evaluated WORLD matrix of that node
+    ///     (its tracks run through the same `evaluate` path, so an animated
+    ///     camera node follows the clock): position = world translation,
+    ///     rotation = the column-normalized world basis (camera-node scale is
+    ///     ignored - the same rigid projection `skinDualQuaternions` uses);
+    ///   * otherwise the section's static translate/rotate (identity defaults
+    ///     when a part is absent).
+    /// Returns std::nullopt when the scene carries no placement at all (no
+    /// node and neither translate nor rotate). One SceneDesc evaluation copy
+    /// per call, exactly like `evaluateSkins`.
+    [[nodiscard]] static std::optional<CameraPose> evaluateCamera(const SceneDesc& scene, float timeSeconds);
+
+    /// ANI8 - tick-clock mirror of `evaluateCamera` (`seconds = tick /
+    /// animationFps`, then exactly `evaluateCamera`).
+    [[nodiscard]] static std::optional<CameraPose> evaluateCameraAtTick(const SceneDesc& scene, std::uint64_t tick);
 
     /// ANI4 - evaluate every `[[skin]]` binding at @p timeSeconds: stamps the
     /// joint node locals (via `evaluate`), reads the resolved joint world

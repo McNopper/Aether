@@ -29,9 +29,13 @@ writes:
    instance list itself. Deforming objects (armature modifier and/or shape
    keys) add the ANI4 `[[skin]]` / ANI5 `[[morph]]` blocks and their weight
    tracks - see *Deformation export* below.
-2. `<name>.camera.toml` — a camera preset (`translate`, `rotate`,
+2. `<name>.camera.toml` - a camera preset (`translate`, `rotate`,
    `vertical_field_of_view`, `ev100`) referenced from the scene's `[camera]`
-   section.
+   section, plus `node = "<camera object>"` (ANI8) when the camera object is
+   itself part of the export - the renderers then re-place the camera from
+   this node's evaluated world every animation tick (animated camera), while
+   the static TRS stays the load-time fallback/preview. `selected_only`
+   exports that exclude the camera emit the static TRS only.
 3. One `.obj` per unique mesh (geometry only; **materials are not exported**).
 
 It deliberately does **not** convert Blender materials to OpenPBR — Blender has
@@ -243,6 +247,30 @@ binary32 component values) - which is what makes `validateSkinVertexCounts`
 / `validateMorphVertexCounts` pass at load. `tests/test_blender_roundtrip.cpp`
 pins the contract against the committed `skinned` / `skinned_dqs` fixtures,
 including a 6-vs-4 negative control.
+
+### Camera-from-node (ANI8)
+
+When the camera object is part of the export, the `<name>.camera.toml` carries
+`node = "<camera object>"` and the renderers follow that node's **evaluated**
+world every animation tick (`SceneAnimator::evaluateCameraAtTick`): an animated
+camera (directly or via a parented pivot rig) re-places the view per frame, and
+`--frame N` seeks where the playback starts. Two exporter rules make the aim
+correct:
+
+* **Camera nodes are PRE-multiplied, not conjugated** (`CONV @ local` instead
+  of `CONV @ local @ CONV^-1` - every other node conjugates). A camera's
+  payload is its OPTICAL AXIS, and conjugation swizzles the local axes too
+  (local `-Z` lands on `-Y`), while the consumers map
+  `forward = rotation * (0, 0, -1)` - exactly the form the static `[camera]`
+  block writes (`CONV @ R`). The compounded camera world therefore comes out
+  as `CONV @ R_chain` (position identical either way) and the aim is the true
+  view direction. The committed `camera_orbit` fixture pins this
+  (`BlenderRoundTrip.AnimatedCameraNodeAimsAtTheOrigin`: position (0, 2, 6),
+  forward == to-origin at ticks 0 and 58).
+* **Camera rotation keys/tangents take the same pre-multiplied form**
+  (`_premultiply_rotation`), so a directly animated camera object stays aimed
+  too. A camera parented to ANOTHER camera breaks the telescoping product and
+  is not supported (documented).
 
 **Install:** copy `blender_to_aether/` into your Blender addons folder and
 enable *Aether Scene Exporter*, or run it headless:
@@ -486,7 +514,8 @@ and exports them through the addon - the NH4 verification oracle:
 
 ```text
 blender --background --python tools/test_scenes.py -- \
-        --scene hierarchy|animated|simple|instancing|skinned|skinned_dqs --out <dir>
+        --scene hierarchy|animated|simple|instancing|skinned|skinned_dqs| \
+             camera_orbit|skinned_orbit --out <dir>
 ```
 
 Each run writes `<scene>.scene.toml` plus `<scene>.expected.json`
@@ -497,7 +526,11 @@ mixed-interpolation location curve split into per-mode tracks. `skinned`
 (LBS) and `skinned_dqs` (DQS - the same builder, `skin_blend` differs)
 exercise the deformation contract: two-bone armature, blocky vertex-group
 weights, and a `Smile` shape key keyframed over frames 1..30 (the morph
-weight track).
+weight track). `camera_orbit` (static cube + orbiting camera) and
+`skinned_orbit` (the skinned fixture + the same orbit rig) exercise the
+ANI8 camera contract: they turn on `include_camera` (the `[camera] node`
+binding) and take the meadow IBL preset - factory-empty scenes carry no
+lights, so a direct-light-only preset would render black.
 
 The two `skinned` exports are **committed as fixtures** (`assets/skinned*.scene.toml`
 + the shared `assets/SkinnedQuad.obj`; regenerate with the command above and

@@ -175,6 +175,47 @@ TEST(BlenderRoundTrip, RestPoseSkinMatricesAreIdentity) {
 
 // � shape key -> weight track -> deformMorphs �����������������������������
 
+//  ANI8 (camera-from-node convention)  ------------------------------------------------
+
+TEST(BlenderRoundTrip, AnimatedCameraNodeAimsAtTheOrigin) {
+    // The exporter PRE-multiplies camera-node locals (CONV @ R - the same form
+    // the static [camera] block writes) instead of conjugating them like every
+    // other node, because a camera's payload is its OPTICAL AXIS: plain
+    // conjugation swizzles local -Z onto -Y and the aim ends up 90 degrees off
+    // (the rendered frames were sky-only). This pins both the position and the
+    // aim - forward = rotation * (0, 0, -1) must point at the origin from
+    // Aether (0, 2, 6) (= Blender (0, -6, 2) under CONV).
+    const auto scene = aether::SceneParser::parse(assetsDir() / "camera_orbit.scene.toml");
+    ASSERT_TRUE(scene.has_value());
+    ASSERT_TRUE(scene->camera.nodeId.has_value());
+    EXPECT_EQ(*scene->camera.nodeId, "OrbitCam");
+
+    const auto p0 = aether::SceneAnimator::evaluateCameraAtTick(*scene, 0);
+    ASSERT_TRUE(p0.has_value());
+    EXPECT_NEAR(p0->position.x, 0.0F, kEps);
+    EXPECT_NEAR(p0->position.y, 2.0F, kEps);
+    EXPECT_NEAR(p0->position.z, 6.0F, kEps) << "tick 0: orbit pivot at its identity key";
+
+    const auto aimsAtOrigin = [](const aether::CameraPose& pose) {
+        const sm::float3 fwd = pose.rotation * sm::float3{0.0F, 0.0F, -1.0F};
+        const float len = sm::length(pose.position);
+        const sm::float3 toOrigin = pose.position * (-1.0F / len);
+        EXPECT_NEAR(fwd.x, toOrigin.x, 1.0e-3F) << "forward.x vs to-origin";
+        EXPECT_NEAR(fwd.y, toOrigin.y, 1.0e-3F) << "forward.y vs to-origin";
+        EXPECT_NEAR(fwd.z, toOrigin.z, 1.0e-3F) << "forward.z vs to-origin";
+    };
+    aimsAtOrigin(*p0);
+
+    // Deep into the orbit: the pivot rig keeps the aim on the origin while the
+    // camera swings (~90 degrees about Aether +Y) - position height and radius
+    // stay exact, and the forward direction still hits the target.
+    const auto p58 = aether::SceneAnimator::evaluateCameraAtTick(*scene, 58);
+    ASSERT_TRUE(p58.has_value());
+    EXPECT_NEAR(p58->position.y, 2.0F, kEps) << "orbit keeps the camera height";
+    EXPECT_NEAR(sm::length(p58->position), std::sqrt(40.0F), 1.0e-3F) << "orbit keeps the radius";
+    aimsAtOrigin(*p58);
+}
+
 TEST(BlenderRoundTrip, MorphWeightTrackDrivesDeform) {
     const Fixture f("skinned.scene.toml");
     ASSERT_TRUE(f.scene.has_value()) << f.error;

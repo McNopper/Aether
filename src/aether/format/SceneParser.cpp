@@ -1,5 +1,6 @@
 #include "aether/format/SceneParser.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -90,6 +91,12 @@ void parseTRS(const toml::table& tbl,
 
 void applyCamera(const toml::table& cam, SceneDesc& desc) {
     parseTRS(cam, desc.camera.translation, desc.camera.rotation, desc.camera.scale);
+
+    // Camera-from-node (ANI8): bound against the completed [[node]] graph in
+    // parse() - the settings sections parse before the node array.
+    if (const auto node = cam["node"].value<std::string>()) {
+        desc.camera.nodeId = *node;
+    }
 
     if (const auto vfov = cam["vertical_field_of_view"].value<double>()) {
         desc.camera.vfov = static_cast<float>(*vfov);
@@ -606,6 +613,21 @@ std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFi
             }
         }
         if (!resolveNodes(desc, errorMessage)) {
+            return std::nullopt;
+        }
+    }
+
+    // Camera-from-node (ANI8): `[camera] node = "<id>"` binds against the
+    // completed node graph (the settings sections parse before [[node]], so
+    // the existence check has to run here, next to the other graph bindings).
+    if (desc.camera.nodeId) {
+        const std::string& want = *desc.camera.nodeId;
+        const auto it = std::find_if(desc.nodes.begin(), desc.nodes.end(),
+                                     [&want](const NodeDesc& node) { return node.id == want; });
+        if (it == desc.nodes.end()) {
+            if (errorMessage != nullptr) {
+                *errorMessage = "camera references unknown node '" + want + "'";
+            }
             return std::nullopt;
         }
     }

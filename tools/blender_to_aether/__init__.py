@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Aether Scene Exporter",
     "author": "Aether Tools",
-    "version": (1, 4, 0),
+    "version": (1, 5, 0),
     "blender": (5, 2, 0),
     "location": "File > Export > Aether Scene (.scene.toml)",
     "description": "Export Blender scenes to Aether scene/animation/camera/OBJ files",
@@ -61,6 +61,14 @@ def _conjugate_rotation(x, y, z, w):
     # Q_CONV ⊗ q ⊗ Q_CONV⁻¹ (Blender → Aether). The product is bilinear in the
     # four components, so non-unit tangent 4-vectors conjugate exactly too.
     quat = _quat_product(_quat_product(Q_CONV_PARTS, (w, x, y, z)), Q_CONV_INV_PARTS)
+    return [quat[1], quat[2], quat[3], quat[0]]
+
+
+def _premultiply_rotation(x, y, z, w):
+    # Q_CONV ⊗ q - the rotation part of CONV @ R(q) (Blender → Aether CAMERA
+    # form; see the camera note in _node_block). Also bilinear, so tangent
+    # 4-vectors premultiply exactly too.
+    quat = _quat_product(Q_CONV_PARTS, (w, x, y, z))
     return [quat[1], quat[2], quat[3], quat[0]]
 
 
@@ -170,21 +178,30 @@ def _export_obj_file(obj: bpy.types.Object, obj_path: Path) -> None:
             bpy.context.view_layer.objects.active = prev_active
 
 
-def _camera_block(camera: bpy.types.Object, ev100: float) -> list[str]:
+def _camera_block(camera: bpy.types.Object, ev100: float, node_id: str | None = None) -> list[str]:
     # Camera world transform mapped Blender Z-up -> Aether Y-up. A camera's
     # placement is a plain TRS (identical keys to a mesh instance): translate +
     # rotate. The scene format accepts rotate (quat [qx,qy,qz,qw]) or
     # rotate_x/y/z (Euler); the quaternion is emitted for a lossless export.
+    # ANI8: when the camera object is itself part of the exported node graph,
+    # `node = "<id>"` binds the section to it - the renderers re-place the
+    # camera from this node's evaluated world every animation tick (animated
+    # camera), while the static TRS below stays the load-time fallback/preview.
     world = CONV @ camera.matrix_world
     location = world.translation
     rotation = world.to_quaternion()
     vfov = math.degrees(getattr(camera.data, "angle_y", camera.data.angle))
-    lines = [
-        f"translate = [{location.x}, {location.y}, {location.z}]",
-        f"rotate = [{rotation.x}, {rotation.y}, {rotation.z}, {rotation.w}]",
-        f"vertical_field_of_view = {vfov}",
-        f"ev100 = {ev100}",
-    ]
+    lines = []
+    if node_id is not None:
+        lines.append(f"node = {_quote(node_id)}")
+    lines.extend(
+        [
+            f"translate = [{location.x}, {location.y}, {location.z}]",
+            f"rotate = [{rotation.x}, {rotation.y}, {rotation.z}, {rotation.w}]",
+            f"vertical_field_of_view = {vfov}",
+            f"ev100 = {ev100}",
+        ]
+    )
     return lines
 
 
@@ -253,8 +270,17 @@ def _node_block(
     # Conjugating every local matrix by CONV distributes over composition, so
     # the Aether parser's per-level T*R*S compounding reproduces the conjugated
     # Blender world transforms against the Y-up local mesh geometry (see CONV).
+    # ANI8 CAMERA exception: a camera node's payload is its OPTICAL AXIS, and
+    # conjugation swizzles the local axes too (local -Z lands on -Y), while the
+    # consumers map `forward = rotation * (0, 0, -1)` - exactly what the static
+    # [camera] block's PRE-multiplied CONV @ R form satisfies. So camera nodes
+    # pre-multiply instead of conjugating: the compounded world then comes out
+    # as CONV @ R_chain (position identical either way - only the rotation
+    # differs) and the aim is the true view direction. A camera parented to
+    # ANOTHER camera breaks the telescoping product and is not supported.
     local = obj.matrix_local if parent_id is not None else obj.matrix_world
-    local = CONV @ local @ CONV.inverted()
+    # (ternary keeps the camera form one line - see the CAMERA note above)
+    local = CONV @ local if obj.type == "CAMERA" else CONV @ local @ CONV.inverted()
     location, rotation, scale = _decompose_checked(local, obj.name, warnings)
     block: dict[str, object] = {"id": obj.name}
     if parent_id is not None:
@@ -476,21 +502,24 @@ _COMPONENT_OF_INDEX = {
 }
 
 
-def _quaternion_value(components: Sequence[float]) -> list[float]:
+def _quaternion_value(components: Sequence[float], map_rot=_conjugate_rotation) -> list[float]:
     # Blender rotation_quaternion channels are (w, x, y, z); the schema wants
     # (x, y, z, w). Component lerp can leave the key slightly off unit length,
-    # so the key is normalized before conjugation (the parser normalizes too;
-    # a degenerate zero quaternion maps to identity, matching sm::normalize).
+    # so the key is normalized before the rotation map (the parser normalizes
+    # too; a degenerate zero quaternion maps to identity, matching sm::normalize).
     w, x, y, z = components
     norm = math.sqrt(w * w + x * x + y * y + z * z)
     if norm == 0.0:
-        return _conjugate_rotation(0.0, 0.0, 0.0, 1.0)
-    return _conjugate_rotation(x / norm, y / norm, z / norm, w / norm)
+        return map_rot(0.0, 0.0, 0.0, 1.0)
+    return map_rot(x / norm, y / norm, z / norm, w / norm)
 
 
-def _rotation_tangent(components: Sequence[float], tangent: Sequence[float]) -> list[float]:
+def _rotation_tangent(
+    components: Sequence[float], tangent: Sequence[float], map_rot=_conjugate_rotation
+) -> list[float]:
     # Tangent components (dw, dx, dy, dz) in Blender channel order (w, x, y, z).
-    return _conjugate_rotation(tangent[1], tangent[2], tangent[3], tangent[0])
+    del components  # both maps are linear in the four components
+    return map_rot(tangent[1], tangent[2], tangent[3], tangent[0])
 
 
 def _run_tracks(
@@ -758,12 +787,18 @@ def _rotation_tracks(
         position = max(bisect_right(reference_frames, frame) - 1, 0)
         segment_modes.append(reference_modes[position] if reference_modes else "LINEAR")
 
+    # ANI8: camera nodes carry the PRE-multiplied camera form (see _node_block),
+    # so their rotation keys/tangents map through the same form instead of the
+    # node-graph conjugation. Both maps are linear in the four components.
+    map_rot = _premultiply_rotation if obj.type == "CAMERA" else _conjugate_rotation
+
     if is_quaternion:
 
         def to_value(components: Sequence[float]) -> list[float]:
-            return _quaternion_value(components)
+            return _quaternion_value(components, map_rot)
 
-        to_tangent = _rotation_tangent
+        def to_tangent(components: Sequence[float], tangent: Sequence[float]) -> list[float]:
+            return _rotation_tangent(components, tangent, map_rot)
 
     else:
 
@@ -773,12 +808,12 @@ def _rotation_tracks(
 
         def to_value(components: Sequence[float]) -> list[float]:
             # Blender applies the euler angles in the object's rotation order.
-            return _conjugate_rotation(*quat_parts(components))
+            return map_rot(*quat_parts(components))
 
         def to_tangent(components: Sequence[float], tangent: Sequence[float]) -> list[float]:
             # dq/dt of the euler→quaternion conversion for the per-channel
             # euler rates: central difference per angle (exact to float
-            # precision), conjugated like the value.
+            # precision), mapped like the value.
             h = 1e-4
             derivative = [0.0, 0.0, 0.0, 0.0]
             for index in range(3):
@@ -790,7 +825,7 @@ def _rotation_tracks(
                 lower = quat_parts(minus)
                 scale = 0.5 / h * float(tangent[index])
                 derivative = [derivative[c] + (upper[c] - lower[c]) * scale for c in range(4)]
-            return _conjugate_rotation(*derivative)
+            return map_rot(*derivative)
 
     return _run_tracks(
         target,
@@ -1546,7 +1581,16 @@ class AetherSceneExporter(Operator, ExportHelper):
         camera_reference = None
         if self.include_camera and context.scene.camera:
             camera_path = _camera_path(scene_path)
-            _write_simple_toml(camera_path, _camera_block(context.scene.camera, self.camera_ev100))
+            # ANI8: bind the [camera] section to the camera OBJECT's node when
+            # that node is part of this export - the renderers then follow the
+            # camera's animated transform per tick. selected_only exports that
+            # exclude the camera keep the static TRS only.
+            camera_node = (
+                context.scene.camera.name if context.scene.camera.name in exported_ids else None
+            )
+            _write_simple_toml(
+                camera_path, _camera_block(context.scene.camera, self.camera_ev100, camera_node)
+            )
             camera_reference = camera_path.name
 
         material_libraries = [item.strip() for item in self.material_libraries.split(",") if item.strip()]

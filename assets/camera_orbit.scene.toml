@@ -1,0 +1,44 @@
+[render]
+reference = "presets/meadow_64spp_8bounce.render.toml"
+
+[camera]
+reference = "camera_orbit.camera.toml"
+
+[tonemap]
+reference = "presets/aces.tonemap.toml"
+
+[meta]
+generator = "blender_to_aether/1.5.0"
+
+[[mesh]]
+name = "Subject"
+path = "Subject.obj"
+
+[[node]]
+id = "Subject"
+translate = [0.0, 0.0, 0.0]
+rotate = [0.0, 0.0, 0.0, 1.0]
+scale = [1.0, 1.0, 1.0]
+mesh = "Subject"
+
+[[node]]
+id = "OrbitPivot"
+translate = [0.0, 0.0, 0.0]
+rotate = [0.0, 0.7071067690849304, -3.0908619663705394e-08, 0.7071067690849304]
+scale = [1.0, 1.0, 1.0]
+
+[[node]]
+id = "OrbitCam"
+parent = "OrbitPivot"
+translate = [0.0, 2.000000238418579, 6.0]
+rotate = [-0.16018232703208923, 0.0, 0.0, 0.9870874285697937]
+scale = [1.0, 1.0, 1.0]
+
+[animation_clock]
+fps = 30.0
+
+[[animation]]
+target = "nodes/OrbitPivot/rotation"
+interpolation = "cubic_spline"
+times = [0.03333333333333333, 2.0]
+values = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0000000000000002, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.7071067690849305, 0.0, 0.7071067690849305, 0.0, 0.0, 0.0, 0.0]

@@ -1039,4 +1039,87 @@ values = [0.0, 1.0]
     EXPECT_FLOAT_EQ(x(30), 1.0F);
 }
 
+// � ANI8 (camera-from-node + static fallback) �──────────────────────────
+
+TEST(EvaluateCamera, StaticPlacementFallback) {
+    // No `node` key: the pose comes straight from the section's TRS.
+    AnimScene s("cam_static", R"toml([camera]
+translate = [1.0, 2.0, 3.0]
+rotate = [0.0, 0.0, 0.0, 1.0]
+vertical_field_of_view = 45.0
+)toml");
+    ASSERT_TRUE(s.scene.has_value()) << s.error;
+    ASSERT_FALSE(s.scene->camera.nodeId.has_value());
+
+    const auto pose = aether::SceneAnimator::evaluateCamera(*s.scene, 0.0F);
+    ASSERT_TRUE(pose.has_value());
+    EXPECT_FLOAT_EQ(pose->position.x, 1.0F);
+    EXPECT_FLOAT_EQ(pose->position.y, 2.0F);
+    EXPECT_FLOAT_EQ(pose->position.z, 3.0F);
+    EXPECT_NEAR(pose->rotation.w, 1.0F, kTrsEpsilon);
+    EXPECT_NEAR(pose->rotation.x, 0.0F, kTrsEpsilon);
+}
+
+TEST(EvaluateCamera, NodePlacementFollowsAnimatedTracks) {
+    // The camera node carries BOTH a translation and a rotation track: the
+    // pose must follow the tick clock (position at t=1 s, forward swinging
+    // from -Z to -X under the 90 degree +Y rotation).
+    AnimScene s("cam_node_anim", R"toml([animation_clock]
+fps = 30
+
+[camera]
+node = "cam"
+vertical_field_of_view = 45.0
+
+[[node]]
+id = "cam"
+
+[[node]]
+id = "subject"
+
+[[animation]]
+target = "nodes/cam/translation"
+interpolation = "linear"
+times = [0.0, 1.0]
+values = [0.0, 0.0, 0.0, 0.0, 0.0, 5.0]
+
+[[animation]]
+target = "nodes/cam/rotation"
+interpolation = "linear"
+times = [0.0, 1.0]
+values = [0.0, 0.0, 0.0, 1.0, 0.0, 0.70710678, 0.0, 0.70710678]
+)toml");
+    ASSERT_TRUE(s.scene.has_value()) << s.error;
+    ASSERT_TRUE(s.scene->camera.nodeId.has_value());
+    EXPECT_EQ(*s.scene->camera.nodeId, "cam");
+
+    const auto p0 = aether::SceneAnimator::evaluateCameraAtTick(*s.scene, 0);
+    ASSERT_TRUE(p0.has_value());
+    EXPECT_NEAR(p0->position.z, 0.0F, kTrsEpsilon) << "tick 0: track start";
+    EXPECT_NEAR(p0->rotation.w, 1.0F, kTrsEpsilon) << "tick 0: identity rotation";
+
+    const auto p30 = aether::SceneAnimator::evaluateCameraAtTick(*s.scene, 30); // t = 1 s
+    ASSERT_TRUE(p30.has_value());
+    EXPECT_NEAR(p30->position.z, 5.0F, kTrsEpsilon) << "translation track followed to t=1 s";
+    const sm::float3 forward = p30->rotation * sm::float3{0.0F, 0.0F, -1.0F};
+    EXPECT_NEAR(forward.x, -1.0F, kTrsEpsilon) << "90 degree +Y: forward -Z -> -X";
+    EXPECT_NEAR(forward.y, 0.0F, kTrsEpsilon);
+    EXPECT_NEAR(forward.z, 0.0F, kTrsEpsilon);
+
+    // Mid-tick: the linear track lands halfway (t = 0.5 s).
+    const auto p15 = aether::SceneAnimator::evaluateCameraAtTick(*s.scene, 15);
+    ASSERT_TRUE(p15.has_value());
+    EXPECT_NEAR(p15->position.z, 2.5F, kTrsEpsilon);
+}
+
+TEST(EvaluateCamera, NoPlacementReturnsNullopt) {
+    // vfov-only camera: authored optics, no placement -> no pose.
+    AnimScene s("cam_noplacement", R"toml([camera]
+vertical_field_of_view = 45.0
+)toml");
+    ASSERT_TRUE(s.scene.has_value()) << s.error;
+    EXPECT_FALSE(aether::SceneAnimator::evaluateCamera(*s.scene, 0.0F).has_value());
+    EXPECT_FALSE(aether::SceneAnimator::evaluateCameraAtTick(*s.scene, 0).has_value());
+}
+
 } // namespace
