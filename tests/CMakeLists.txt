@@ -50,6 +50,7 @@ endif()
 
 add_executable(aether_tests
     test_material_library.cpp
+    test_morphing.cpp
     test_obj_importer.cpp
     test_opacity_micromap.cpp
     test_scene_animator.cpp

@@ -235,6 +235,21 @@ inline constexpr AnimationTargetBinding kAnimationTargetBindings[]{
     {AnimationTrack::Parameter::Scale, "scale/x", 1, 0, &lerpComponents, &floorScaleComponents, &applyScaleX},
     {AnimationTrack::Parameter::Scale, "scale/y", 1, 1, &lerpComponents, &floorScaleComponents, &applyScaleY},
     {AnimationTrack::Parameter::Scale, "scale/z", 1, 2, &lerpComponents, &floorScaleComponents, &applyScaleZ},
+
+    // ANI5: the morph-target WEIGHT row. Arity 1, plain value lerp, no
+    // validity clamp (weights are any finite scalar). `apply` is deliberately
+    // nullptr: the sink is `SceneDesc::morphWeights[index]`, not a NodeDesc -
+    // SceneAnimator::evaluate special-cases Parameter::MorphWeight BEFORE the
+    // apply call, and the parser only reaches this row through the
+    // `morphs/<mesh>/<name>` grammar (the `nodes/` path rejects it by name,
+    // so a node can never accidentally drive a morph weight).
+    {AnimationTrack::Parameter::MorphWeight,
+     "weight",
+     1,
+     AnimationTrack::kNoComponent,
+     &lerpComponents,
+     &keepComponents,
+     nullptr},
 };
 
 /// Registry lookup by TOML parameter token (nullptr when unknown).
@@ -295,6 +310,25 @@ splitAnimationTarget(std::string_view target, std::string_view& nodeId, std::str
     return !nodeId.empty() && !parameter.empty();
 }
 
+/// Split an authored morph-weight target `morphs/<meshName>/<name>` (ANI5) -
+/// exactly 3 `/`-separated segments; neither a mesh name nor a target name may
+/// contain `/`. Views point into @p target. False unless the grammar matches.
+[[nodiscard]] inline bool
+splitMorphTarget(std::string_view target, std::string_view& meshName, std::string_view& targetName) {
+    constexpr std::string_view kPrefix = "morphs/";
+    if (!target.starts_with(kPrefix)) {
+        return false;
+    }
+    const std::size_t separator = target.find('/', kPrefix.size());
+    if (separator == std::string_view::npos) {
+        return false;
+    }
+    meshName = target.substr(kPrefix.size(), separator - kPrefix.size());
+    targetName = target.substr(separator + 1);
+    // Exactly 3 segments: neither a mesh name nor a target name may contain '/'.
+    return !meshName.empty() && !targetName.empty() && targetName.find('/') == std::string_view::npos;
+}
+
 /// Parse, validate and bind every `[[animation]]` entry of @p root into
 /// @p desc.animations. Called by SceneParser after the `[[node]]` block —
 /// bindings resolve against the completed node list. Also parses the
@@ -308,6 +342,20 @@ splitAnimationTarget(std::string_view target, std::string_view& nodeId, std::str
 /// without `[[animation]]` entries only parses (and validates) the optional
 /// clock — its tracks stay empty and the clock, if valid, is inert.
 [[nodiscard]] bool parseAnimations(const toml::table& root, SceneDesc& desc, std::string* error);
+
+/// ANI5: parse the `[[morph]]` blocks into `desc.morphs` (+ the parallel
+/// `desc.morphWeights` initial values from each block's `weight` key,
+/// default 0). Must run BEFORE parseAnimations (morph-weight tracks bind
+/// against the completed morph list) and after the mesh list exists (each
+/// entry must reference a declared object/box mesh - procedural spheres carry
+/// no stable vertex count). Parse errors (reported in @p error, naming the
+/// offending entry): non-table entry, missing/empty `mesh` or `name`,
+/// duplicate (mesh, name), unknown mesh, sphere mesh, non-finite `weight`,
+/// missing/empty `deltas`, or a delta row that is not exactly 3 finite
+/// floats. The per-target ROW COUNT binds against the imported mesh later
+/// (`validateMorphVertexCounts` - the loader owns imports). Morph-free
+/// scenes: returns true without touching @p desc.
+[[nodiscard]] bool parseMorphs(const toml::table& root, SceneDesc& desc, std::string* error);
 
 /// ANI4 - the evaluated pose of one `[[skin]]` binding at a point in time.
 /// `skinMatrices[j]` is the LOCAL-space skin matrix of joint j,
@@ -368,6 +416,18 @@ class SceneAnimator {
     /// animationFps`, then `evaluateSkins`): the deterministic per-frame entry
     /// point for the renderers' BLAS refit.
     [[nodiscard]] static std::vector<SkinPose> evaluateSkinsAtTick(const SceneDesc& scene, std::uint64_t tick);
+
+    /// ANI5 - evaluate the morph-weight tracks at @p timeSeconds and return
+    /// the weights parallel to `scene.morphs` (a target without a track keeps
+    /// its authored initial weight; morph-free scenes return empty for any t).
+    /// One SceneDesc evaluation copy per call (the shared evaluate budget);
+    /// deterministic per time. Pair each weight with its `MorphTarget` and
+    /// feed `deformMorphs`.
+    [[nodiscard]] static std::vector<float> evaluateMorphWeights(const SceneDesc& scene, float timeSeconds);
+
+    /// ANI5 - tick-clock mirror of `evaluateMorphWeights` (seconds = tick /
+    /// animationFps).
+    [[nodiscard]] static std::vector<float> evaluateMorphWeightsAtTick(const SceneDesc& scene, std::uint64_t tick);
 };
 
 } // namespace aether

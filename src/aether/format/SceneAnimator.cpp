@@ -55,6 +55,95 @@ namespace {
 
 } // namespace
 
+bool parseMorphs(const toml::table& root, SceneDesc& desc, std::string* error) {
+    const toml::array* morphs = root["morph"].as_array();
+    if (morphs == nullptr) {
+        return true; // morph-free scenes
+    }
+
+    auto fail = [error](std::string message) {
+        if (error != nullptr) {
+            *error = std::move(message);
+        }
+        return false;
+    };
+
+    for (const toml::node& elem : *morphs) {
+        const toml::table* t = elem.as_table();
+        if (t == nullptr) {
+            return fail("morph entry must be a table");
+        }
+
+        MorphTarget morph;
+        morph.meshName = (*t)["mesh"].value_or<std::string>("");
+        morph.name = (*t)["name"].value_or<std::string>("");
+        if (morph.meshName.empty()) {
+            return fail("morph entry is missing 'mesh'");
+        }
+        if (morph.name.empty()) {
+            return fail("morph entry on mesh '" + morph.meshName + "' is missing 'name'");
+        }
+
+        // The referenced mesh must exist and be morphable at parse time:
+        // procedural spheres have renderer-defined tessellation (no stable
+        // vertex count), exactly the ANI4 skin rule.
+        const auto meshIt = std::find_if(desc.meshes.begin(), desc.meshes.end(), [&morph](const MeshDesc& mesh) {
+            return mesh.name == morph.meshName;
+        });
+        if (meshIt == desc.meshes.end()) {
+            return fail("morph '" + morph.name + "' references unknown mesh '" + morph.meshName + "'");
+        }
+        if (meshIt->kind == MeshDesc::Kind::Sphere) {
+            return fail("morph '" + morph.name + "' references procedural sphere mesh '" + morph.meshName +
+                        "' - unsupported (morph object/box meshes)");
+        }
+
+        const std::string label = "morph '" + morph.meshName + "/" + morph.name + "'";
+        // Duplicate (mesh, name): a track target must address exactly one delta set.
+        const auto dupIt = std::find_if(desc.morphs.begin(), desc.morphs.end(), [&morph](const MorphTarget& prior) {
+            return prior.meshName == morph.meshName && prior.name == morph.name;
+        });
+        if (dupIt != desc.morphs.end()) {
+            return fail(label + ": duplicate target name on the same mesh");
+        }
+
+        // Initial weight (optional): finite scalar, default 0. The live vector
+        // stays parallel to desc.morphs; morph-weight tracks overwrite it.
+        float weight = 0.0F;
+        if (const auto authored = (*t)["weight"].value<double>()) {
+            if (!std::isfinite(*authored)) {
+                return fail(label + ": 'weight' must be a finite number");
+            }
+            weight = static_cast<float>(*authored);
+        }
+
+        const toml::array* deltas = (*t)["deltas"].as_array();
+        if (deltas == nullptr || deltas->empty()) {
+            return fail(label + ": missing or empty 'deltas' (one [dx, dy, dz] row per vertex)");
+        }
+        morph.deltas.reserve(deltas->size());
+        for (const toml::node& rowNode : *deltas) {
+            const toml::array* row = rowNode.as_array();
+            if (row == nullptr || row->size() != 3) {
+                return fail(label + ": each 'deltas' row must hold exactly 3 floats (dx, dy, dz)");
+            }
+            Vec3 delta{};
+            for (std::size_t c = 0; c < 3; ++c) {
+                const auto value = (*row)[c].value<double>();
+                if (!value || !std::isfinite(*value)) {
+                    return fail(label + ": 'deltas' must be finite numbers");
+                }
+                delta[c] = static_cast<float>(*value);
+            }
+            morph.deltas.push_back(delta);
+        }
+
+        desc.morphWeights.push_back(weight);
+        desc.morphs.push_back(std::move(morph));
+    }
+    return true;
+}
+
 bool parseAnimations(const toml::table& root, SceneDesc& desc, std::string* error) {
     const toml::array* entries = root["animation"].as_array();
 
@@ -94,11 +183,13 @@ bool parseAnimations(const toml::table& root, SceneDesc& desc, std::string* erro
         }
         AnimationTrack track{};
 
-        // target = "nodes/<id>/<parameter>" (required)
+        // target = "nodes/<id>/<parameter>" or, ANI5, "morphs/<mesh>/<name>"
+        // (required)
         const auto target = (*tbl)["target"].value<std::string>();
         if (!target || target->empty()) {
             if (error != nullptr) {
-                *error = "animation without a 'target' (expected \"nodes/<id>/<parameter>\")";
+                *error = "animation without a 'target' (expected \"nodes/<id>/<parameter>\" or "
+                         "\"morphs/<mesh>/<name>\")";
             }
             return false;
         }
@@ -121,36 +212,75 @@ bool parseAnimations(const toml::table& root, SceneDesc& desc, std::string* erro
             }
         }
 
-        // Bind the parameter by name through the registry; the node id
-        // resolves below against the completed [[node]] list.
+        // Bind the parameter through the registry: ANI5 morph-weight tracks
+        // resolve through the `morphs/<mesh>/<name>` grammar against the
+        // completed morph list; everything else is `nodes/<id>/<parameter>`
+        // and resolves against the completed [[node]] list below.
         std::string_view nodeId;
         std::string_view parameterName;
-        if (!splitAnimationTarget(track.target, nodeId, parameterName)) {
-            if (error != nullptr) {
-                *error = label + ": malformed target (expected \"nodes/<id>/<parameter>\")";
-            }
-            return false;
-        }
-        const AnimationTargetBinding* binding = findAnimationTargetBinding(parameterName);
-        if (binding == nullptr) {
-            if (error != nullptr) {
-                // A 4-segment target names a component: when the parameter
-                // itself is known, report the component case precisely.
-                const std::size_t slash = parameterName.find('/');
-                if (slash != std::string_view::npos &&
-                    findAnimationTargetBinding(parameterName.substr(0, slash)) != nullptr) {
-                    *error = label + ": unknown component '" + std::string{parameterName.substr(slash + 1)} +
-                             "' for parameter '" + std::string{parameterName.substr(0, slash)} +
-                             "' (translation/scale: x | y | z; rotation: x | y | z | w)";
-                } else {
-                    *error = label + ": unknown parameter '" + std::string{parameterName} +
-                             "' (translation | rotation | scale)";
+        std::size_t morphIndex = 0;
+        const bool isMorphTarget = track.target.starts_with("morphs/");
+        const AnimationTargetBinding* binding = nullptr;
+        if (isMorphTarget) {
+            std::string_view meshName;
+            std::string_view targetName;
+            if (!splitMorphTarget(track.target, meshName, targetName)) {
+                if (error != nullptr) {
+                    *error = label + ": malformed target (expected \"morphs/<mesh>/<name>\")";
                 }
+                return false;
             }
-            return false;
+            const auto morphIt = std::find_if(desc.morphs.begin(), desc.morphs.end(), [&](const MorphTarget& morph) {
+                return std::string_view{morph.meshName} == meshName && std::string_view{morph.name} == targetName;
+            });
+            if (morphIt == desc.morphs.end()) {
+                if (error != nullptr) {
+                    *error = label + ": unknown morph target '" + std::string{meshName} + "/" +
+                             std::string{targetName} + "'";
+                }
+                return false;
+            }
+            morphIndex = static_cast<std::size_t>(morphIt - desc.morphs.begin());
+            binding = &animationTargetBinding(AnimationTrack::Parameter::MorphWeight, AnimationTrack::kNoComponent);
+            track.parameter = binding->parameter;
+            track.componentIndex = binding->componentIndex;
+        } else {
+            if (!splitAnimationTarget(track.target, nodeId, parameterName)) {
+                if (error != nullptr) {
+                    *error = label + ": malformed target (expected \"nodes/<id>/<parameter>\" or "
+                                     "\"morphs/<mesh>/<name>\")";
+                }
+                return false;
+            }
+            binding = findAnimationTargetBinding(parameterName);
+            if (binding == nullptr) {
+                if (error != nullptr) {
+                    // A 4-segment target names a component: when the parameter
+                    // itself is known, report the component case precisely.
+                    const std::size_t slash = parameterName.find('/');
+                    if (slash != std::string_view::npos &&
+                        findAnimationTargetBinding(parameterName.substr(0, slash)) != nullptr) {
+                        *error = label + ": unknown component '" + std::string{parameterName.substr(slash + 1)} +
+                                 "' for parameter '" + std::string{parameterName.substr(0, slash)} +
+                                 "' (translation/scale: x | y | z; rotation: x | y | z | w)";
+                    } else {
+                        *error = label + ": unknown parameter '" + std::string{parameterName} +
+                                 "' (translation | rotation | scale)";
+                    }
+                }
+                return false;
+            }
+            if (binding->parameter == AnimationTrack::Parameter::MorphWeight) {
+                // 'weight' is reachable ONLY through the morphs/ grammar - a
+                // node must never silently drive desc.morphWeights[nodeIndex].
+                if (error != nullptr) {
+                    *error = label + ": 'weight' is a morph-weight token - address it as \"morphs/<mesh>/<name>\"";
+                }
+                return false;
+            }
+            track.parameter = binding->parameter;
+            track.componentIndex = binding->componentIndex;
         }
-        track.parameter = binding->parameter;
-        track.componentIndex = binding->componentIndex;
 
         // times + values: present, non-empty, numeric, finite.
         if (!readFloatArray(*tbl, "times", track.times, label, error) ||
@@ -189,17 +319,23 @@ bool parseAnimations(const toml::table& root, SceneDesc& desc, std::string* erro
             binding->makeValid(track.values.data() + k * stride + valueOffset, binding->arity);
         }
 
-        // Node binding: the target's node id must name a [[node]] entry.
-        const auto nodeIt = std::find_if(desc.nodes.begin(), desc.nodes.end(), [&nodeId](const NodeDesc& node) {
-            return std::string_view{node.id} == nodeId;
-        });
-        if (nodeIt == desc.nodes.end()) {
-            if (error != nullptr) {
-                *error = label + ": unknown node '" + std::string{nodeId} + "'";
+        // Target index binding: morph tracks were resolved above against the
+        // morph list (nodeIndex = morph index); node tracks need the id to
+        // name a [[node]] entry.
+        if (isMorphTarget) {
+            track.nodeIndex = morphIndex;
+        } else {
+            const auto nodeIt = std::find_if(desc.nodes.begin(), desc.nodes.end(), [&nodeId](const NodeDesc& node) {
+                return std::string_view{node.id} == nodeId;
+            });
+            if (nodeIt == desc.nodes.end()) {
+                if (error != nullptr) {
+                    *error = label + ": unknown node '" + std::string{nodeId} + "'";
+                }
+                return false;
             }
-            return false;
+            track.nodeIndex = static_cast<std::size_t>(nodeIt - desc.nodes.begin());
         }
-        track.nodeIndex = static_cast<std::size_t>(nodeIt - desc.nodes.begin());
 
         desc.animations.push_back(std::move(track));
     }
@@ -291,12 +427,22 @@ SceneDesc SceneAnimator::evaluate(const SceneDesc& scene, float timeSeconds) {
         return out; // animation-free scenes: the parse result verbatim, for any t
     }
 
-    // 1) Evaluate tracks → node local TRS. Declaration order: a later track
-    //    driving the same node parameter wins (whole-parameter or component).
+    // 1) Evaluate tracks -> node local TRS (or, ANI5, the morph weight).
+    //    Declaration order: a later track driving the same target wins
+    //    (whole-parameter or component).
     float sampled[kMaxAnimationArity]; // stack scratch, reused across tracks
     for (const AnimationTrack& track : out.animations) {
         const AnimationTargetBinding& binding = animationTargetBinding(track.parameter, track.componentIndex);
         sampleTrack(track, binding, timeSeconds, sampled);
+        if (track.parameter == AnimationTrack::Parameter::MorphWeight) {
+            // ANI5: nodeIndex is the morph index for these tracks; the sink
+            // is the live weight vector, not a NodeDesc (binding.apply is
+            // null - the registry row documents this special case).
+            if (track.nodeIndex < out.morphWeights.size()) {
+                out.morphWeights[track.nodeIndex] = sampled[0];
+            }
+            continue;
+        }
         binding.apply(out.nodes[track.nodeIndex], sampled);
     }
 
@@ -382,6 +528,28 @@ std::vector<SkinPose> SceneAnimator::evaluateSkinsAtTick(const SceneDesc& scene,
     }
     const float timeSeconds = static_cast<float>(static_cast<double>(tick) / scene.animationFps);
     return evaluateSkins(scene, timeSeconds);
+}
+
+std::vector<float> SceneAnimator::evaluateMorphWeights(const SceneDesc& scene, float timeSeconds) {
+    if (scene.morphs.empty()) {
+        return {}; // morph-free scenes: no weights for any t (mirrors evaluateSkins)
+    }
+    // evaluate() stamps the morph-weight tracks into the copy's morphWeights
+    // (and re-resolves the node graph as a side effect); animation-free scenes
+    // short-circuit inside evaluate() to the verbatim copy - authored weights.
+    const SceneDesc stamped = evaluate(scene, timeSeconds);
+    if (stamped.morphWeights.size() != scene.morphs.size()) {
+        return {}; // hand-built scene with a non-parallel weight vector
+    }
+    return stamped.morphWeights;
+}
+
+std::vector<float> SceneAnimator::evaluateMorphWeightsAtTick(const SceneDesc& scene, std::uint64_t tick) {
+    if (!(scene.animationFps > 0.0)) {
+        return {};
+    }
+    const float timeSeconds = static_cast<float>(static_cast<double>(tick) / scene.animationFps);
+    return evaluateMorphWeights(scene, timeSeconds);
 }
 
 } // namespace aether

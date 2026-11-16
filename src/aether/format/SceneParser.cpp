@@ -604,6 +604,12 @@ std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFi
         return std::nullopt;
     }
 
+    // Morph targets (optional; ANI5 - bind against the mesh list; must run
+    // BEFORE parseAnimations, whose morph-weight tracks bind against them).
+    if (!parseMorphs(root, desc, errorMessage)) {
+        return std::nullopt;
+    }
+
     // ── Animations (optional; bind against the completed node graph) ──
     if (!parseAnimations(root, desc, errorMessage)) {
         return std::nullopt;

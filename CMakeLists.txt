@@ -234,6 +234,7 @@ find_package(tomlplusplus CONFIG REQUIRED)
 
 set(AETHER_SOURCES
     src/aether/format/MaterialLibrary.cpp
+    src/aether/format/Morphing.cpp
     src/aether/format/NodeGraph.cpp
     src/aether/format/ObjImporter.cpp
     src/aether/format/OmmImporter.cpp

@@ -154,6 +154,24 @@ struct SkinDesc {
     std::vector<float> boneWeights;         ///< 4 x vertexCount
 };
 
+/// ANI5 - one morph target (blendshape / shape key): a per-vertex POSITION
+/// delta over `meshName`'s imported vertices (one row per vertex, in the same
+/// import-order concatenation rule as `[[skin]]` rows - validated against the
+/// mesh at bind time via `validateMorphVertexCounts`, not at parse time).
+///
+/// Normals are NOT re-derived from the deformed positions (documented v1
+/// contract, matched by the renderer kernel): POSITION-only morphs, exactly
+/// what facial animation / shape keys need. Deltas are arbitrary finite floats
+/// (a target may push outward or inward); the live weight lives in the
+/// parallel `SceneDesc::morphWeights` vector - authored initial value from the
+/// block's `weight` key (default 0), overwritten per evaluation by ANI1 tracks
+/// authored as `target = "morphs/<meshName>/<name>"`.
+struct MorphTarget {
+    std::string meshName; ///< references a MeshDesc::name (object/box meshes only)
+    std::string name;     ///< target name, unique per mesh
+    std::vector<Vec3> deltas;
+};
+
 /// One keyframed animation track (ANI1): a timed float sequence driving one
 /// addressable node parameter — the whole parameter, or ONE of its scalar
 /// components.
@@ -176,10 +194,15 @@ struct SkinDesc {
 /// `aether::SceneAnimator::evaluateAtTick` (ticks over the scene's clock).
 struct AnimationTrack {
     /// The node parameter this track drives (the registry row is keyed by it).
+    /// ANI5: `MorphWeight` is the morph-target weight - addressed through the
+    /// `morphs/<mesh>/<name>` grammar (NOT as a node parameter), arity 1, and
+    /// applied to `SceneDesc::morphWeights[nodeIndex]` (the field is repurposed
+    /// as the morph index for such tracks) instead of a node TRS.
     enum class Parameter : std::uint8_t {
-        Translation, ///< `translation` — arity 3 (or one of its x|y|z components)
-        Rotation,    ///< `rotation` — arity 4 (or one of its x|y|z|w components), slang-math order
-        Scale,       ///< `scale` — arity 3 (or one of its x|y|z components)
+        Translation, ///< `translation` - arity 3 (or one of its x|y|z components)
+        Rotation,    ///< `rotation` - arity 4 (or one of its x|y|z|w components), slang-math order
+        Scale,       ///< `scale` - arity 3 (or one of its x|y|z components)
+        MorphWeight, ///< ANI5 morph-target weight (arity 1; `morphs/<mesh>/<name>` tracks)
     };
 
     /// `componentIndex` of a whole-parameter track (the registry's
@@ -323,6 +346,14 @@ struct SceneDesc {
     /// `SceneAnimator::evaluateSkins` + `deformSkinLbs` (the CPU reference).
     /// Empty unless the scene declares `[[skin]]` - skin-free scenes unaffected.
     std::vector<SkinDesc> skins;
+    /// ANI5 - morph targets (optional; `[[morph]]` entries, declaration order),
+    /// consumed by `SceneAnimator::evaluateMorphWeights` + `deformMorphs`.
+    std::vector<MorphTarget> morphs;
+    /// ANI5 - live weights parallel to `morphs` (the parse-time `weight` key's
+    /// initial value, default 0; `morphs/<mesh>/<name>` tracks overwrite the
+    /// entry on every evaluation). Kept parallel by construction - resize the
+    /// two together.
+    std::vector<float> morphWeights;
 };
 
 } // namespace aether
