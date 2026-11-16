@@ -40,6 +40,41 @@ struct DeformedVertices {
 [[nodiscard]] std::optional<DeformedVertices>
 deformSkinLbs(const MeshData& mesh, const SkinDesc& skin, const std::vector<Mat4>& skinMatrices);
 
+/// ANI4-DQS: per-joint DUAL QUATERNIONS - 8 floats per joint (real x,y,z,w,
+/// then dual x,y,z,w), joint order, over the same `skinMatrices` the LBS path
+/// consumes. SINGLE SOURCE OF TRUTH: the `deformSkinDqs` reference and the
+/// renderer's per-tick staging both call this, and the GPU blends exactly
+/// these values - the extraction NEVER runs on the GPU, so CPU/GPU parity is
+/// by shared code, not by reimplementation.
+///
+/// Rigid contract (Kavan et al. 2008): each joint matrix is projected to its
+/// orthonormal rotation (COLUMN NORMALIZATION - **scale/shear is dropped**,
+/// which is what DQS means by rigid) + translation, then
+/// `real = rotationQuat`, `dual = 0.5 * (T_quat * rotationQuat)` (Hamilton).
+/// Returns std::nullopt on a degenerate matrix (zero-length basis column).
+[[nodiscard]] std::optional<std::vector<float>> skinDualQuaternions(const std::vector<Mat4>& skinMatrices);
+
+/// ANI4-DQS CPU reference - dual-quaternion skinning (the spec for the GPU
+/// kernel's `useDqs` branch):
+///
+///   per vertex: renormalized weights (glTF, same as LBS); the first
+///     NON-ZERO-weight influence anchors, later influences are SIGN-ALIGNED to
+///     it (`dot(real_k, real_anchor) < 0` -> negate real AND dual; dq and -dq
+///     are the same transform - without alignment near-360-degree joints blend
+///     through zero);
+///   sum over influences, then:
+///     rLen = |sum real|;  r' = sumReal / rLen;
+///     dual' = (sumDual - dot4(sumDual, r') * r') / rLen;   // dual unit constraint
+///     t = 2 * vec(dual' * conj(r'));                        // translation
+///   p' = rotate(r', p) + t;  normals/tangents rotate by r' (unit rotation).
+///
+/// Contract fallbacks mirror `deformSkinLbs`: mesh/skin/matrix violations ->
+/// std::nullopt; wsum == 0 -> the authored vertex; a degenerate blend
+/// (|r| <= 1e-8 or no usable influence) -> the authored vertex (never NaN).
+/// Scale is DROPPED (see `skinDualQuaternions`).
+[[nodiscard]] std::optional<DeformedVertices>
+deformSkinDqs(const MeshData& mesh, const SkinDesc& skin, const std::vector<Mat4>& skinMatrices);
+
 /// ANI4 bind-time validation: every skin's boneIndices/boneWeights must cover
 /// exactly the skinned node's mesh vertex count (4 entries per vertex, indices
 /// inside the joint range). @p vertexCounts maps mesh name -> imported vertex

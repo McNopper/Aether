@@ -518,6 +518,17 @@ bool parseSkins(const toml::table& root, SceneDesc& desc, std::string* error) {
             }
         }
 
+        // ANI4-DQS blend mode (optional): "lbs" (default) | "dqs".
+        if (const auto blend = (*t)["blend"].value<std::string>()) {
+            if (*blend == "lbs") {
+                skin.blend = SkinDesc::Blend::Lbs;
+            } else if (*blend == "dqs") {
+                skin.blend = SkinDesc::Blend::Dqs;
+            } else {
+                return fail("skin '" + skin.nodeId + "': unknown blend '" + *blend + "' (lbs | dqs)");
+            }
+        }
+
         desc.skins.push_back(std::move(skin));
     }
     return true;

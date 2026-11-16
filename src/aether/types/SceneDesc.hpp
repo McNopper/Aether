@@ -152,6 +152,15 @@ struct SkinDesc {
     std::vector<float> inverseBind;         ///< 16 floats x joints.size(), row-major
     std::vector<std::uint32_t> boneIndices; ///< 4 x vertexCount
     std::vector<float> boneWeights;         ///< 4 x vertexCount
+
+    /// Blend mode (ANI4-DQS), authored as `blend = "lbs" | "dqs"`:
+    /// `Lbs` - linear blend skinning (the default; matrix blend, preserves
+    ///   scale/shear but loses volume under rotation blends - "candy wrapper");
+    /// `Dqs` - dual-quaternion skinning (Kavan et al. 2008; rigid-by-design:
+    ///   each joint matrix is projected to rotation + translation, so SCALE IS
+    ///   DROPPED - correct rotation blends, wrong for squash/stretch rigs).
+    enum class Blend : std::uint8_t { Lbs, Dqs };
+    Blend blend = Blend::Lbs;
 };
 
 /// ANI5 - one morph target (blendshape / shape key): a per-vertex POSITION

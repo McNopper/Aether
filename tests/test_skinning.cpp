@@ -3,6 +3,7 @@
 // deformSkinLbs math (rigid / blend / renormalization / zero-sum / normals)
 // and the bind-time vertex-count validator. No GPU, no renderers.
 
+#include <cmath>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -512,4 +513,216 @@ TEST(ValidateSkins, RejectsGroupingNodeAndUnknownMesh) {
     desc.nodes = {meshed};
     EXPECT_FALSE(aether::validateSkinVertexCounts(desc, counts, &error));
     EXPECT_NE(error.find("was not imported"), std::string::npos) << error;
+}
+
+// ── ANI4-DQS (dual-quaternion skinning) ──────────────────────────────────────
+
+namespace {
+
+// Rotation of @p degrees about +Z as a quaternion (x, y, z, w).
+aether::Quat rotZ(float degrees) {
+    const float half = degrees * 3.14159265358979F / 360.0F;
+    return aether::Quat{0.0F, 0.0F, std::sin(half), std::cos(half)};
+}
+
+// A single-joint skin (all influences on joint 0, weight 1).
+aether::SkinDesc singleJointSkin() {
+    aether::SkinDesc skin;
+    skin.nodeId = "part";
+    skin.joints = {"root"};
+    skin.inverseBind.assign(16, 0.0F);
+    skin.inverseBind[0] = 1.0F;
+    skin.inverseBind[5] = 1.0F;
+    skin.inverseBind[10] = 1.0F;
+    skin.inverseBind[15] = 1.0F;
+    skin.boneIndices = {0, 0, 0, 0, 0, 0, 0, 0};
+    skin.boneWeights = {1.0F, 0.0F, 0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 0.0F};
+    skin.blend = aether::SkinDesc::Blend::Dqs;
+    return skin;
+}
+
+// A uniform 0.5/0.5 two-joint skin (both vertices blended equally).
+aether::SkinDesc halfHalfSkin() {
+    aether::SkinDesc skin;
+    skin.nodeId = "part";
+    skin.joints = {"root", "tip"};
+    skin.inverseBind.assign(32, 0.0F);
+    for (int m = 0; m < 2; ++m) {
+        skin.inverseBind[static_cast<std::size_t>(m) * 16 + 0] = 1.0F;
+        skin.inverseBind[static_cast<std::size_t>(m) * 16 + 5] = 1.0F;
+        skin.inverseBind[static_cast<std::size_t>(m) * 16 + 10] = 1.0F;
+        skin.inverseBind[static_cast<std::size_t>(m) * 16 + 15] = 1.0F;
+    }
+    skin.boneIndices = {0, 1, 0, 0, 0, 1, 0, 0};
+    skin.boneWeights = {0.5F, 0.5F, 0.0F, 0.0F, 0.5F, 0.5F, 0.0F, 0.0F};
+    skin.blend = aether::SkinDesc::Blend::Dqs;
+    return skin;
+}
+
+} // namespace
+
+TEST(SkinDqs, SingleJointMatchesRigidTransformAndLbs) {
+    // One joint carrying rotation + translation: DQS must reproduce the exact
+    // affine transform (and therefore agree with LBS for a single influence).
+    const aether::MeshData mesh = twoVertexMesh();
+    const aether::SkinDesc skin = singleJointSkin();
+    const std::vector<aether::Mat4> matrices{sm::trs(aether::Vec3{1.0F, 2.0F, 3.0F}, rotZ(90.0F), aether::Vec3{1.0F})};
+
+    const auto dqs = aether::deformSkinDqs(mesh, skin, matrices);
+    ASSERT_TRUE(dqs.has_value());
+    const auto lbs = aether::deformSkinLbs(mesh, skin, matrices);
+    ASSERT_TRUE(lbs.has_value());
+
+    // Fixture: v0 = (1,0,0), v1 = (0,1,0). M*v0 = col0 + T = (0,1,0)+(1,2,3).
+    EXPECT_NEAR(dqs->positions[0].x, 1.0F, 1.0e-5F);
+    EXPECT_NEAR(dqs->positions[0].y, 3.0F, 1.0e-5F);
+    EXPECT_NEAR(dqs->positions[0].z, 3.0F, 1.0e-5F);
+    // M*v1 = col1 + T = (-1,0,0) + (1,2,3).
+    EXPECT_NEAR(dqs->positions[1].x, 0.0F, 1.0e-5F);
+    EXPECT_NEAR(dqs->positions[1].y, 2.0F, 1.0e-5F);
+    EXPECT_NEAR(dqs->positions[1].z, 3.0F, 1.0e-5F);
+    // Normal rotated, not translated (rigid rotation of the direction).
+    EXPECT_NEAR(dqs->normals[0].x, 0.0F, 1.0e-5F);
+    EXPECT_NEAR(dqs->normals[0].y, 1.0F, 1.0e-5F);
+    // Parity anchor: single influence DQS == LBS.
+    for (std::size_t v = 0; v < 2; ++v) {
+        EXPECT_NEAR(dqs->positions[v].x, lbs->positions[v].x, 1.0e-5F) << "v=" << v;
+        EXPECT_NEAR(dqs->positions[v].y, lbs->positions[v].y, 1.0e-5F) << "v=" << v;
+        EXPECT_NEAR(dqs->positions[v].z, lbs->positions[v].z, 1.0e-5F) << "v=" << v;
+    }
+}
+
+TEST(SkinDqs, TwoJointRotationBlendPreservesLengthWhileLbsCollapses) {
+    // The candy-wrapper receipt: two joints rotating +-80 degrees about Z with
+    // 0.5/0.5 weights. LBS averages the MATRICES (diag(cos80, cos80, 1) - the
+    // vertex collapses to 0.1737 of its length); DQS averages the ROTATIONS
+    // (identity - the vertex keeps its length).
+    const aether::MeshData mesh = twoVertexMesh();
+    const aether::SkinDesc skin = halfHalfSkin();
+    const std::vector<aether::Mat4> matrices{sm::trs(aether::Vec3{0.0F}, rotZ(80.0F), aether::Vec3{1.0F}),
+                                             sm::trs(aether::Vec3{0.0F}, rotZ(-80.0F), aether::Vec3{1.0F})};
+
+    const auto dqs = aether::deformSkinDqs(mesh, skin, matrices);
+    ASSERT_TRUE(dqs.has_value());
+    const auto lbs = aether::deformSkinLbs(mesh, skin, matrices);
+    ASSERT_TRUE(lbs.has_value());
+
+    const float dqsLen = sm::length(dqs->positions[1]);
+    const float lbsLen = sm::length(lbs->positions[1]);
+    EXPECT_NEAR(dqsLen, 1.0F, 1.0e-4F) << "rigid blend preserves length";
+    EXPECT_NEAR(lbsLen, std::cos(80.0F * 3.14159265F / 180.0F), 1.0e-4F)
+        << "matrix blend collapses (the artifact DQS exists to fix)";
+    EXPECT_GT(dqsLen - lbsLen, 0.5F) << "the two blend modes must actually differ";
+    EXPECT_NEAR(dqs->positions[0].x, 1.0F, 1.0e-5F) << "identity blend, no translation";
+    EXPECT_NEAR(dqs->positions[0].y, 0.0F, 1.0e-5F);
+}
+
+TEST(SkinDqs, SignAlignmentRescuesNear360DegreeJoints) {
+    // Joints +-179 degrees apart: their quaternions straddle hemispheres
+    // (dot < 0). WITHOUT sign alignment the real parts cancel toward identity;
+    // WITH it the blend is the aligned ~180-degree rotation.
+    const aether::MeshData mesh = twoVertexMesh();
+    const aether::SkinDesc skin = halfHalfSkin();
+    const std::vector<aether::Mat4> matrices{sm::trs(aether::Vec3{0.0F}, rotZ(179.0F), aether::Vec3{1.0F}),
+                                             sm::trs(aether::Vec3{0.0F}, rotZ(-179.0F), aether::Vec3{1.0F})};
+
+    const auto dqs = aether::deformSkinDqs(mesh, skin, matrices);
+    ASSERT_TRUE(dqs.has_value());
+    EXPECT_NEAR(dqs->positions[1].x, 0.0F, 1.0e-4F);
+    EXPECT_LT(dqs->positions[1].y, -0.99F) << "aligned blend must land at ~180 degrees";
+    const float len = sm::length(dqs->positions[1]);
+    EXPECT_NEAR(len, 1.0F, 1.0e-4F) << "aligned result stays rigid and finite";
+}
+
+TEST(SkinDqs, DropsScaleByContract) {
+    // DQS is rigid-by-design: a uniform scale in the joint matrix is dropped
+    // (column normalization in skinDualQuaternions), LBS applies it.
+    const aether::MeshData mesh = twoVertexMesh();
+    const aether::SkinDesc skin = singleJointSkin();
+    const std::vector<aether::Mat4> matrices{
+        sm::trs(aether::Vec3{5.0F, 0.0F, 0.0F}, aether::Quat{0.0F, 0.0F, 0.0F, 1.0F}, aether::Vec3{2.0F})};
+
+    const auto dqs = aether::deformSkinDqs(mesh, skin, matrices);
+    ASSERT_TRUE(dqs.has_value());
+    const auto lbs = aether::deformSkinLbs(mesh, skin, matrices);
+    ASSERT_TRUE(lbs.has_value());
+    EXPECT_NEAR(dqs->positions[0].x, 6.0F, 1.0e-4F) << "rigid: (1,0,0) + T, no scale";
+    EXPECT_NEAR(lbs->positions[0].x, 7.0F, 1.0e-4F) << "LBS applies the 2x scale";
+}
+
+TEST(SkinDqs, ZeroSumAndContractFallbacks) {
+    const aether::MeshData mesh = twoVertexMesh();
+    aether::SkinDesc skin = halfHalfSkin();
+
+    // Zero-sum weights -> authored vertices (the LBS glTF fallback).
+    aether::SkinDesc zeroed = skin;
+    zeroed.boneWeights.assign(8, 0.0F);
+    const std::vector<aether::Mat4> matrices{sm::trs(aether::Vec3{0.0F}, rotZ(30.0F), aether::Vec3{1.0F}),
+                                             sm::trs(aether::Vec3{0.0F}, rotZ(-30.0F), aether::Vec3{1.0F})};
+    const auto out = aether::deformSkinDqs(mesh, zeroed, matrices);
+    ASSERT_TRUE(out.has_value());
+    EXPECT_NEAR(out->positions[0].x, 1.0F, 1.0e-6F) << "authored v0 = (1,0,0)";
+    EXPECT_NEAR(out->positions[0].y, 0.0F, 1.0e-6F);
+
+    // Contract breaks -> nullopt (coverage / joint-count), like LBS.
+    aether::SkinDesc shortCoverage = skin;
+    shortCoverage.boneWeights.pop_back();
+    EXPECT_FALSE(aether::deformSkinDqs(mesh, shortCoverage, matrices).has_value());
+    const std::vector<aether::Mat4> tooFew{matrices[0]};
+    EXPECT_FALSE(aether::deformSkinDqs(mesh, skin, tooFew).has_value());
+
+    // A degenerate joint matrix (zero basis column) fails the extraction.
+    aether::Mat4 degenerate = sm::trs(aether::Vec3{0.0F}, aether::Quat{0.0F, 0.0F, 0.0F, 1.0F}, aether::Vec3{1.0F});
+    degenerate[0][0] = 0.0F;
+    degenerate[1][0] = 0.0F;
+    degenerate[2][0] = 0.0F; // column 0 has zero length now
+    EXPECT_FALSE(aether::deformSkinDqs(mesh, singleJointSkin(), {degenerate}).has_value());
+}
+
+TEST(SkinDqs, DualQuaternionLayoutIsJointMajorAndUnit) {
+    const std::vector<aether::Mat4> matrices{sm::trs(aether::Vec3{1.0F, 2.0F, 3.0F}, rotZ(45.0F), aether::Vec3{1.0F}),
+                                             sm::trs(aether::Vec3{0.0F}, rotZ(-10.0F), aether::Vec3{1.0F})};
+    const auto dq = aether::skinDualQuaternions(matrices);
+    ASSERT_TRUE(dq.has_value());
+    ASSERT_EQ(dq->size(), 16U) << "8 floats per joint (real xyzw + dual xyzw)";
+    // Joint 0's real part is the unit rotation quaternion.
+    const float* real = dq->data();
+    const float norm = std::sqrt(real[0] * real[0] + real[1] * real[1] + real[2] * real[2] + real[3] * real[3]);
+    EXPECT_NEAR(norm, 1.0F, 1.0e-5F);
+    // Joint 1's dual encodes half the translation (zero here -> pure rotation).
+    EXPECT_NEAR((*dq)[12], 0.0F, 1.0e-6F);
+    EXPECT_NEAR((*dq)[13], 0.0F, 1.0e-6F);
+}
+
+// ── ANI4-DQS: the blend key ──────────────────────────────────────────────────
+
+namespace {
+
+// The happy-path scene with `blend = "<value>"` injected before the joints list.
+std::string sceneWithBlend(std::string_view value) {
+    std::string s{kHappyPathScene};
+    const auto pos = s.find("joints = [");
+    if (pos == std::string::npos) {
+        return s;
+    }
+    return s.substr(0, pos) + "blend = \"" + std::string{value} + "\"\n" + s.substr(pos);
+}
+
+} // namespace
+
+TEST(SkinBlendKey, ParsesDqsAndDefaultsToLbs) {
+    SkinScene dqs("blend_dqs", sceneWithBlend("dqs"));
+    ASSERT_TRUE(dqs.scene.has_value()) << dqs.error;
+    ASSERT_EQ(dqs.scene->skins.size(), 1U);
+    EXPECT_EQ(dqs.scene->skins[0].blend, aether::SkinDesc::Blend::Dqs);
+
+    SkinScene lbs("blend_default", kHappyPathScene);
+    ASSERT_TRUE(lbs.scene.has_value()) << lbs.error;
+    EXPECT_EQ(lbs.scene->skins[0].blend, aether::SkinDesc::Blend::Lbs) << "default stays LBS";
+}
+
+TEST(SkinBlendKey, RejectsUnknownBlendValue) {
+    SkinScene bad("blend_bad", sceneWithBlend("quaternion"));
+    EXPECT_FALSE(bad.scene.has_value());
+    EXPECT_NE(bad.error.find("unknown blend 'quaternion' (lbs | dqs)"), std::string::npos) << bad.error;
 }

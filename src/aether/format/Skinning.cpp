@@ -1,5 +1,6 @@
 #include "aether/format/Skinning.hpp"
 
+#include <cmath>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -37,6 +38,16 @@ BlendWeights blendWeights(const SkinDesc& skin, std::size_t vertex) {
 bool contractOk(std::size_t vertexCount, const SkinDesc& skin, const std::vector<Mat4>& skinMatrices) {
     return skin.boneIndices.size() == 4 * vertexCount && skin.boneWeights.size() == 4 * vertexCount &&
            skinMatrices.size() == skin.joints.size();
+}
+
+/// Rotate @p v by the (unit) quaternion @p q - the q * (0, v) * conj(q) form:
+/// v + 2w(c x v) + 2c x (c x v) with c = q.xyz. MIRRORED EXACTLY by the
+/// deform.comp.slang DQS branch (same op order on both sides); @p q is the
+/// float[4] = {x, y, z, w} layout the DQ buffers use.
+Vec3 rotateByQuaternion(const float* q, const Vec3& v) {
+    const Vec3 c{q[0], q[1], q[2]};
+    const Vec3 t = 2.0F * sm::cross(c, v);
+    return v + q[3] * t + sm::cross(c, t);
 }
 
 } // namespace
@@ -82,6 +93,145 @@ deformSkinLbs(const MeshData& mesh, const SkinDesc& skin, const std::vector<Mat4
         }
         out.positions[v] = blendedP;
 
+        const float nLen = sm::length(blendedN);
+        out.normals[v] = (nLen > 1.0e-8F) ? blendedN * (1.0F / nLen) : n;
+    }
+    return out;
+}
+
+std::optional<std::vector<float>> skinDualQuaternions(const std::vector<Mat4>& skinMatrices) {
+    std::vector<float> out;
+    out.reserve(skinMatrices.size() * 8);
+    for (const Mat4& m : skinMatrices) {
+        // Rigid projection: orthonormalize the 3x3 by COLUMN NORMALIZATION -
+        // this is where DQS drops scale/shear (documented rigid contract; it is
+        // also sm::toQuaternion's required input contract: orthonormal only).
+        Vec3 col[3];
+        for (std::size_t j = 0; j < 3; ++j) {
+            col[j] = Vec3{m[0][j], m[1][j], m[2][j]};
+            const float len = sm::length(col[j]);
+            if (len <= 1.0e-20F) {
+                return std::nullopt; // degenerate basis: bind error, not a pose
+            }
+            col[j] = col[j] * (1.0F / len);
+        }
+        const sm::float3x3 rotation{
+            {col[0].x, col[1].x, col[2].x}, {col[0].y, col[1].y, col[2].y}, {col[0].z, col[1].z, col[2].z}};
+        const sm::quaternion r = sm::toQuaternion(rotation);
+        const Vec3 t{m[0][3], m[1][3], m[2][3]};
+
+        // dual = 0.5 * T_quat * r (Hamilton, T_quat = (x, y, z, w=0)) -
+        // componentwise write mirrors the shader's buffer layout.
+        const sm::quaternion tQuat{t.x, t.y, t.z, 0.0F};
+        const sm::quaternion dual = tQuat * r;
+        out.push_back(r.x);
+        out.push_back(r.y);
+        out.push_back(r.z);
+        out.push_back(r.w);
+        out.push_back(0.5F * dual.x);
+        out.push_back(0.5F * dual.y);
+        out.push_back(0.5F * dual.z);
+        out.push_back(0.5F * dual.w);
+    }
+    return out;
+}
+
+std::optional<DeformedVertices>
+deformSkinDqs(const MeshData& mesh, const SkinDesc& skin, const std::vector<Mat4>& skinMatrices) {
+    const std::size_t vertexCount = mesh.vertices.size();
+    if (!contractOk(vertexCount, skin, skinMatrices)) {
+        return std::nullopt;
+    }
+    const auto dq = skinDualQuaternions(skinMatrices);
+    if (!dq) {
+        return std::nullopt;
+    }
+
+    DeformedVertices out;
+    out.positions.resize(vertexCount);
+    out.normals.resize(vertexCount);
+    for (std::size_t v = 0; v < vertexCount; ++v) {
+        const BlendWeights bw = blendWeights(skin, v);
+        const Vec3 p = mesh.vertices[v].position;
+        const Vec3 n = mesh.vertices[v].normal;
+
+        if (bw.sum <= 0.0F) {
+            out.positions[v] = p; // glTF invalid-weights fallback, as LBS
+            out.normals[v] = n;
+            continue;
+        }
+
+        // Gather: the first non-zero-weight influence anchors; later
+        // influences are sign-aligned to it (dq and -dq encode the same
+        // transform - alignment picks the nearest hemisphere, so joints
+        // separated by more than 180 degrees blend into a valid rotation
+        // instead of cancelling toward zero).
+        float r[4]{};
+        float d[4]{};
+        float anchor[4]{};
+        bool haveAnchor = false;
+        for (std::size_t k = 0; k < 4; ++k) {
+            const float w = bw.w[k];
+            if (w == 0.0F) {
+                continue;
+            }
+            const float* joint = dq->data() + static_cast<std::size_t>(skin.boneIndices[v * 4 + k]) * 8;
+            float sign = 1.0F;
+            if (!haveAnchor) {
+                for (std::size_t c = 0; c < 4; ++c) {
+                    anchor[c] = joint[c];
+                }
+                haveAnchor = true;
+            } else {
+                float dotReal = 0.0F;
+                for (std::size_t c = 0; c < 4; ++c) {
+                    dotReal += joint[c] * anchor[c];
+                }
+                if (dotReal < 0.0F) {
+                    sign = -1.0F;
+                }
+            }
+            for (std::size_t c = 0; c < 4; ++c) {
+                r[c] += w * sign * joint[c];
+                d[c] += w * sign * joint[4 + c];
+            }
+        }
+
+        float rLen = 0.0F;
+        for (std::size_t c = 0; c < 4; ++c) {
+            rLen += r[c] * r[c];
+        }
+        rLen = std::sqrt(rLen);
+        if (!haveAnchor || rLen <= 1.0e-8F) {
+            out.positions[v] = p; // degenerate blend: authored vertex, never NaN
+            out.normals[v] = n;
+            continue;
+        }
+
+        // Normalized dual quaternion: real unit, dual projected (dual unit
+        // constraint r . d = 0), both scaled by 1/|r| (Kavan's constraints).
+        float real[4];
+        float dual[4];
+        for (std::size_t c = 0; c < 4; ++c) {
+            real[c] = r[c] / rLen;
+        }
+        float projection = 0.0F;
+        for (std::size_t c = 0; c < 4; ++c) {
+            projection += d[c] * real[c];
+        }
+        for (std::size_t c = 0; c < 4; ++c) {
+            dual[c] = (d[c] - projection * real[c]) / rLen;
+        }
+
+        // t = 2 * vec(dual * conj(real)) (Hamilton via the shared operator).
+        const sm::quaternion realQ{real[0], real[1], real[2], real[3]};
+        const sm::quaternion dualQ{dual[0], dual[1], dual[2], dual[3]};
+        const sm::quaternion translation = dualQ * sm::conjugate(realQ);
+        const Vec3 t{2.0F * translation.x, 2.0F * translation.y, 2.0F * translation.z};
+
+        const Vec3 blendedP = rotateByQuaternion(real, p) + t;
+        const Vec3 blendedN = rotateByQuaternion(real, n);
+        out.positions[v] = blendedP;
         const float nLen = sm::length(blendedN);
         out.normals[v] = (nLen > 1.0e-8F) ? blendedN * (1.0F / nLen) : n;
     }
