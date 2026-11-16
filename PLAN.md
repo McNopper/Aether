@@ -151,7 +151,8 @@ above plus `verify-full` (verify + format-check + clang-tidy + cppcheck).
 
 ## Baseline
 
-- **v0.8.0** (current): **core format release.** NH1 node graph (compounded TRS,
+- **v0.9.0** (current): **deformation schema release.** ANI4 skinning (`[[skin]]` + parser validation, node-world exposure via `resolveNodes`, `evaluateSkins(AtTick)` LOCAL-space matrices, the `deformSkinLbs` CPU reference + bind-time validation, `blend = lbs|dqs` + `skinDualQuaternions` shared extraction + `deformSkinDqs` reference) and ANI5 morph targets (`[[morph]]`, the `morphs/<mesh>/<name>` weight-track grammar with the guarded `weight` token, `evaluateMorphWeights`, `deformMorphs`). 150/150 ctest.
+- **v0.8.0**: **core format release.** NH1 node graph (compounded TRS,
   instanced subtrees, graph validation), ANI1 animation (`[[animation]]` tracks,
   `[animation_clock]` fps, tick-based deterministic `evaluateAtTick`, parameter
   registry with clamp/normalize validity), META2 (node descriptions/tags,
