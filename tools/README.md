@@ -595,7 +595,8 @@ and exports them through the addon - the NH4 verification oracle:
 ```text
 blender --background --python tools/test_scenes.py -- \
         --scene hierarchy|animated|simple|instancing|skinned|skinned_dqs| \
-             camera_orbit|skinned_orbit|feature_matrix|skinned_pose --out <dir>
+             camera_orbit|skinned_orbit|camera_static|feature_matrix|
+             skinned_pose --out <dir>
 ```
 
 Each run writes `<scene>.scene.toml` plus `<scene>.expected.json`
@@ -615,7 +616,11 @@ exercises the 1.6.0 surface (META2 description/tags, a two-slot material
 object with usemtl groups, computed bounds, and every scene-level inline
 option) and `skinned_pose` the pose-bone path (root location + child euler
 rotation keys), including Blender's depsgraph-evaluated vertices at frames 0
-and 30 as the ground-truth oracle in `_pose_truth`.
+and 30 as the ground-truth oracle in `_pose_truth`, and `camera_static` the
+merged-guard edge case (a camera bound through `[camera] node` with NO
+animation: its offline classic capture must converge exactly like the
+sequence path - the scripted camera re-places idempotently without tripping
+the accumulation reset).
 
 The committed fixtures (`assets/skinned*.scene.toml`,
 `assets/feature_matrix.scene.toml`, `assets/skinned_pose.scene.toml` + the

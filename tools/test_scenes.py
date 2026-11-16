@@ -7,7 +7,8 @@
 # Usage (headless):
 #   blender --background --python tools/test_scenes.py -- --scene <name> --out <dir>
 #   (scene names: hierarchy | animated | simple | instancing; repeatable runs
-#   skinned | skinned_dqs | camera_orbit | skinned_orbit | feature_matrix |
+#   skinned | skinned_dqs | camera_orbit | skinned_orbit | camera_static |
+#   feature_matrix |
 #   skinned_pose;
 #   repeatable runs
 #    are deterministic - same scene name, same output bytes)
@@ -367,6 +368,26 @@ def build_skinned_pose():
 
     return {"meshed": ["SkinnedQuad"], "pose_frames": [0, 30]}
 
+def build_camera_static():
+    """ANI8 static-node camera fixture: a cube under a camera bound through
+    `[camera] node` with NO animation anywhere. The merged-guard edge case:
+    the scripted camera must re-place idempotently WITHOUT tripping the
+    animation block's accumulation reset - an offline classic capture of this
+    scene must still converge (verified against an identical sequence capture
+    in the render tests)."""
+    _clear_scene()
+    bpy.context.scene.render.fps = 30
+
+    _add_cube("StaticSubject")
+    cam_data = bpy.data.cameras.new("StaticCam")
+    cam = bpy.data.objects.new("StaticCam", cam_data)
+    bpy.context.collection.objects.link(cam)
+    cam.location = (0.0, -6.0, 2.0)
+    cam.rotation_euler = (Vector((0.0, 0.0, 0.0)) - cam.location).to_track_quat("-Z", "Y").to_euler()
+    bpy.context.scene.camera = cam
+
+    return {"meshed": ["StaticSubject"]}
+
 
 SCENES = {
     "hierarchy": build_hierarchy,
@@ -379,6 +400,7 @@ SCENES = {
     "skinned_orbit": build_skinned_orbit,
     "feature_matrix": build_feature_matrix,
     "skinned_pose": build_skinned_pose,
+    "camera_static": build_camera_static,
 }
 
 # Extra operator kwargs per scene (skin_blend rides the exporter option so the
@@ -398,6 +420,10 @@ SCENE_OPS = {
     },
     # Scene-level inline options: they OVERRIDE the preset reference (local
     # wins), which the round-trip test asserts key by key.
+    "camera_static": {
+        "include_camera": True,
+        "render_reference": "presets/meadow_64spp_8bounce.render.toml",
+    },
     "feature_matrix": {
         "samples_per_pixel": 128,
         "max_depth": 5,
