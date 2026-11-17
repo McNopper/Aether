@@ -28,7 +28,7 @@ flowchart LR
 - Harmonia/Hyperion/Theia consume Aether via CMake **FetchContent**.
 
 Aether must never reference the renderers. Renderer-aware tooling (e.g.
-`compare_renders.py`) lives in Harmonia, not here.
+`Harmonia/tools/compare_renders.py`) lives in Harmonia, not here.
 
 ## Assets
 
@@ -108,7 +108,7 @@ include cycles** (file-level SCC detection), declared edges only.
 
 **
 
-**Dead-code gate:** `python tools/check_dead.py` - orphan headers, never-compiled sources (absent from `compile_commands.json` AND unreferenced by any CMake file), and FetchContent declare/consume mismatches. Also registered as ctest `test_dead` (label `analysis`; local only - registration is gated on the per-user check-dead skill install, so CI runners skip it). Justified findings go into `tools/check_dead.exceptions` with a reason; real dead code is deleted in a fix commit.
+**Dead-code gate:** `python tools/check_dead.py` - orphan headers, never-compiled sources (absent from `build/compile_commands.json` AND unreferenced by any CMake file), and FetchContent declare/consume mismatches. Also registered as ctest `test_dead` (label `analysis`; local only - registration is gated on the per-user check-dead skill install, so CI runners skip it). Justified findings go into `tools/check_dead.exceptions` with a reason; real dead code is deleted in a fix commit.
 
 Sanitizer lane (Clang/GCC configures only):** `-DAETHER_SANITIZER=address|undefined|thread`.
 Host-side FP is deterministic (`/fp:strict` / `-ffp-contract=off -fno-fast-math`).

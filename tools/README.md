@@ -23,7 +23,7 @@ writes:
    `mesh` reference plus material binding), an optional `material_libraries`
    list, and `[render]` / `[camera]` / `[tonemap]` references. Scene TOMLs
    with content also carry a `[meta]` block whose `generator` field names
-   this exporter and its version (`blender_to_aether/x.y.z` from `bl_info`).
+   this exporter and its version (`blender_to_aether/<x.y.z>` from `bl_info`).
    The Aether parser validates the node graph (duplicate ids, unknown
    parents, cycles) and compounds the parent transforms into its flat
    instance list itself. Deforming objects (armature modifier and/or shape
@@ -155,14 +155,14 @@ scene without animation is unchanged from the pre-NH4b output.
   component tracks, because a whole-parameter track and component tracks on
   one parameter would interact through the declaration-order precedence.
   What maps to what:
-  - Blender `location` channels (x, y, z) drive `translation/x`,
-    `translation/z`, `translation/y` — the same CONV swizzle as the values,
+  - Blender `location` channels (x, y, z) drive `<translation/x>`,
+    `<translation/z>`, `<translation/y>` — the same CONV swizzle as the values,
     and Blender Y negates into Aether Z (the negation applies to key values
     and bezier-handle tangents alike); Blender `scale` channels drive
-    `scale/x`, `scale/z`, `scale/y`. Translation/scale components are exact
+    `<scale/x>`, `<scale/z>`, `<scale/y>`. Translation/scale components are exact
     per key and carry their own curve's handle-derived tangents.
-  - Blender `rotation_quaternion` channels (w, x, y, z) drive `rotation/w`,
-    `rotation/x`, `rotation/y`, `rotation/z`. A quaternion component cannot
+  - Blender `rotation_quaternion` channels (w, x, y, z) drive `<rotation/w>`,
+    `<rotation/x>`, `<rotation/y>`, `<rotation/z>`. A quaternion component cannot
     be conjugated in isolation (the conjugation mixes all four components):
     a key's emitted scalar is the conjugated component of the **normalized
     Blender pose at the key frame** — the keyed channel contributes its key
@@ -411,7 +411,7 @@ textured, and a Standard-Surface rejection case) with expected output in
 `examples/shader_ball.mtlx` and `examples/bunny.mtlx` are OpenPBR libraries whose
 material names match the `shader_ball.obj` (5 zones) and `bunny.obj` scenes in
 `assets/`. Converting them produces drop-in replacements for
-`assets/shader_ball.materials.toml` / `assets/bunny.materials.toml`:
+`assets/shader_ball.materials.toml` / `assets/bunny_shaderball.materials.toml`:
 
 ```bash
 python mtlx_to_toml.py examples/shader_ball.mtlx examples/shader_ball_openpbr.materials.toml
@@ -420,8 +420,8 @@ python mtlx_to_toml.py examples/shader_ball.mtlx examples/shader_ball_openpbr.ma
 ### Gathered official examples (2026-11-16)
 
 The NH4 directive's material gathering took the **ten official MaterialX OpenPBR
-examples** from upstream `AcademySoftwareFoundation/MaterialX`,
-`resources/Materials/Examples/OpenPbr/*.mtlx` (main): default (the full
+examples** from upstream [AcademySoftwareFoundation/MaterialX](https://github.com/AcademySoftwareFoundation/MaterialX),
+resources/Materials/Examples/OpenPbr/*.mtlx (main): default (the full
 parameter sweep), aluminum_brushed (anisotropy), carpaint (coat), glass
 (dispersion), honey (transmission scatter), ketchup (subsurface), lightbulb
 (emission), pearl (thin film + subsurface + coat), soapbubble (thin film +
@@ -666,5 +666,5 @@ and the pose tracks reproduce Blender's evaluated vertices.
 * **OpenPBR reference repository** — AcademySoftwareFoundation/OpenPBR.
   <https://github.com/AcademySoftwareFoundation/OpenPBR>
 * **MaterialX** specification and node library (OpenPBR node
-  `open_pbr_surface`, `libraries/bxdf/open_pbr_surface.mtlx`).
+  `open_pbr_surface`, libraries/bxdf/open_pbr_surface.mtlx).
   <https://materialx.org/> · <https://github.com/AcademySoftwareFoundation/MaterialX>
