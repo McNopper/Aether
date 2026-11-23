@@ -33,6 +33,7 @@ tools — never renderer code, never Vulkan. Sibling plans: `Harmonia/PLAN.md`,
   and the `aether-validate` assembly gate are the documented, tested contract.
   Next phase: downstream consumption (renderers adopt evaluated flat lists).
 - **Release:** v0.10.0 (2026-11-20) - docs alignment (real file names, verified upstream links) since v0.9.0; slang-math pin v0.8.0 -> v0.10.0; project 0.10.0, family aligned on v0.10.0.
+  - **Release verification (2026-11-23):** `verify-full` exit 0 after constexpr keyword tables, optimal binding layout, designated initializers and explicit index types (`3185d65`).
 - **Release:** v0.8.1 (tag-synced with GitHub) - the slang-math pin bump
   (v0.6.0 -> v0.8.0: additive SM1/SM2/SM3 API). **Prior (v0.8.0):** the
   **core-format release** (NH1 node graph, ANI1 animation, META2 metadata,
