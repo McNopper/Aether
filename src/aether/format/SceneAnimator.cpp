@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -133,7 +134,7 @@ bool parseMorphs(const toml::table& root, SceneDesc& desc, std::string* error) {
                 if (!value || !std::isfinite(*value)) {
                     return fail(label + ": 'deltas' must be finite numbers");
                 }
-                delta[c] = static_cast<float>(*value);
+                delta[static_cast<std::int32_t>(c)] = static_cast<float>(*value);
             }
             morph.deltas.push_back(delta);
         }
@@ -494,7 +495,8 @@ std::optional<CameraPose> SceneAnimator::evaluateCamera(const SceneDesc& scene, 
         // rigid projection - sm::toQuaternion's input contract is orthonormal).
         Vec3 col[3];
         for (std::size_t j = 0; j < 3; ++j) {
-            col[j] = Vec3{world[0][j], world[1][j], world[2][j]};
+            const auto ji = static_cast<std::int32_t>(j);
+            col[j] = Vec3{world[0][ji], world[1][ji], world[2][ji]};
             const float len = sm::length(col[j]);
             if (len <= 1.0e-20F) {
                 return std::nullopt; // degenerate basis: not a pose
@@ -562,10 +564,9 @@ std::vector<SkinPose> SceneAnimator::evaluateSkins(const SceneDesc& scene, float
             Mat4 inverseBind;
             for (std::size_t r = 0; r < 4; ++r) {
                 const std::size_t base = j * 16 + r * 4;
-                inverseBind[r] = Vec4{skin.inverseBind[base + 0],
-                                      skin.inverseBind[base + 1],
-                                      skin.inverseBind[base + 2],
-                                      skin.inverseBind[base + 3]};
+                const auto b = static_cast<std::int32_t>(base);
+                inverseBind[static_cast<std::int32_t>(r)] = Vec4{
+                    skin.inverseBind[b], skin.inverseBind[b + 1], skin.inverseBind[b + 2], skin.inverseBind[b + 3]};
             }
             pose.skinMatrices.push_back(invNodeWorld * stamped.nodeWorlds[jointIt->second] * inverseBind);
         }

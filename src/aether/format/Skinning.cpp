@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -108,7 +109,8 @@ std::optional<std::vector<float>> skinDualQuaternions(const std::vector<Mat4>& s
         // also sm::toQuaternion's required input contract: orthonormal only).
         Vec3 col[3];
         for (std::size_t j = 0; j < 3; ++j) {
-            col[j] = Vec3{m[0][j], m[1][j], m[2][j]};
+            const auto ji = static_cast<std::int32_t>(j);
+            col[j] = Vec3{m[0][ji], m[1][ji], m[2][ji]};
             const float len = sm::length(col[j]);
             if (len <= 1.0e-20F) {
                 return std::nullopt; // degenerate basis: bind error, not a pose

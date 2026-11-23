@@ -2,11 +2,11 @@
 #define AETHER_FORMAT_MATERIALKWTABLES_HPP
 
 #include <algorithm>
+#include <cstddef>
 #include <optional>
 #include <slang-math/slang-math.hpp>
 #include <string_view>
 #include <toml++/toml.hpp>
-#include <unordered_map>
 
 #include "aether/types/MaterialDesc.hpp"
 
@@ -38,6 +38,44 @@ struct ColorSpaceSetter {
     std::string_view label{};
 };
 
+// A constexpr, allocation-free keyword table with the small part of the
+// std::unordered_map surface these tables and their invariant test consume:
+// size(), find(key), begin()/end(), and pair-shaped entries (first/second).
+// Inline constexpr keeps initialization non-throwing by construction; the old
+// inline const unordered_maps were flagged by bugprone-throwing-static-init.
+template <typename T> struct KwEntry {
+    std::string_view first;
+    T second;
+};
+
+template <typename T, std::size_t N> struct KwTable {
+    struct Iterator {
+        const KwEntry<T>* entry;
+
+        [[nodiscard]] constexpr const KwEntry<T>& operator*() const noexcept { return *entry; }
+        [[nodiscard]] constexpr const KwEntry<T>* operator->() const noexcept { return entry; }
+        constexpr Iterator& operator++() noexcept {
+            ++entry;
+            return *this;
+        }
+        friend constexpr bool operator==(const Iterator&, const Iterator&) noexcept = default;
+    };
+
+    KwEntry<T> entries[N];
+
+    [[nodiscard]] constexpr std::size_t size() const noexcept { return N; }
+    [[nodiscard]] constexpr Iterator begin() const noexcept { return {entries}; }
+    [[nodiscard]] constexpr Iterator end() const noexcept { return {entries + N}; }
+    [[nodiscard]] constexpr Iterator find(std::string_view key) const noexcept {
+        for (const KwEntry<T>& entry : entries) {
+            if (entry.first == key) {
+                return {&entry};
+            }
+        }
+        return end();
+    }
+};
+
 // ── Keyword dispatch tables (consumed by MaterialLibrary.cpp applyKw) ─────
 // File scope: hoisted from applyKw's function-local statics so the pairing
 // invariant between the texture-path and colorspace tables can be enforced
@@ -52,7 +90,7 @@ struct ColorSpaceSetter {
 /// to `map_*` keys). Foreign-format names (UsdPreviewSurface / MaterialX /
 /// Wavefront MTL) are intentionally NOT accepted — files are authored in
 /// OpenPBR.
-inline const std::unordered_map<std::string_view, TextureSlot> texturePathSetters = {
+inline constexpr KwTable<TextureSlot, 10> texturePathSetters{{
     {"map_base_color", &MaterialDesc::map_base_color},
     {"map_normal", &MaterialDesc::map_normal},
     {"map_orm", &MaterialDesc::map_orm},
@@ -63,13 +101,13 @@ inline const std::unordered_map<std::string_view, TextureSlot> texturePathSetter
     {"map_tangent", &MaterialDesc::map_tangent},
     {"map_coat_tangent", &MaterialDesc::map_coat_tangent},
     {"map_opacity", &MaterialDesc::map_opacity},
-};
+}};
 
 /// Texture map color spaces (ColorInterop interop IDs): `map_X_colorspace` →
 /// the same slot + its warning label. Unknown tokens keep the slot's default
 /// and warn (in applyKw) — silently treating a wrong color space as data
 /// would render wrong colors.
-inline const std::unordered_map<std::string_view, ColorSpaceSetter> colorspaceSetters = {
+inline constexpr KwTable<ColorSpaceSetter, 10> colorspaceSetters{{
     {"map_base_color_colorspace", {&MaterialDesc::map_base_color, "map_base_color"}},
     {"map_normal_colorspace", {&MaterialDesc::map_normal, "map_normal"}},
     {"map_orm_colorspace", {&MaterialDesc::map_orm, "map_orm"}},
@@ -80,13 +118,13 @@ inline const std::unordered_map<std::string_view, ColorSpaceSetter> colorspaceSe
     {"map_tangent_colorspace", {&MaterialDesc::map_tangent, "map_tangent"}},
     {"map_coat_tangent_colorspace", {&MaterialDesc::map_coat_tangent, "map_coat_tangent"}},
     {"map_opacity_colorspace", {&MaterialDesc::map_opacity, "map_opacity"}},
-};
+}};
 
 /// Colour keywords (3-element arrays). Aether records colors verbatim in the
 /// declared input color space (MaterialDesc::inputColorSpace); the consumer
 /// performs any conversion. Non-color data (subsurface_radius_scale,
 /// transmission_scatter) is never color-converted.
-inline const std::unordered_map<std::string_view, ColorSetter> colorSetters = {
+inline constexpr KwTable<ColorSetter, 9> colorSetters{{
     {"base_color", [](MaterialDesc& d, const Vec3& v) { d.base_color = v; }},
     {"specular_color", [](MaterialDesc& d, const Vec3& v) { d.specular_color = v; }},
     {"transmission_color", [](MaterialDesc& d, const Vec3& v) { d.transmission_color = v; }},
@@ -96,10 +134,10 @@ inline const std::unordered_map<std::string_view, ColorSetter> colorSetters = {
     {"emission_color", [](MaterialDesc& d, const Vec3& v) { d.emission_color = v; }},
     {"subsurface_color", [](MaterialDesc& d, const Vec3& v) { d.subsurface_color = v; }},
     {"subsurface_radius_scale", [](MaterialDesc& d, const Vec3& v) { d.subsurface_radius_scale = v; }},
-};
+}};
 
 /// Boolean keywords (bool, or a numeric 0/1 — see applyKw).
-inline const std::unordered_map<std::string_view, BoolSetter> boolSetters = {
+inline constexpr KwTable<BoolSetter, 2> boolSetters{{
     {"geometry_thin_walled",
      [](MaterialDesc& d, const toml::node& v) {
          if (const auto b = v.value<bool>()) {
@@ -116,10 +154,10 @@ inline const std::unordered_map<std::string_view, BoolSetter> boolSetters = {
              d.emission_as_light_source = (*f != 0.0F);
          }
      }},
-};
+}};
 
 /// Scalar keywords (floats; per-field clamping lives in the setters).
-inline const std::unordered_map<std::string_view, ScalarSetter> scalarSetters = {
+inline constexpr KwTable<ScalarSetter, 27> scalarSetters{{
     {"base_weight", [](MaterialDesc& d, float f) { d.base_weight = sm::saturate(f); }},
     {"base_metalness", [](MaterialDesc& d, float f) { d.base_metalness = f; }},
     {"base_diffuse_roughness", [](MaterialDesc& d, float f) { d.base_diffuse_roughness = f; }},
@@ -152,7 +190,7 @@ inline const std::unordered_map<std::string_view, ScalarSetter> scalarSetters = 
     {"subsurface_scatter_anisotropy",
      [](MaterialDesc& d, float f) { d.subsurface_scatter_anisotropy = std::clamp(f, -1.0F, 1.0F); }},
     {"geometry_opacity", [](MaterialDesc& d, float f) { d.geometry_opacity = sm::saturate(f); }},
-};
+}};
 
 } // namespace aether::format
 #endif // AETHER_FORMAT_MATERIALKWTABLES_HPP
