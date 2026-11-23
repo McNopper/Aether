@@ -31,7 +31,9 @@ tools — never renderer code, never Vulkan. Sibling plans: `Harmonia/PLAN.md`,
 - **Core format: COMPLETE.** Node graph (NH1), animation clock + tracks
   (ANI1, tick-based via `[animation_clock]`), hierarchical metadata (META1/2),
   and the `aether-validate` assembly gate are the documented, tested contract.
-  Next phase: downstream consumption (renderers adopt evaluated flat lists).
+  Downstream consumption is shipped in Harmonia, Theia and Hyperion; no open
+  implementation roadmap item remains.
+- **Minor release:** v0.11.0 (2026-11-23) - documentation/roadmap alignment plus the verified constexpr keyword tables, binding layout, designated initializers and explicit index types from `3185d65`; project version and slang-math pin 0.11.0.
 - **Release:** v0.10.0 (2026-11-20) - docs alignment (real file names, verified upstream links) since v0.9.0; slang-math pin v0.8.0 -> v0.10.0; project 0.10.0, family aligned on v0.10.0.
   - **Release verification (2026-11-23):** `verify-full` exit 0 after constexpr keyword tables, optimal binding layout, designated initializers and explicit index types (`3185d65`).
 - **Release:** v0.8.1 (tag-synced with GitHub) - the slang-math pin bump

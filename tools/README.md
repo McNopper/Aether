@@ -383,7 +383,7 @@ It preserves the Aether material-library contract (see
 * top-level `model = "openpbr"` and `colorspace = "lin_rec709_scene" |
   "lin_rec2020_scene"` (derived from the MaterialX document `colorspace`);
 * one TOML table per material, keyed by the `surfacematerial` name;
-* scalar/colour parameters use the **exact OpenPBR Surface 1.1.1 input names**;
+* scalar/colour parameters use the **exact OpenPBR Surface 1.1.2 input names**;
 * image-connected inputs become Aether `map_*` bindings with a
   `map_*_colorspace` (sRGB for colour maps, `data` otherwise).
 
