@@ -4,8 +4,8 @@ Family version-alignment release accompanying Harmonia's shared camera-assembly 
 No Aether source changes. Project version and slang-math pin are 0.12.0.
 
 ## Release mechanics
-- Local release-preparation commits only. Push and `v0.12.0` tags wait for the owner's
-  screenshot approval.
+- Local release-preparation commits. Owner screenshot review complete; push and `v0.12.0`
+  tags proceed together.
 
 ---
 
