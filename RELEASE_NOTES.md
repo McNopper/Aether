@@ -1,3 +1,14 @@
+# Aether v0.12.0 (2026-11-24) - minor release
+
+Family version-alignment release accompanying Harmonia's shared camera-assembly work.
+No Aether source changes. Project version and slang-math pin are 0.12.0.
+
+## Release mechanics
+- Local release-preparation commits only. Push and `v0.12.0` tags wait for the owner's
+  screenshot approval.
+
+---
+
 # Aether v0.9.0 (2026-11-16) - minor release
 
 File-format library release carrying the deformation schema that Harmonia v0.8.0 / Theia v0.9.0 /
