@@ -1,0 +1,68 @@
+# Motion blur probe: a red cube crossing a white ground at a known speed.
+#
+# The animation moves the cube 64 metres in a third of a second (192 m/s), so
+# with --shutter 0.5 its image is smeared over 4 metres in every frame - 1.6
+# times its width - starting where the cube is at the frame's instant. Output
+# frame 4 catches it in the middle of the view. The cube fills about a third of
+# the frame and the smear crosses most of the rest, so a sharp and a shuttered
+# render of this frame fail the comparison against each other while two
+# shuttered (or two sharp) renders pass. Both renderers take the same flags, so
+# the same frame can be rendered in each and compared
+# (Harmonia/tools/compare_renders.py):
+#
+#   theia    --scene motion_blur --output theia.exr --sequence-frames 1 --frame 4 \
+#            --offscreen-frames 512 --shutter 0.5 --time-samples 8
+#   hyperion --scene motion_blur --output hyperion.exr --sequence-frames 1 --frame 4 \
+#            --spp 512 --shutter 0.5 --time-samples 8
+#
+# Without the two shutter flags the same commands render the cube sharp at its
+# frame-4 position.
+#
+# The mover also covers the animated-instance path of the rasterizer: the cube
+# ends this frame 32 metres from where the scene builds it, with sky behind its
+# upper part. If it renders cut off at the ground's far edge, the instance cull
+# is testing stale bounds.
+
+material_libraries = ["cornell.materials.toml"]
+
+[render]
+working_color_space = "lin_rec709_scene"
+environment_map = "meadow_2_4k.exr"
+environment_unit_nits = 10000.0
+
+[camera]
+translate = [0.0, 2.0, 6.0]
+rotate_x = -10.0
+rotate_y = 0.0
+ev100 = 12.0
+
+[tonemap]
+tonemapper = "aces"
+
+[animation_clock]
+fps = 24.0
+
+[[mesh]]
+name = "Cube"
+path = "Subject.obj"
+bounds = { min = [-1.0, -1.0, -1.0], max = [1.0, 1.0, 1.0] }
+
+[[node]]
+id = "Ground"
+mesh = "Cube"
+material = "WhiteWall"
+translate = [0.0, -1.0, 0.0]
+scale = [30.0, 1.0, 30.0]
+
+[[node]]
+id = "Mover"
+mesh = "Cube"
+material = "RedWall"
+translate = [-32.0, 1.25, 0.0]
+scale = [1.25, 1.25, 1.25]
+
+[[animation]]
+target = "nodes/Mover/translation"
+interpolation = "linear"
+times = [0.0, 0.3333333333333333]
+values = [-32.0, 1.25, 0.0, 32.0, 1.25, 0.0]
