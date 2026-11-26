@@ -133,12 +133,15 @@ def _obj_stats(obj_path: Path) -> dict[str, object] | None:
     post modifiers): the BV1 object-space AABB over its `v` lines plus the
     [meta.link] counts - triangle count (`f` lines; the export triangulates,
     so every face is a triangle) and group count (usemtl splits, 1 when the
-    file carries none). None when the file has no vertices."""
+    file carries none) - and the ``usemtl`` names in first-occurrence order
+    (the sub-mesh labels the node's ``materials`` map is keyed by). None when
+    the file has no vertices."""
     lo = [math.inf, math.inf, math.inf]
     hi = [-math.inf, -math.inf, -math.inf]
     vertices = 0
     triangles = 0
     groups = 0
+    usemtl: list[str] = []
     try:
         with open(obj_path, encoding="utf-8", errors="replace") as handle:
             for line in handle:
@@ -158,11 +161,14 @@ def _obj_stats(obj_path: Path) -> dict[str, object] | None:
                     triangles += 1
                 elif line.startswith("usemtl "):
                     groups += 1
+                    name = line[len("usemtl ") :].strip()
+                    if name and name not in usemtl:
+                        usemtl.append(name)
     except OSError:
         return None
     if vertices == 0:
         return None
-    return {"min": lo, "max": hi, "triangles": triangles, "groups": max(1, groups)}
+    return {"min": lo, "max": hi, "triangles": triangles, "groups": max(1, groups), "usemtl": usemtl}
 
 
 def _export_obj_file(obj: bpy.types.Object, obj_path: Path, export_materials: bool = False) -> None:
@@ -211,10 +217,12 @@ def _export_obj_file(obj: bpy.types.Object, obj_path: Path, export_materials: bo
         else:
             raise RuntimeError("No OBJ exporter is available in this Blender build")
         if export_materials:
-            # The usemtl lines are all Aether needs (ObjImporter treats them as
-            # group boundaries and ignores materials by design). The sidecar
-            # .mtl is Blender's non-OpenPBR dump - materials are authored in
-            # TOML, so the file is dropped and its dangling mtllib line removed.
+            # The usemtl lines are all Aether needs: ObjImporter splits the OBJ
+            # into sub-meshes at each one and keeps its name as the label the
+            # scene's material map addresses; the material DEFINITIONS are
+            # ignored by design. The sidecar .mtl is Blender's non-OpenPBR dump -
+            # materials are authored in TOML, so the file is dropped and its
+            # dangling mtllib line removed.
             mtl_path = obj_path.with_suffix(".mtl")
             if mtl_path.exists():
                 mtl_path.unlink()
@@ -317,6 +325,7 @@ def _node_block(
     mesh_name: str | None,
     parent_id: str | None,
     warnings: list[str],
+    used_materials: list[str],
 ) -> dict[str, object]:
     # Local transform relative to the exported parent: matrix_local is
     # Blender's parent-relative matrix (it includes the parent inverse, so
@@ -349,13 +358,18 @@ def _node_block(
         slots = [m for m in obj.data.materials if m is not None]
         if len(slots) > 1:
             # NAME-only bindings (NEVER parameters - Blender materials are not
-            # OpenPBR and are deliberately not converted, see tools/README):
-            # the per-group map keys are the OBJ usemtl group names, which are
-            # exactly the Blender material-slot names.
+            # OpenPBR and are deliberately not converted, see tools/README).
+            # The keys are the OBJ's `usemtl` names - the labels Aether's
+            # ObjImporter gives the sub-meshes. They come from the exported
+            # FILE, not from the object's slot list: Blender writes a usemtl
+            # line only for a slot that owns faces, and a binding for an unused
+            # slot would name no sub-mesh (the scene loader diagnoses and
+            # ignores it).
             block["material"] = (
                 obj.active_material.name if obj.active_material else slots[0].name
             )
-            block["materials"] = {m.name: m.name for m in slots}
+            if used_materials:
+                block["materials"] = {name: name for name in used_materials}
         elif obj.active_material:
             block["material"] = obj.active_material.name
     # META2 (agent-legible context, never affects rendering): custom property
@@ -1979,6 +1993,8 @@ class AetherSceneExporter(Operator, ExportHelper):
         mesh_by_data: dict[str, str] = {}
         obj_paths: dict[str, Path] = {}
         data_paths: dict[str, Path] = {}
+        # mesh name -> `usemtl` names of its OBJ (the node `materials` keys).
+        mesh_usemtl: dict[str, list[str]] = {}
         warnings: list[str] = []
 
         for obj in objects:
@@ -2019,12 +2035,15 @@ class AetherSceneExporter(Operator, ExportHelper):
                         if isinstance(raw_description, str) and raw_description.strip():
                             link["description"] = raw_description.strip()
                         meta_links.append((obj_path.name, link))
+                        mesh_usemtl[mesh_name] = list(stats["usemtl"])
                     meshes.append(mesh_block)
                     obj_paths[obj.name] = obj_path
                     if data_key is not None:
                         mesh_by_data[data_key] = mesh_name
                         data_paths[data_key] = obj_path
-            nodes.append(_node_block(obj, mesh_name, parent_id, warnings))
+            nodes.append(
+                _node_block(obj, mesh_name, parent_id, warnings, mesh_usemtl.get(mesh_name, []))
+            )
 
         # NH4b: one [[animation]] entry per same-mode F-curve segment run,
         # 1:1 (never sampled). Objects without an active action contribute

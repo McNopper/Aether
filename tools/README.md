@@ -285,13 +285,14 @@ correct:
   **materials are never converted** - they are not OpenPBR and may carry
   arbitrary node graphs; material assignment stays name-binding only, authored
   in TOML.
-* **Multi-material meshes = per-group NAME bindings.** An object with more
-  than one material slot exports its OBJ with `usemtl` group lines (the
-  sidecar `.mtl` is dropped - Aether ignores `mtllib` and treats `usemtl`
-  purely as the group boundary) and the node carries
-  `materials = { "<group>" = "<name>" }` identity bindings next to the
-  single `material` fallback. Single-slot objects keep the plain
-  `material = "<name>"` binding.
+* **Multi-material meshes = per-sub-mesh NAME bindings.** An object with more
+  than one material slot exports its OBJ with `usemtl` lines (the sidecar
+  `.mtl` is dropped - Aether never imports OBJ material definitions). Each
+  `usemtl` splits the OBJ into a sub-mesh and names it: the node carries
+  `materials = { "<usemtl>" = "<name>" }` identity bindings for exactly the
+  `usemtl` names present in the exported file, next to the single `material`
+  fallback. A slot no face uses writes no `usemtl` line and gets no binding.
+  Single-slot objects keep the plain `material = "<name>"` binding.
 * **Mesh bounds (BV1).** Every OBJ mesh block gets
   `bounds = { min = [...], max = [...] }` - the object-space AABB computed
   from the exported file (post axis-conversion, post modifiers), so the
