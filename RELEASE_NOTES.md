@@ -1,3 +1,22 @@
+# Aether v1.0.0 (2026-11-26) - major stable release
+
+Stable public baseline for the GPU-agnostic file-format library. Coordinates with
+**slang-math v1.0.0** and the Harmonia v1.0.0 family.
+
+## Stability review
+- Removed deterministic analyzer debt in scene parsing and skinning.
+- Adopted strict documentation-reference checks.
+- Architecture and dead-code gates remain clean.
+
+## Verification
+- Full suite: **168/168**
+- `verify-full`, `check_arch`, `check_dead`, and `check_docs_refs --strict`: clean.
+
+## Release mechanics
+- Local release-preparation commits only. Push and v1.0.0 tags require explicit authorization.
+
+---
+
 # Aether v0.12.0 (2026-11-24) - minor release
 
 Family version-alignment release accompanying Harmonia's shared camera-assembly work.
