@@ -1,80 +1,82 @@
-# Aether v1.0.0 (2026-11-26) - major stable release
+# Release notes — Aether
 
-Stable public baseline for the GPU-agnostic file-format library. Coordinates with
-**slang-math v1.0.0** and the Harmonia v1.0.0 family.
+Notes of each Aether release, newest first. A short history of all releases is in
+[PLAN.md](PLAN.md#release-history); older details are in `git log`.
 
-## Stability review
-- Removed deterministic analyzer debt in scene parsing and skinning.
-- Adopted strict documentation-reference checks.
-- Architecture and dead-code gates remain clean.
+## Aether v1.0.0 (2026-11-26) — stable release
 
-## Verification
-- Full suite: **168/168**
-- `verify-full`, `check_arch`, `check_dead`, and `check_docs_refs --strict`: clean.
+Stable public baseline of the GPU-agnostic file-format library. It coordinates with slang-math
+v1.0.0 and with the Harmonia v1.0.0 family.
 
-## Release mechanics
-- Local release-preparation commits only. Push and v1.0.0 tags require explicit authorization.
+- Removed deterministic analyzer findings in scene parsing and skinning.
+- Adopted the strict documentation-reference checks.
+- The architecture check and the dead-code check report no findings.
 
----
+Verification: full suite **168/168**; `verify-full`, `check_arch`, `check_dead` and
+`check_docs_refs --strict` clean.
 
-# Aether v0.12.0 (2026-11-24) - minor release
+## Aether v0.12.0 (2026-11-24) — minor release
 
-Family version-alignment release accompanying Harmonia's shared camera-assembly work.
-No Aether source changes. Project version and slang-math pin are 0.12.0.
+Family version-alignment release accompanying Harmonia's shared camera-assembly work. No Aether
+source changes. Project version and slang-math pin are 0.12.0.
 
-## Release mechanics
-- Local release-preparation commits. Owner screenshot review complete; push and `v0.12.0`
-  tags proceed together.
+## Aether v0.9.0 (2026-11-16) — minor release
 
----
+File-format library release that carries the deformation schema, consumed by Harmonia v0.8.0,
+Theia v0.9.0 and Hyperion v0.8.0.
 
-# Aether v0.9.0 (2026-11-16) - minor release
+### Skinning
 
-File-format library release carrying the deformation schema that Harmonia v0.8.0 / Theia v0.9.0 /
-Hyperion v0.8.0 consume.
+- `[[skin]]` block with `node`, `joints`, per-joint row-major `inverse_bind`, per-vertex
+  `bone_indices` and `bone_weights`, and `blend = "lbs"` or `"dqs"` (default `"lbs"`), with full
+  parser validation.
+- `SceneDesc::nodeWorlds` exposes the world matrix of every node, filled by the node resolution.
+- `SceneAnimator::evaluateSkins` and `evaluateSkinsAtTick` produce the object-space skin
+  matrices `inverse(nodeWorld) * jointWorld * inverseBind`.
+- `validateSkinVertexCounts` checks the per-vertex row counts when the scene is loaded.
+- `deformSkinLbs` is the CPU reference for linear blend skinning (glTF weight normalization,
+  normals blended as directions).
+- `deformSkinDqs` is the CPU reference for dual-quaternion skinning (rigid, scale dropped). It
+  uses the dual quaternions of `skinDualQuaternions`, which the renderer staging calls as well, so
+  CPU and GPU share one extraction.
 
-## Shipped
-- **ANI4 skinning**: `[[skin]]` (node, joints, per-joint row-major `inverse_bind`,
-  per-vertex `bone_indices`/`bone_weights`, **`blend = "lbs" | "dqs"`**, default LBS) with full
-  parser validation; `SceneDesc::nodeWorlds` exposure from `resolveNodes`;
-  `SceneAnimator::evaluateSkins(AtTick)` (LOCAL-space `inv(nodeWorld)*jointWorld*IBM`);
-  `validateSkinVertexCounts` (bind-time count contract); CPU references **`deformSkinLbs`**
-  (glTF renormalization, direction-blend normals) and **`deformSkinDqs`** (sign-aligned
-  dual-quaternion blend - rigid contract, scale dropped - via the SHARED
-  `skinDualQuaternions` extraction the renderer staging also calls, so GPU/CPU parity is by
-  shared code).
-- **ANI5 morph targets**: `[[morph]]` (mesh/name/optional weight/per-vertex POSITION deltas;
-  spheres rejected at parse), parallel `SceneDesc::morphWeights` driven by ANI1 tracks through
-  the new **`morphs/<mesh>/<name>`** grammar (dedicated arity-1 `MorphWeight` registry row; the
-  `nodes/` path rejects the `weight` token by name), `evaluateMorphWeights(AtTick)`,
-  **`deformMorphs`** (`p' = p + sum(w*delta)`, POSITION-only, normals untouched).
+### Morph targets
 
-## Receipts
-- `ctest`: **150/150** (+21 skinning, +19 morphing, +8 DQS, +3 blend-key), clang-format +
-  check_dead clean; downstream lockstep (Harmonia 180/180, Theia 61/61, Hyperion 43/43).
+- `[[morph]]` block with `mesh`, `name`, optional `weight` and per-vertex position `deltas`;
+  procedural spheres are rejected at parse time.
+- Weight tracks with the target `morphs/<mesh>/<name>`; `SceneAnimator::evaluateMorphWeights` and
+  `evaluateMorphWeightsAtTick`.
+- `deformMorphs` computes `p' = p + sum(w * delta)`; positions only.
 
-## Upgrade notes
-- Purely additive: existing scenes parse unchanged (default `blend = lbs`).
-- Consumers: `validateMorphVertexCounts` + `validateSkinVertexCounts` run at scene load;
-  `deformMorphs`/`deformSkinDqs`/`skinDualQuaternions` are the GPU-spec functions.
+### Blender exporter
 
-## Release mechanics
-- Local commits only: **tag `v0.9.0` and push commits + tag together** (consumer pins move to it).
+- Version 1.4.0, deformation export: armature bones as `<armature>::<bone>` nodes, `[[skin]]`
+  blocks with the four strongest same-named vertex-group weights per vertex and the chosen blend
+  mode, `[[morph]]` blocks with morph weight tracks. Per-vertex rows follow the importer's
+  deduplicated vertex order (6 face corners become 4 imported vertices); `tests/test_blender_roundtrip.cpp`
+  checks this against the committed fixtures (commit 603042c).
+- Version 1.5.0, camera bound to a node: `[camera] node = "<id>"` with `SceneAnimator::evaluateCamera`
+  and `evaluateCameraAtTick`. Camera nodes are rotated instead of conjugated, so
+  `forward = rotation * (0, 0, -1)` is the true aim. Example scenes `camera_orbit` and
+  `skinned_orbit`, rendered with the `--frame` seek of the renderers (commit bc8e4eb).
+- Version 1.6.0: pose-bone animation tracks, the scene-level render, tonemap, post-tonemap and
+  metadata options, node descriptions and tags, per-sub-mesh material bindings, mesh bounds and
+  link tables.
 
-## Also in this release (added after the notes assembly)
+### MaterialX OpenPBR examples
 
-- **Blender deformation export** (blender_to_aether v1.4.0): armature bones as
-  `<arm>::<bone>` NH1 nodes, `[[skin]]` (top-4 same-named vertex-group
-  weights, `blend = "lbs" | "dqs"`), `[[morph]]` shape-key deltas +
-  `morphs/<mesh>/<key>` weight tracks - rows expanded in ObjImporter's
-  deduplicated import order (6 face corners -> 4 imported vertices), pinned by
-  `tests/test_blender_roundtrip.cpp` against committed fixtures (commit 603042c).
-- **ANI8 camera-from-node** (v1.5.0): `[camera] node = "<id>"` +
-  `SceneAnimator::evaluateCamera(AtTick)`; camera-node locals PRE-multiplied
-  (`CONV @ R`) so `forward = rotation * (0, 0, -1)` is the true aim; example
-  scenes `camera_orbit` / `skinned_orbit` with the `--frame` seek chain
-  (commit bc8e4eb).
-- **Gathered MaterialX OpenPBR materials**: the ten official MaterialX
-  `OpenPbr` examples, flat-verified (zero nodegraphs), merged into
-  `assets/openpbr_mtlx.materials.toml` + the `openpbr_mtlx` showcase scene;
-  converter goldens 17/17 (commit 9ee4e7a).
+The ten official MaterialX OpenPBR examples, each verified to be a flat document (no node graphs),
+merged into `assets/openpbr_mtlx.materials.toml` with the showcase scene `assets/openpbr_mtlx.scene.toml`;
+the converter's golden tests pass 17/17 (commit 9ee4e7a).
+
+### Tests
+
+`ctest`: **150/150** (new: 21 skinning tests, 19 morphing tests, 8 dual-quaternion tests, 3
+blend-key tests).
+
+### Upgrade notes
+
+- The release is additive: existing scenes parse unchanged (`blend` defaults to `"lbs"`).
+- Consumers call `validateMorphVertexCounts` and `validateSkinVertexCounts` when they load a
+  scene. `deformMorphs`, `deformSkinDqs` and `skinDualQuaternions` are the reference for the GPU
+  paths.
