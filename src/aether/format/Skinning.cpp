@@ -200,8 +200,8 @@ deformSkinDqs(const MeshData& mesh, const SkinDesc& skin, const std::vector<Mat4
         }
 
         float rLen = 0.0F;
-        for (std::size_t c = 0; c < 4; ++c) {
-            rLen += r[c] * r[c];
+        for (float component : r) {
+            rLen += component * component;
         }
         rLen = std::sqrt(rLen);
         if (!haveAnchor || rLen <= 1.0e-8F) {

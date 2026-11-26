@@ -10,6 +10,7 @@
 #include <string_view>
 #include <toml++/toml.hpp>
 #include <unordered_map>
+#include <utility>
 
 #include "aether/format/NodeGraph.hpp"
 #include "aether/format/SceneAnimator.hpp"
@@ -499,7 +500,7 @@ bool parseSkins(const toml::table& root, SceneDesc& desc, std::string* error) {
             }
             for (auto&& v : *row) {
                 const auto i = v.value<std::int64_t>();
-                if (!i || *i < 0 || static_cast<std::size_t>(*i) >= jointCount) {
+                if (!i || *i < 0 || std::cmp_greater_equal(*i, jointCount)) {
                     return fail("skin '" + skin.nodeId +
                                 "' bone_indices entry is not an integer joint index inside [0, joints)");
                 }
