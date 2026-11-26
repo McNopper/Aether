@@ -34,13 +34,18 @@ struct MeshData {
     [[nodiscard]] bool empty() const noexcept { return indices.empty(); }
 };
 
-/// One named sub-mesh from an OBJ file (split on `o` / `g` / `usemtl`).
+/// One sub-mesh from an OBJ file, split at every `o` / `g` / `usemtl` statement.
 ///
-/// The `name` is the OBJ group/object name; material assignment is performed by
-/// the scene (via SceneDesc group/override material names) — OBJ materials are
-/// never imported.
+/// A sub-mesh carries the two labels an OBJ file can give it, and the scene may
+/// address it by either one (per-group material bindings):
+///  - `name`: the `o` / `g` group/object name in effect, or the file stem when
+///    the file declares none;
+///  - `materialName`: the `usemtl` material name in effect, empty when none.
+/// OBJ material definitions are never imported - material assignment is the
+/// scene's job.
 struct MeshGroup {
     std::string name;
+    std::string materialName;
     MeshData mesh;
 };
 

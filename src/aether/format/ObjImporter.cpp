@@ -135,6 +135,7 @@ struct VertexEqual {
 
 [[nodiscard]] bool flushMesh(PendingMesh& pending,
                              std::vector<MeshGroup>& out,
+                             const std::string& materialName,
                              const std::vector<Vec3>& positions,
                              const std::vector<Vec3>& normals,
                              const std::vector<Vec2>& texcoords) {
@@ -171,7 +172,7 @@ struct VertexEqual {
         mesh.indices.push_back(it->second);
     }
 
-    out.push_back(MeshGroup{.name = pending.m_name, .mesh = std::move(mesh)});
+    out.push_back(MeshGroup{.name = pending.m_name, .materialName = materialName, .mesh = std::move(mesh)});
     pending.m_indices.clear();
     return true;
 }
@@ -189,6 +190,9 @@ std::optional<std::vector<MeshGroup>> ObjImporter::parse(const std::filesystem::
     std::vector<Vec2> texcoords;
     std::vector<MeshGroup> groups;
     PendingMesh pending{.m_name = path.stem().string(), .m_indices = {}};
+    // The `usemtl` name in effect for the pending sub-mesh. OBJ state
+    // semantics: it persists across `o` / `g` until the next `usemtl`.
+    std::string materialName;
 
     std::string line;
     while (std::getline(file, line)) {
@@ -217,14 +221,19 @@ std::optional<std::vector<MeshGroup>> ObjImporter::parse(const std::filesystem::
                 texcoords.push_back(uv);
             }
         } else if (kw == "usemtl") {
-            // OBJ material directives are ignored by design — materials are
+            // OBJ material definitions are never imported - materials are
             // assigned exclusively by the scene file. usemtl still acts as a
-            // mesh boundary so multi-material OBJs split into sub-meshes.
-            if (!flushMesh(pending, groups, positions, normals, texcoords)) {
+            // sub-mesh boundary, and its name is kept as the sub-mesh's
+            // material label: it is the only thing distinguishing the pieces of
+            // a multi-material OBJ, and the scene addresses them by it.
+            if (!flushMesh(pending, groups, materialName, positions, normals, texcoords)) {
                 return std::nullopt;
             }
+            std::string name;
+            std::getline(ss, name);
+            materialName = trim(name);
         } else if (kw == "o" || kw == "g") {
-            if (!flushMesh(pending, groups, positions, normals, texcoords)) {
+            if (!flushMesh(pending, groups, materialName, positions, normals, texcoords)) {
                 return std::nullopt;
             }
             std::string name;
@@ -257,7 +266,7 @@ std::optional<std::vector<MeshGroup>> ObjImporter::parse(const std::filesystem::
         }
     }
 
-    if (!flushMesh(pending, groups, positions, normals, texcoords)) {
+    if (!flushMesh(pending, groups, materialName, positions, normals, texcoords)) {
         return std::nullopt;
     }
 

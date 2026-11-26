@@ -155,8 +155,10 @@ faithful to OpenPBR — the sweet spot glTF and USD each sit to one side of.
   verbatim; optional top-level `colorspace` and `model` (default `"openpbr"` — the material
   model tag, anticipating additional material models in the future). Texture bindings use
   Aether's `map_*` keys.
-* **OBJ**: geometry only. Non-triangle faces are skipped and all `usemtl` / `mtllib`
-  directives are ignored — materials are assigned exclusively from the scene file.
+* **OBJ**: geometry only. Non-triangle faces are skipped and `mtllib` / the material definitions
+  behind `usemtl` are never imported — materials are assigned exclusively from the scene file.
+  Every `o`, `g` and `usemtl` statement starts a new sub-mesh, which the scene addresses by its
+  `o`/`g` name or its `usemtl` name.
 
 ### Authoring tools
 

@@ -93,8 +93,10 @@ struct MeshDesc {
 ///
 /// `meshName` resolves against the `SceneDesc::meshes` list. The TRS places the
 /// mesh (glTF T × R × S convention). `materialName` overrides the whole mesh's
-/// material; `groupMaterials` overrides per OBJ group/object name (a multi-group
-/// OBJ splits into sub-meshes, each assigned via its group name).
+/// material; `groupMaterials` overrides it per OBJ sub-mesh, keyed by the
+/// sub-mesh's `usemtl` material name or its `o`/`g` group name (the `usemtl`
+/// key wins when both are present, so a multi-material OBJ stays assignable
+/// even when its sub-meshes share one object name).
 struct InstanceDesc {
     std::string meshName; ///< references a MeshDesc::name
 
@@ -103,7 +105,8 @@ struct InstanceDesc {
     Vec3 scale{1.0F};
 
     std::string materialName; ///< whole-mesh material override (usemtl name)
-    /// Per-group material overrides: OBJ group/object name → material name.
+    /// Per-sub-mesh material overrides: OBJ `usemtl` material name or `o`/`g`
+    /// group name → material name.
     std::unordered_map<std::string, std::string> groupMaterials;
 };
 
@@ -128,7 +131,8 @@ struct NodeDesc {
 
     std::string meshName; ///< references a MeshDesc::name; empty = grouping node
     /// Material bindings, exactly the instance semantics: `material` overrides
-    /// the whole mesh, `groupMaterials` overrides per OBJ group/object name.
+    /// the whole mesh, `groupMaterials` overrides per OBJ sub-mesh (`usemtl`
+    /// material name or `o`/`g` group name).
     std::string materialName;
     std::unordered_map<std::string, std::string> groupMaterials;
 

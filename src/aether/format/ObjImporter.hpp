@@ -13,8 +13,11 @@ namespace aether {
 ///
 /// OBJ files are treated as **pure geometry**: their own `mtllib` / `usemtl`
 /// material directives are intentionally NOT imported (material assignment is
-/// the scene file's job). `usemtl`, `o` and `g` still act as mesh boundaries so
-/// a multi-material OBJ splits into separately-assignable sub-meshes.
+/// the scene file's job). `usemtl`, `o` and `g` still act as sub-mesh
+/// boundaries, so a multi-material OBJ splits into separately-assignable
+/// sub-meshes. Each sub-mesh carries both labels the OBJ can give it - the
+/// `o`/`g` name (`MeshGroup::name`) and the `usemtl` name
+/// (`MeshGroup::materialName`) - and the scene addresses it by either one.
 ///
 /// Vertices are emitted in **object/local space** (no world transform) and are
 /// deduplicated. Only triangles are supported; non-triangle faces are skipped.

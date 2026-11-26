@@ -12,6 +12,7 @@
 // blend key, the rest-pose identity deform (both blend modes) and the shape
 // key -> morph weight track -> deformMorphs chain. No GPU, no renderers.
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -318,6 +319,20 @@ TEST(BlenderRoundTrip, FeatureMatrixExportsEveryFormatKey) {
     ASSERT_EQ(node.groupMaterials.size(), 2U);
     EXPECT_EQ(node.groupMaterials.at("MatAlpha"), "MatAlpha");
     EXPECT_EQ(node.groupMaterials.at("MatBeta"), "MatBeta");
+
+    // Exporter <-> importer contract: every emitted map key must address a
+    // sub-mesh of the exported OBJ, by its `usemtl` label or its group name.
+    // Both sub-meshes share the object name, so without the `usemtl` label the
+    // split silently falls back to the whole-mesh material.
+    const auto groups = aether::ObjImporter::parse(assetsDir() / "FeatureCube.obj");
+    ASSERT_TRUE(groups.has_value());
+    ASSERT_EQ(groups->size(), 2U);
+    for (const auto& [key, value] : node.groupMaterials) {
+        const bool addresses = std::any_of(groups->begin(), groups->end(), [&key](const aether::MeshGroup& g) {
+            return g.materialName == key || g.name == key;
+        });
+        EXPECT_TRUE(addresses) << "material key '" << key << "' names no sub-mesh";
+    }
 }
 
 TEST(BlenderRoundTrip, MetaLinksDescribeLinkedFilesForAgents) {
