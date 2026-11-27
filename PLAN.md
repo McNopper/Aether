@@ -16,10 +16,11 @@ a finished feature is described in the [README](README.md), and its release is r
 | Animation loop and wrap | Tracks hold their end key outside the key range. Looping and wrapping are reserved and not implemented |
 | Metadata for material libraries | Material libraries have no metadata block of their own. A link summary in a scene lists material names only; a one-line description per material is not available |
 | Opacity micromaps from Blender | The Blender exporter does not write `opacity_micromaps`. The baker produces the descriptor and the sidecar; the mesh reference is assembled in the scene by hand |
+| Reusable and animated-subtree-only scene evaluation | Approved investigation (2026-11-27). On the local 29,775-object stress scene, the animated camera's full `evaluate()` cost 72–98 ms and the separate instance-stamping interval 72–82 ms per time sample. Reuse the evaluated output storage and re-compound only affected node subtrees; keep `evaluate()` as the deterministic compatibility API and prove identical instance lists and camera poses |
 
-Nothing else is queued in Aether. The next format item is the OpenPBR Surface 1.2 track. The
-renderers' use of the format (deformation on the GPU, animated cameras, sequence capture) is
-planned in the sibling repositories.
+The next format item is the OpenPBR Surface 1.2 track. The renderers' use of the format
+(deformation on the GPU, animated cameras, sequence capture) is planned in the sibling
+repositories.
 
 ### Known limitations
 
