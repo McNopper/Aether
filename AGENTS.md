@@ -48,6 +48,13 @@ The material model is **OpenPBR Surface** (Academy Software Foundation), tagged
 implementation is MaterialX. A new parameter follows OpenPBR and MaterialX, never a
 renderer-specific convention.
 
+A scene section `[haze]` describes a medium between the camera and the scene: `density`, the
+extinction per metre at height zero, and `height`, the height at which it has fallen to 1/e.
+Aether validates the two keys together (one without the other, a negative density or a height
+below or equal to zero is rejected) and hands them to the consumer; `Harmonia/shaders/haze.slang`
+models the medium in both renderers.
+
+
 ### FetchContent asset trap (it bites every asset edit)
 
 Hyperion and Theia do **not** read assets from this working tree. They read their own FetchContent

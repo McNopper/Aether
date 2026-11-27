@@ -57,6 +57,13 @@ Blender exporter (details in [tools/README.md](tools/README.md#blender-scene-exp
 - Geometry is exported unscaled and Aether scenes are in metres. The exporter inspects the scene's
   unit system and scale length, but its warning is added after the warnings have been reported, so
   a scene in imperial units or with a scale length other than 1 exports without a notice.
+- Texture coordinates are written as Blender holds them (`v` is 0 at the bottom of a picture), and
+  the renderers show the first row of an image file at `v = 0`: a picture on a face unwrapped in
+  Blender is vertically mirrored in a render, and an OpenGL normal map on it is inverted in relief.
+  No scene of this repository has a texture with a top and a bottom, so it does not show here. The
+  flip belongs either in the exporter or in the loader of Harmonia (with `tools/omm_bake.py` and
+  the baked opacity micromaps following); until it is decided, a library stores its maps for the
+  pipeline as it is.
 
 MaterialX converter (details in [tools/README.md](tools/README.md#materialx-to-toml-converter-mtlx_to_aether)):
 
@@ -116,7 +123,7 @@ Details of the recent releases are in [RELEASE_NOTES.md](RELEASE_NOTES.md); earl
 
 | Version | Date | Content | Tests |
 |---------|------|---------|-------|
-| Unreleased | — | A sub-mesh keeps both its object/group name and its `usemtl` name, and a scene's material key may use either, so a Blender export with several materials per object renders each part with its material. The Blender exporter writes a binding only for the materials that exported faces use. The scene `motion_blur` for the motion-blur comparison between the renderers | 170 |
+| Unreleased | — | A sub-mesh keeps both its object/group name and its `usemtl` name, and a scene's material key may use either, so a Blender export with several materials per object renders each part with its material. The Blender exporter writes a binding only for the materials that exported faces use. The scene `motion_blur` for the motion-blur comparison between the renderers. The scene section `[haze]`: `density` and `height` describe a distance haze that both renderers apply to the camera rays (`haze` is the scene for the comparison between them). The Blender exporter writes the section from `haze_density` and `haze_height`. Without `map_tangent`, the anisotropy of a material follows the u direction of its texture coordinates, and a tangent map stores the direction along which the highlight stretches | 174 |
 | v1.0.0 | 2026-11-26 | Stable baseline: analyzer cleanup in scene parsing and skinning, strict documentation-reference checks. Project version and slang-math pin 1.0.0 | 168 |
 | v0.12.0 | 2026-11-24 | Family version alignment for Harmonia's shared camera assembly; no source change | |
 | v0.11.0 | 2026-11-23 | `constexpr` keyword tables, binding layout, designated initializers and explicit index types | |

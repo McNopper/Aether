@@ -328,6 +328,14 @@ struct SceneDesc {
     /// absent means the consumer's default (rec2020).
     std::optional<std::string> workingColorSpace;
 
+    /// Distance haze ([haze]): an opt-in medium between the camera and the
+    /// scene. `hazeDensity` is the extinction coefficient per metre at height
+    /// zero; the coefficient falls exponentially with height and has dropped
+    /// to 1/e at `hazeHeight` metres above it. Absent = no haze. A scene
+    /// that gives one of the two gives both.
+    std::optional<float> hazeDensity;
+    std::optional<float> hazeHeight;
+
     std::optional<SceneMeta> meta; ///< agent-legible [meta] block (optional)
 
     std::map<std::string, LinkMeta> links; ///< [meta.link] summaries keyed by relative path

@@ -413,7 +413,7 @@ node binding, skins, morph targets, animation tracks.
 
 | Path | Resolved by | Relative to |
 |------|-------------|--------------|
-| `reference` in `[render]`, `[camera]`, `[tonemap]`, `[post_tonemap]` | Aether, at parse time | The scene file's directory |
+| `reference` in `[render]`, `[camera]`, `[tonemap]`, `[post_tonemap]`, `[haze]` | Aether, at parse time | The scene file's directory |
 | `file` in `[data]` of a micromap descriptor | Aether, at parse time | The descriptor's directory |
 | `material_libraries`, mesh `path`, `environment_map`, `opacity_micromaps`, texture paths | The consumer | Aether records them exactly as written |
 
@@ -422,7 +422,7 @@ file's directory first and then in the assets directory.
 
 ### Settings sections
 
-Each of the four sections is optional. Only the keys that are present are applied.
+Each of the five sections is optional. Only the keys that are present are applied.
 
 `[render]`:
 
@@ -448,6 +448,29 @@ Each of the four sections is optional. Only the keys that are present are applie
 `renderer`, a keyword that selects an optional post-tonemap renderer (for example
 `"green_screen"`). Aether records both tokens as written and does not validate them; the consumer
 maps them to its modes.
+
+`[haze]` describes a distance haze between the camera and the scene. It is an opt-in medium
+with two keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `density` | number | Extinction per metre at height zero. The extinction falls exponentially with the height |
+| `height` | number | Height in metres above height zero at which the extinction has fallen to 1/e |
+
+```toml
+[haze]
+density = 0.0003     # along a horizontal sight line: transmittance 0.91 at 300 m, 0.74 at 1 km
+height = 220.0
+```
+
+A scene without the section has no haze. A scene that gives one key and not the other is
+rejected, and so are a negative or non-finite density and a height that is 0, below 0 or not
+finite; the error names `[haze]`. A density of 0 is accepted and is a medium that is switched
+off. Aether checks the two keys and hands them to the consumer; the medium is modelled by the
+renderers, through one shared module of Harmonia (`Harmonia/shaders/haze.slang`) in Hyperion and in
+Theia: the radiance of a camera ray is faded with the transmittance from the camera to the
+surface the ray hits and completed with the sky in the direction of the ray. What the model
+covers is described in Harmonia's README.
 
 ### Preset references
 
@@ -478,6 +501,7 @@ applied.
 | Render | `[render]` keys, top level | `assets/presets/preview.render.toml` (64 spp, 8 bounces, no environment map), the `meadow_<spp>spp_<bounces>bounce` and `relax_256spp_16bounce` variants with an environment map |
 | Camera | `[camera]` keys, top level | `cornell`, `openpbr_studio_wide`, `openpbr_studio_near`, `abeautifulgame` |
 | Tonemap | `tonemapper` | `aces`, `agx` |
+| Haze | `[haze]` keys, top level | none in the repository; the scenes that have haze write their two keys inline |
 
 Camera presets are written by the Blender exporter as well; a scene references its own
 `<name>.camera.toml` next to it.
@@ -864,6 +888,18 @@ Both keys can be overridden inside a material. Colour values are always linear; 
 the primaries. Aether records the declared colour space on each material and converts nothing; the
 consumer converts to the working colour space.
 
+A library with textures is built on these conventions of the renderers:
+
+- A texture path is resolved like a path of the scene: against the scene file's directory first,
+  then against the assets directory.
+- `v = 0` is the first row of an image file, and nothing flips the image. Blender unwraps a face
+  with `v = 0` at the bottom, so a picture on such a face is vertically mirrored in a render; see
+  [tools/README.md](tools/README.md#blender-scene-exporter-blender_to_aether).
+- `map_orm` carries roughness in G and metalness in B; its R channel is not read.
+- Every map is sampled at mip level 0, so fine detail aliases at a distance.
+- A sub-mesh of a mesh without texture coordinates samples the texel at `(0, 0)` of each map.
+- Without `map_tangent`, anisotropy follows the `u` direction of the texture coordinates.
+
 Scalar parameters (numbers):
 
 | Key | Default | How the parser treats the value |
@@ -915,7 +951,7 @@ Boolean parameters (a Boolean, or a number: 0 is false):
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `geometry_thin_walled` | false | The surface is an infinitely thin, double-sided shell |
-| `emission_as_light_source` | true | The emission also lights the scene; `false` keeps it visible only |
+| `emission_as_light_source` | true | An input of the format, not of OpenPBR. Set, the emission is a light source: next-event estimation samples it, and the renderers synthesize a light from the mesh. Clear, the emission is visible only: a camera ray sees it, and so does a path right after a perfect mirror. A rough reflection does not show it (the emitter is black there), and it lights nothing |
 
 Texture maps. Each key is a file path; a key with the suffix `_colorspace` declares the colour
 space of that map. The parser also accepts the OpenPBR vector inputs `geometry_normal`,
@@ -947,6 +983,10 @@ corresponding keys.
 - Harmonia uploads `map_base_color`, `map_normal`, `map_orm`, `map_emission_color`, `map_coat_normal`,
   `map_tangent`, `map_coat_tangent` and `map_opacity`. `map_roughness` and `map_metalness` are
   parsed and recorded only.
+- Without `map_tangent`, the anisotropy follows the u direction of the texture coordinates, the
+  default of OpenPBR's reference implementation (`geometry_tangent` is bound to the tangent of the
+  geometry). A tangent map stores a direction `(x, y)` in the plane of the texture coordinates,
+  and the anisotropic highlight stretches along it; `map_coat_tangent` does the same for the coat.
 - A key that is not listed above is ignored. A value of the wrong type leaves the default.
 
 A material whose parameters are all default is a diffuse grey surface.
@@ -1080,6 +1120,7 @@ Every scene lives in `assets/` and can be opened with `aether-validate`.
 | `bunny_shaderball`, `dragon_teapot`, `ABeautifulGame`, `camera_suzanne` | Image-based-lighting showcases: bunny and ShaderBall, teapot and dragon, the MaterialX chess set, a Blender-exported scene | relax or meadow, 256 spp |
 | `skinned`, `skinned_dqs`, `skinned_pose`, `skinned_orbit`, `camera_orbit`, `camera_static`, `feature_matrix` | Blender-exported fixtures for skinning, morph targets, pose-bone animation and a camera bound to a node, read by `tests/test_blender_roundtrip.cpp` | `preview` or meadow, 64 spp |
 | `motion_blur` | A red cube crossing white ground at 192 m/s, for the comparison of motion blur between the renderers: `--shutter` and `--time-samples` blur it in both, and a sharp against a shuttered render fails the comparison | inline (meadow panorama, ACES), 256 spp or frames |
+| `haze` | Five red cubes on white ground at 5 m to 320 m and as high as 31 m, for the comparison of the distance haze between the renderers: a copy of the scene without its `[haze]` section is the clear reference, and the haze around each cube is read back from its own pixels | inline (`[haze]` 0.02 per metre, scale height 40 m), 256 spp or frames |
 
 The image-based-lighting scenes reference presets of 64 to 256 samples per pixel. A path-traced
 reference is only clean at a high sample count: a low-sample reference is noisy, and comparing a

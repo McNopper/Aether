@@ -1,0 +1,23 @@
+# Materials of the distance haze probe (haze.scene.toml). Hand-authored OpenPBR
+# Surface library; linear Rec.709 input.
+#
+# ProbeBlack reflects nothing: with no diffuse and no specular it is black in a
+# clear render, so with the haze on it shows exactly the light the medium
+# scatters toward the camera in its direction. That is what makes the
+# transmittance of the red cube beside it readable from the two images:
+#   T = (hazed red - hazed black) / (clear red - clear black)
+
+model = "openpbr"
+colorspace = "lin_rec709_scene"
+
+[ProbeWhite]
+base_color = [0.725, 0.710, 0.680]
+specular_roughness = 1.0
+
+[ProbeRed]
+base_color = [0.630, 0.065, 0.050]
+specular_roughness = 1.0
+
+[ProbeBlack]
+base_color = [0.0, 0.0, 0.0]
+specular_weight = 0.0

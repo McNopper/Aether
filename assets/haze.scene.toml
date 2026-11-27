@@ -1,0 +1,158 @@
+# Distance haze probe: red cubes at known distances over white ground, each
+# with a black cube beside it.
+#
+# The [haze] section puts a medium between the camera and the scene whose
+# extinction falls off with height. Each cube's optical depth follows from the
+# formula in the format reference, and the black cube beside a red one shows
+# the light the medium scatters into that direction, so the transmittance of
+# every red cube can be read from two renders of this scene:
+#
+#   T = (hazed red - hazed black) / (clear red - clear black)
+#
+# Both renderers must give the same T, and T must equal the formula:
+#
+#   theia    --scene haze --output theia.exr --sequence-frames 1 --offscreen-frames 1024
+#   hyperion --scene haze --output hyperion.exr --sequence-frames 1 --spp 1024
+#   python Harmonia/tools/compare_renders.py hyperion_0000.exr theia_0000.exr
+#
+# A copy of this scene without the [haze] section is the clear render. The
+# comparison of a hazed render against a clear one fails, so the scene proves
+# the feature and not just the agreement of two renderers without it.
+#
+# Layout in the camera's view (64 x 50 degrees, pitched 8 degrees down): the
+# near pair low on the left, the 320 m pair just under the horizon left of the
+# centre, the 20 m pair at the centre below them, the 80 m pair right of the
+# centre, the pair on the pillars above right. Every cube is at least 18
+# pixels wide at 320 x 240.
+
+material_libraries = ["haze.materials.toml"]
+
+[render]
+working_color_space = "lin_rec709_scene"
+environment_map = "meadow_2_4k.exr"
+environment_unit_nits = 10000.0
+
+# Extinction of 0.02 per metre at height zero, falling to 1/e at 40 metres.
+# From the camera, 2 m up, the red cubes at 5, 20, 80 and 320 m are seen through
+# transmittances of about 0.91, 0.68, 0.22 and 0.007. The cube on its pillar,
+# centre 31 m up and 130 m away, keeps 0.16, where a cube on the ground at that
+# distance would keep 0.08.
+[haze]
+density = 0.02
+height = 40.0
+
+[camera]
+translate = [0.0, 2.0, 6.0]
+rotate_x = -8.0
+rotate_y = 0.0
+vertical_field_of_view = 50.0
+ev100 = 12.0
+
+[tonemap]
+tonemapper = "aces"
+
+[[mesh]]
+name = "Cube"
+path = "Subject.obj"
+bounds = { min = [-1.0, -1.0, -1.0], max = [1.0, 1.0, 1.0] }
+
+[[node]]
+id = "Ground"
+mesh = "Cube"
+material = "ProbeWhite"
+translate = [0.0, -1.0, 0.0]
+scale = [200.0, 1.0, 200.0]
+
+# 5 m: two 1 m cubes, 24 and 12 degrees left of the view axis.
+
+[[node]]
+id = "Red5"
+mesh = "Cube"
+material = "ProbeRed"
+translate = [-2.226, 0.5, 1.0]
+scale = [0.5, 0.5, 0.5]
+
+[[node]]
+id = "Black5"
+mesh = "Cube"
+material = "ProbeBlack"
+translate = [-1.064, 0.5, 1.0]
+scale = [0.5, 0.5, 0.5]
+
+# 20 m: two 2 m cubes on the view axis and 6 degrees right of it.
+
+[[node]]
+id = "Red20"
+mesh = "Cube"
+material = "ProbeRed"
+translate = [0.0, 1.0, -14.0]
+scale = [1.0, 1.0, 1.0]
+
+[[node]]
+id = "Black20"
+mesh = "Cube"
+material = "ProbeBlack"
+translate = [2.10, 1.0, -14.0]
+scale = [1.0, 1.0, 1.0]
+
+# 80 m: two 8 m cubes, 14 and 20 degrees right of the view axis.
+
+[[node]]
+id = "Red80"
+mesh = "Cube"
+material = "ProbeRed"
+translate = [19.94, 4.0, -74.0]
+scale = [4.0, 4.0, 4.0]
+
+[[node]]
+id = "Black80"
+mesh = "Cube"
+material = "ProbeBlack"
+translate = [29.12, 4.0, -74.0]
+scale = [4.0, 4.0, 4.0]
+
+# 320 m: two 36 m cubes, 8 and 1 degrees left of the view axis.
+
+[[node]]
+id = "Red320"
+mesh = "Cube"
+material = "ProbeRed"
+translate = [-44.9, 18.0, -314.0]
+scale = [18.0, 18.0, 18.0]
+
+[[node]]
+id = "Black320"
+mesh = "Cube"
+material = "ProbeBlack"
+translate = [-5.59, 18.0, -314.0]
+scale = [18.0, 18.0, 18.0]
+
+# Two pillars 24 m tall, 130 m away, 16 and 22.5 degrees right of the view
+# axis, each carrying a 14 m cube whose centre is 31 m up.
+[[node]]
+id = "PillarRed"
+mesh = "Cube"
+material = "ProbeWhite"
+translate = [37.27, 12.0, -124.0]
+scale = [0.3, 12.0, 0.3]
+
+[[node]]
+id = "Red130High"
+mesh = "Cube"
+material = "ProbeRed"
+translate = [37.27, 31.0, -124.0]
+scale = [7.0, 7.0, 7.0]
+
+[[node]]
+id = "PillarBlack"
+mesh = "Cube"
+material = "ProbeWhite"
+translate = [53.89, 12.0, -124.0]
+scale = [0.3, 12.0, 0.3]
+
+[[node]]
+id = "Black130High"
+mesh = "Cube"
+material = "ProbeBlack"
+translate = [53.89, 31.0, -124.0]
+scale = [7.0, 7.0, 7.0]

@@ -107,6 +107,8 @@ blender --background --python-expr "import sys; sys.path.append('tools'); \
 | `tonemapper` | `omit` | Inline `[tonemap]` key: `aces`, `agx`, `reinhard`, `hable` or `omit` |
 | `post_tonemap_renderer` | `omit` | Inline `[post_tonemap]` key: `green_screen` or `omit` |
 | `post_tonemap_reference` | empty | `[post_tonemap]` preset reference |
+| `haze_density` | 0 | Inline `[haze] density`, in metres⁻¹. Written only together with `haze_height`; 0 leaves the section out |
+| `haze_height` | 0 | Inline `[haze] height`, in metres. Written only together with `haze_density`; 0 leaves the section out |
 | `meta_title` | empty | `[meta]` title; empty uses the export file name without its last suffix (`camera_orbit.scene.toml` gives `camera_orbit.scene`) |
 | `meta_description` | empty | `[meta]` description |
 
@@ -254,6 +256,13 @@ wins), with the numbers rounded to single precision as the importer sees them. T
 `tests/test_blender_roundtrip.cpp` checks this contract against the committed `skinned` and
 `skinned_dqs` fixtures, including a 6-versus-4 negative control.
 
+**Texture coordinates.** The exporter writes the `vt` lines as Blender holds them: `v` is 0 at the
+bottom of a picture and 1 at its top. The renderers show the first row of an image file at `v = 0`,
+so a picture on a face unwrapped in Blender comes out vertically mirrored, and an OpenGL normal map
+on it comes out inverted in relief. A library with such pictures stores its maps for the pipeline
+as it is. Whether the exporter or the loader should flip `v` is an open decision, listed in the
+[known limitations](../PLAN.md#known-limitations).
+
 ### Pose-bone animation
 
 Curves on `pose.bones["<bone>"].location`, `.rotation_euler`, `.rotation_quaternion` and `.scale` —
@@ -301,8 +310,15 @@ The renderer flag `--frame N` sets the tick at which playback or capture starts.
 
 **Settings.** The options `samples_per_pixel`, `max_depth`, `working_color_space`,
 `environment_map` and `environment_unit_nits` are written as inline `[render]` keys,
-`tonemapper` as `[tonemap] tonemapper`, and `post_tonemap_renderer` / `post_tonemap_reference` into
-`[post_tonemap]`. Inline keys override the presets.
+`tonemapper` as `[tonemap] tonemapper`, `post_tonemap_renderer` / `post_tonemap_reference` into
+`[post_tonemap]`, and `haze_density` / `haze_height` into `[haze]`. Inline keys override the presets.
+
+**Haze.** The format takes both `[haze]` keys or neither. When one of `haze_density` and
+`haze_height` is above 0 and the other is not, the exporter reports it in its warnings
+(`[haze] needs both density and height; only one is set, so no haze is exported`) and writes no
+`[haze]` section, because a scene with one key is rejected. The two values are written with the
+shortest decimal that parses back to the single-precision number Blender holds, so a scene reads
+exactly what was set.
 
 **Mesh bounds.** Every OBJ mesh block gets `bounds = { min = [...], max = [...] }`, the
 object-space bounding box read back from the exported OBJ file after the axis conversion and the

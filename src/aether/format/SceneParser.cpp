@@ -137,6 +137,34 @@ void applyPostTonemap(const toml::table& postTonemap, SceneDesc& desc) {
     }
 }
 
+void applyHaze(const toml::table& haze, SceneDesc& desc) {
+    if (const auto v = haze["density"].value<double>()) {
+        desc.hazeDensity = static_cast<float>(*v);
+    }
+    if (const auto v = haze["height"].value<double>()) {
+        desc.hazeHeight = static_cast<float>(*v);
+    }
+}
+
+/// [haze] is off unless both keys are there, with a finite density of at
+/// least 0 and a finite height above 0.
+bool validateHaze(const SceneDesc& desc, std::string* errorMessage) {
+    if (!desc.hazeDensity.has_value() && !desc.hazeHeight.has_value()) {
+        return true;
+    }
+    if (desc.hazeDensity.has_value() && desc.hazeHeight.has_value()) {
+        const float density = *desc.hazeDensity;
+        const float height = *desc.hazeHeight;
+        if (std::isfinite(density) && density >= 0.0F && std::isfinite(height) && height > 0.0F) {
+            return true;
+        }
+    }
+    if (errorMessage != nullptr) {
+        *errorMessage = "[haze] needs both density (per metre, at least 0) and height (metres, above 0)";
+    }
+    return false;
+}
+
 using SectionFn = void (*)(const toml::table&, SceneDesc&);
 
 /// Resolve a `[section]` that may carry an external `reference` (a base preset
@@ -582,6 +610,10 @@ std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFi
     resolveSection(root, "camera", baseDir, desc, applyCamera);
     resolveSection(root, "tonemap", baseDir, desc, applyTonemap);
     resolveSection(root, "post_tonemap", baseDir, desc, applyPostTonemap);
+    resolveSection(root, "haze", baseDir, desc, applyHaze);
+    if (!validateHaze(desc, errorMessage)) {
+        return std::nullopt;
+    }
 
     // ── Agent metadata ([meta] / [meta.link]) — pure AI context ─────────────
     // Parsed exactly once per scene, independent of [[mesh]] presence: the

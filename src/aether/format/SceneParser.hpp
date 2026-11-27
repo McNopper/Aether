@@ -32,6 +32,9 @@ namespace aether {
 ///                   parsed for parity with instances but has no defined camera meaning.
 ///   [tonemap]       tonemapper   (raw keyword token, e.g. "agx")
 ///   [post_tonemap]   renderer     (raw keyword token, e.g. "green_screen")
+///   [haze]          density (extinction per metre at height zero, >= 0) and
+///                   height (metres above that level at which it has fallen to
+///                   1/e, > 0). Both or neither.
 ///
 /// REFERENCE + OVERRIDE
 /// ────────────────────

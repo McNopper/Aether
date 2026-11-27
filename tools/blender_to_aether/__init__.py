@@ -76,11 +76,37 @@ def _quote(value: str) -> str:
     return json.dumps(value)
 
 
+class _TomlFloat:
+    """A float that is already reduced to its shortest TOML text."""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
+def _single_precision_text(value: float) -> _TomlFloat:
+    """The shortest decimal that parses back to the single-precision value
+    Blender stores (a float property is 32 bit), written as a float literal:
+    0.0012 stays 0.0012 instead of the 0.0012000000569969416 its widened form
+    prints as, and 220 stays 220.0."""
+    packed = struct.pack("<f", value)
+    # A whole number reads best in plain notation (220.0, not 2.2e+02).
+    candidates = [f"{value:.1f}"] if float(value).is_integer() and abs(value) < 1.0e15 else []
+    candidates += [f"{value:.{digits}g}" for digits in range(1, 10)]
+    for text in candidates:
+        if struct.pack("<f", float(text)) == packed:
+            if "e" not in text and "." not in text:
+                text += ".0"
+            return _TomlFloat(text)
+    return _TomlFloat(repr(value))
+
+
 def _format_value(value) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, int) and not isinstance(value, bool):
         return str(value)
+    if isinstance(value, _TomlFloat):
+        return value.text
     if isinstance(value, float):
         return repr(float(value))
     if isinstance(value, str):
@@ -1068,6 +1094,7 @@ def _write_scene_toml(
     tonemap_keys: dict[str, object] | None = None,
     post_tonemap_reference: str | None = None,
     post_tonemap_keys: dict[str, object] | None = None,
+    haze_keys: dict[str, object] | None = None,
     meta_keys: dict[str, object] | None = None,
     meta_links: list[tuple[str, dict[str, object]]] | None = None,
 ) -> None:
@@ -1098,6 +1125,11 @@ def _write_scene_toml(
         if post_tonemap_reference:
             lines.append(f"reference = {_quote(post_tonemap_reference)}")
         for key, value in (post_tonemap_keys or {}).items():
+            lines.append(f"{key} = {_format_value(value)}")
+        lines.append("")
+    if haze_keys:
+        lines.append("[haze]")
+        for key, value in haze_keys.items():
             lines.append(f"{key} = {_format_value(value)}")
         lines.append("")
     if meshes or nodes:
@@ -1933,6 +1965,22 @@ class AetherSceneExporter(Operator, ExportHelper):
         default="",
     )
 
+    haze_density: FloatProperty(
+        name="Haze Density",
+        description="[haze] density: extinction per metre at height zero; needs Haze Height "
+        "(0 = no haze)",
+        default=0.0,
+        min=0.0,
+    )
+
+    haze_height: FloatProperty(
+        name="Haze Height",
+        description="[haze] height in metres above height zero at which the extinction has "
+        "fallen to 1/e; needs Haze Density (0 = no haze)",
+        default=0.0,
+        min=0.0,
+    )
+
     meta_title: StringProperty(
         name="Meta Title",
         description="[meta] title (empty = the scene filename stem)",
@@ -1960,6 +2008,8 @@ class AetherSceneExporter(Operator, ExportHelper):
         col.prop(self, "working_color_space")
         col.prop(self, "environment_map")
         col.prop(self, "environment_unit_nits")
+        col.prop(self, "haze_density")
+        col.prop(self, "haze_height")
         col = layout.column(align=True)
         col.prop(self, "tonemapper")
         col.prop(self, "post_tonemap_renderer")
@@ -2137,6 +2187,16 @@ class AetherSceneExporter(Operator, ExportHelper):
         if self.post_tonemap_renderer != "omit":
             post_tonemap_keys["renderer"] = self.post_tonemap_renderer
         post_tonemap_reference = self.post_tonemap_reference.strip() or None
+        # [haze] takes both keys or neither: one of them set is a mistake the
+        # format rejects, so it is reported here and left out.
+        haze_keys: dict[str, object] = {}
+        if self.haze_density > 0.0 and self.haze_height > 0.0:
+            haze_keys["density"] = _single_precision_text(self.haze_density)
+            haze_keys["height"] = _single_precision_text(self.haze_height)
+        elif self.haze_density > 0.0 or self.haze_height > 0.0:
+            warnings.append(
+                "[haze] needs both density and height; only one is set, so no haze is exported"
+            )
         meta_keys: dict[str, object] = {"title": self.meta_title.strip() or scene_path.stem}
         if self.meta_description.strip():
             meta_keys["description"] = self.meta_description.strip()
@@ -2176,6 +2236,7 @@ class AetherSceneExporter(Operator, ExportHelper):
             tonemap_keys=tonemap_keys,
             post_tonemap_reference=post_tonemap_reference,
             post_tonemap_keys=post_tonemap_keys,
+            haze_keys=haze_keys,
             meta_keys=meta_keys,
             meta_links=meta_links,
         )

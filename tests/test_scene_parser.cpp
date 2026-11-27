@@ -356,6 +356,43 @@ TEST(SceneParser, PostTonemapGroupResolvedFromReferencePreset) {
     EXPECT_EQ(*f.scene->postTonemapRenderer, "green_screen");
 }
 
+TEST(SceneParser, HazeGroupResolvedFromReferencePreset) {
+    PresetFixture f{"haze", "density = 0.002\nheight = 180.0\n"};
+    ASSERT_TRUE(f.scene.has_value());
+    ASSERT_TRUE(f.scene->hazeDensity.has_value());
+    EXPECT_FLOAT_EQ(*f.scene->hazeDensity, 0.002F);
+    ASSERT_TRUE(f.scene->hazeHeight.has_value());
+    EXPECT_FLOAT_EQ(*f.scene->hazeHeight, 180.0F);
+}
+
+TEST(SceneParser, HazeAbsentByDefault) {
+    const auto scene = aether::SceneParser::parse(assetsDir() / "cornell_classic.scene.toml");
+    ASSERT_TRUE(scene.has_value());
+    EXPECT_FALSE(scene->hazeDensity.has_value());
+    EXPECT_FALSE(scene->hazeHeight.has_value());
+}
+
+TEST(SceneParser, RejectsAHazeWithOneKeyOrUnphysicalValues) {
+    for (const auto* body : {"[haze]\ndensity = 0.002\n",
+                             "[haze]\nheight = 180.0\n",
+                             "[haze]\ndensity = -0.001\nheight = 180.0\n",
+                             "[haze]\ndensity = 0.002\nheight = 0.0\n",
+                             "[haze]\ndensity = 0.002\nheight = -5.0\n",
+                             "[haze]\ndensity = inf\nheight = 180.0\n",
+                             "[haze]\ndensity = 0.002\nheight = nan\n"}) {
+        NodeScene f{"haze_invalid", body};
+        EXPECT_FALSE(f.scene.has_value()) << body;
+        EXPECT_NE(f.error.find("[haze]"), std::string::npos) << body;
+    }
+}
+
+TEST(SceneParser, ZeroHazeDensityIsASwitchedOffMedium) {
+    NodeScene f{"haze_zero", "[haze]\ndensity = 0.0\nheight = 180.0\n"};
+    ASSERT_TRUE(f.scene.has_value());
+    ASSERT_TRUE(f.scene->hazeDensity.has_value());
+    EXPECT_FLOAT_EQ(*f.scene->hazeDensity, 0.0F);
+}
+
 TEST(SceneParser, ReadmeGalleryScenesParse) {
     static constexpr std::array<std::string_view, 15> kGalleryScenes{
         "cornell_classic.scene.toml",
