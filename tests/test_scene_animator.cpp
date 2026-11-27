@@ -1551,4 +1551,184 @@ TEST(SceneAnimator, ReusableEvaluateDegenerateClockCopiesVerbatim) {
     EXPECT_TRUE(aether::SceneAnimator::evaluateMorphWeightsAtTick(desc, 7, out).empty());
 }
 
+// ── cameraPoseFromEvaluated: the camera extraction on an evaluated scene ────
+
+TEST(EvaluateCamera, PoseFromEvaluatedMatchesEvaluateCameraOnNodePlacement) {
+    // Two node placements: the camera under an animated pivot (animated
+    // indirectly, `camera_orbit`) and a camera node with its own translation
+    // and rotation tracks. At every tick the pose read from an evaluated
+    // scene - a fresh result or ONE reused output - is the pose
+    // evaluateCamera returns, and the extraction never modifies the scene.
+    const auto orbit = aether::SceneParser::parse(assetsDir() / "camera_orbit.scene.toml");
+    ASSERT_TRUE(orbit.has_value());
+    ASSERT_TRUE(orbit->camera.nodeId.has_value());
+    AnimScene direct("cam_from_evaluated_node", R"toml([animation_clock]
+fps = 30
+
+[camera]
+node = "cam"
+vertical_field_of_view = 45.0
+
+[[node]]
+id = "cam"
+
+[[animation]]
+target = "nodes/cam/translation"
+interpolation = "linear"
+times = [0.0, 1.0]
+values = [0.0, 0.0, 0.0, 0.0, 0.0, 5.0]
+
+[[animation]]
+target = "nodes/cam/rotation"
+interpolation = "linear"
+times = [0.0, 1.0]
+values = [0.0, 0.0, 0.0, 1.0, 0.0, 0.70710678, 0.0, 0.70710678]
+)toml");
+    ASSERT_TRUE(direct.scene.has_value()) << direct.error;
+
+    const std::vector<const aether::SceneDesc*> nodeScenes{&*orbit, &*direct.scene};
+    for (const aether::SceneDesc* scene : nodeScenes) {
+        aether::SceneDesc out; // one output reused across every tick below
+        for (const std::uint64_t tick : {std::uint64_t{0},
+                                         std::uint64_t{7},
+                                         std::uint64_t{15},
+                                         std::uint64_t{30},
+                                         std::uint64_t{61},
+                                         std::uint64_t{15},
+                                         std::uint64_t{0}}) {
+            SCOPED_TRACE("tick " + std::to_string(tick));
+            const float seconds = static_cast<float>(static_cast<double>(tick) / scene->animationFps);
+            const auto expected = aether::SceneAnimator::evaluateCameraAtTick(*scene, tick);
+            ASSERT_TRUE(expected.has_value());
+            // The tick and the seconds form agree.
+            expectPoseEqual(expected, aether::SceneAnimator::evaluateCamera(*scene, seconds));
+
+            // A fresh evaluation of the tick. The extraction must not modify
+            // it: an independent fresh evaluation of the same tick is the
+            // reference.
+            aether::SceneDesc stamped = aether::SceneAnimator::evaluateAtTick(*scene, tick);
+            const aether::SceneDesc reference = aether::SceneAnimator::evaluateAtTick(*scene, tick);
+            expectPoseEqual(expected, aether::SceneAnimator::cameraPoseFromEvaluated(stamped));
+            expectSceneEqual(reference, stamped);
+
+            // The reused output: the instance list and the camera pose come
+            // from ONE evaluation, and evaluateCamera leaves that scene in it.
+            aether::SceneAnimator::evaluateAtTick(*scene, tick, out);
+            expectPoseEqual(expected, aether::SceneAnimator::cameraPoseFromEvaluated(out));
+            expectPoseEqual(expected, aether::SceneAnimator::evaluateCameraAtTick(*scene, tick, out));
+            expectSceneEqual(reference, out);
+
+            aether::SceneAnimator::evaluate(*scene, seconds, out);
+            expectPoseEqual(expected, aether::SceneAnimator::cameraPoseFromEvaluated(out));
+            expectPoseEqual(expected, aether::SceneAnimator::evaluateCamera(*scene, seconds, out));
+            expectSceneEqual(reference, out);
+        }
+    }
+
+    // Hand-built scenes the extraction defends against: an unknown camera
+    // node, and a node whose graph was never resolved. Both entry points
+    // decline alike.
+    aether::SceneDesc unresolved;
+    unresolved.camera.nodeId = "ghost";
+    EXPECT_FALSE(aether::SceneAnimator::cameraPoseFromEvaluated(unresolved).has_value());
+    expectPoseEqual(aether::SceneAnimator::evaluateCamera(unresolved, 1.0F),
+                    aether::SceneAnimator::cameraPoseFromEvaluated(unresolved));
+    aether::NodeDesc cameraNode;
+    cameraNode.id = "cam";
+    unresolved.nodes.push_back(cameraNode);
+    unresolved.camera.nodeId = "cam"; // present, but nodeWorlds is empty
+    EXPECT_FALSE(aether::SceneAnimator::cameraPoseFromEvaluated(unresolved).has_value());
+    expectPoseEqual(aether::SceneAnimator::evaluateCamera(unresolved, 1.0F),
+                    aether::SceneAnimator::cameraPoseFromEvaluated(unresolved));
+}
+
+TEST(EvaluateCamera, PoseFromEvaluatedMatchesEvaluateCameraOnStaticPlacement) {
+    // A static placement in an ANIMATED scene: the evaluation really runs
+    // (the node moves), the camera stays where it was authored, and the pose
+    // read from the evaluated scene is evaluateCamera's at every tick.
+    AnimScene animated("cam_from_evaluated_static", R"toml([animation_clock]
+fps = 30
+
+[camera]
+translate = [1.0, 2.0, 3.0]
+rotate = [0.0, 0.0, 0.70710678, 0.70710678]
+vertical_field_of_view = 45.0
+
+[[mesh]]
+name = "ball"
+type = "sphere"
+radius = 0.5
+
+[[node]]
+id = "n"
+mesh = "ball"
+
+[[animation]]
+target = "nodes/n/translation"
+times = [0.0, 1.0]
+values = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+)toml");
+    ASSERT_TRUE(animated.scene.has_value()) << animated.error;
+
+    // An animation-free scene is its own evaluated scene.
+    AnimScene still("cam_from_evaluated_still", R"toml([camera]
+translate = [-4.0, 0.5, 2.0]
+vertical_field_of_view = 45.0
+)toml");
+    ASSERT_TRUE(still.scene.has_value()) << still.error;
+    for (const float t : {0.0F, 2.5F, 100.0F}) {
+        const auto expected = aether::SceneAnimator::evaluateCamera(*still.scene, t);
+        ASSERT_TRUE(expected.has_value());
+        expectVec3Near(expected->position, -4.0F, 0.5F, 2.0F);
+        expectPoseEqual(expected, aether::SceneAnimator::cameraPoseFromEvaluated(*still.scene));
+        expectPoseEqual(
+            expected, aether::SceneAnimator::cameraPoseFromEvaluated(aether::SceneAnimator::evaluate(*still.scene, t)));
+    }
+
+    // A vfov-only camera carries no placement: neither entry point has a pose.
+    AnimScene none("cam_from_evaluated_none", R"toml([camera]
+vertical_field_of_view = 45.0
+)toml");
+    ASSERT_TRUE(none.scene.has_value()) << none.error;
+    EXPECT_FALSE(aether::SceneAnimator::cameraPoseFromEvaluated(*none.scene).has_value());
+    expectPoseEqual(aether::SceneAnimator::evaluateCamera(*none.scene, 2.0F),
+                    aether::SceneAnimator::cameraPoseFromEvaluated(*none.scene));
+
+    aether::SceneDesc out;
+    const aether::SceneDesc tick30 = aether::SceneAnimator::evaluateAtTick(*animated.scene, 30);
+    for (const std::uint64_t tick :
+         {std::uint64_t{0}, std::uint64_t{7}, std::uint64_t{30}, std::uint64_t{61}, std::uint64_t{7}}) {
+        SCOPED_TRACE("tick " + std::to_string(tick));
+        const float seconds = static_cast<float>(static_cast<double>(tick) / animated.scene->animationFps);
+        const auto expected = aether::SceneAnimator::evaluateCameraAtTick(*animated.scene, tick);
+        ASSERT_TRUE(expected.has_value());
+        // The authored placement, at every tick.
+        expectVec3Near(expected->position, 1.0F, 2.0F, 3.0F);
+        expectQuatNear(expected->rotation, 0.0F, 0.0F, 0.70710678F, 0.70710678F);
+
+        // The evaluation ran (the node follows its track: x = min(t, 1)) ...
+        aether::SceneDesc stamped = aether::SceneAnimator::evaluateAtTick(*animated.scene, tick);
+        const aether::SceneDesc reference = aether::SceneAnimator::evaluateAtTick(*animated.scene, tick);
+        ASSERT_EQ(stamped.instances.size(), 1U);
+        EXPECT_NEAR(stamped.nodes[0].translation.x, std::min(seconds, 1.0F), 1.0e-6F);
+        // ... and the camera did not move. The extraction leaves the scene as it was.
+        expectPoseEqual(expected, aether::SceneAnimator::cameraPoseFromEvaluated(stamped));
+        expectSceneEqual(reference, stamped);
+
+        // A static placement does not evaluate: `out` holds the tick-30
+        // evaluation when the camera is asked for another tick, and must
+        // still hold exactly that afterwards (the documented contract of
+        // the scratch).
+        aether::SceneAnimator::evaluateAtTick(*animated.scene, 30, out);
+        expectPoseEqual(expected, aether::SceneAnimator::evaluateCameraAtTick(*animated.scene, tick, out));
+        expectPoseEqual(expected, aether::SceneAnimator::evaluateCamera(*animated.scene, seconds, out));
+        expectSceneEqual(tick30, out);
+
+        // The same reused output after an evaluation of this tick.
+        aether::SceneAnimator::evaluateAtTick(*animated.scene, tick, out);
+        expectPoseEqual(expected, aether::SceneAnimator::cameraPoseFromEvaluated(out));
+        expectSceneEqual(reference, out);
+    }
+}
+
 } // namespace

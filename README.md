@@ -714,6 +714,11 @@ scene; a call that passes the scene itself throws `std::invalid_argument` before
 anything. The skin, morph-weight and camera overloads leave the evaluated scene in `out`, so one
 scratch can serve the camera pose and the instance list of the same tick.
 
+`cameraPoseFromEvaluated(stamped)` reads the camera pose from that evaluated scene without
+running another evaluation. A renderer can therefore evaluate once and use the result for both
+the camera and the instance list. A static placement reads the authored pose and leaves `out`
+unchanged.
+
 ### Camera bound to a node
 
 `[camera] node = "<id>"` binds the camera to a node of the graph. The id must name a node; the parse

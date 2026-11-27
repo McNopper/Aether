@@ -490,11 +490,33 @@ class SceneAnimator {
 
     /// `evaluateCamera` with the evaluation written into the caller's reusable
     /// @p out (the same output and the same precondition as
-    /// `evaluate(scene, timeSeconds, out)`), instead of a per-call copy. The
-    /// scratch is left holding the evaluated scene; a static placement does
-    /// not evaluate and leaves it untouched.
+    /// `evaluate(scene, timeSeconds, out)`), instead of a per-call copy: a
+    /// node placement is `evaluate(scene, timeSeconds, out)` followed by
+    /// `cameraPoseFromEvaluated(out)`. The scratch is left holding the
+    /// evaluated scene; a static placement does not evaluate and leaves it
+    /// untouched.
     [[nodiscard]] static std::optional<CameraPose>
     evaluateCamera(const SceneDesc& scene, float timeSeconds, SceneDesc& out);
+
+    /// ANI8 - the camera pose of an ALREADY evaluated scene: exactly the
+    /// extraction `evaluateCamera` performs after its evaluation, and nothing
+    /// else - no track is sampled, no node is re-compounded, nothing is
+    /// allocated for a scene. Pass what `evaluate` / `evaluateAtTick` returned
+    /// or filled to read the camera of that very evaluation, so a caller that
+    /// holds the evaluated scene for its instance list does not evaluate a
+    /// second time for the camera:
+    /// `evaluateAtTick(scene, tick, out)` then
+    /// `cameraPoseFromEvaluated(out)` equals `evaluateCameraAtTick(scene, tick)`.
+    ///   * `[camera] node = "<id>"` - the WORLD matrix of that node as
+    ///     @p stamped holds it (position = world translation, rotation = the
+    ///     column-normalized world basis - camera-node scale is ignored);
+    ///   * otherwise the section's static translate/rotate (identity defaults
+    ///     when a part is absent; an animation-free scene is its own evaluated
+    ///     scene).
+    /// Returns std::nullopt when the scene carries no placement, when the node
+    /// does not resolve or the graph is unresolved, or for a degenerate basis.
+    /// @p stamped is only read, never modified.
+    [[nodiscard]] static std::optional<CameraPose> cameraPoseFromEvaluated(const SceneDesc& stamped);
 
     /// ANI8 - tick-clock mirror of `evaluateCamera` (`seconds = tick /
     /// animationFps`, then exactly `evaluateCamera`).

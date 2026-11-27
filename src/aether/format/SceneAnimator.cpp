@@ -518,11 +518,19 @@ std::optional<CameraPose> SceneAnimator::evaluateCamera(const SceneDesc& scene, 
     requireDistinctOutput(scene, out);
     if (scene.camera.nodeId) {
         // evaluate() stamps the node locals AND re-resolves nodeWorlds, so
-        // the world read below is exactly this frame's (same contract the
-        // skin evaluation relies on).
+        // the world the pose extraction reads is exactly this frame's (same
+        // contract the skin evaluation relies on).
         evaluate(scene, timeSeconds, out);
-        const SceneDesc& stamped = out;
-        const std::string& want = *scene.camera.nodeId;
+        return cameraPoseFromEvaluated(out);
+    }
+    // A static placement does not depend on time: the scene is its own
+    // evaluated scene, so nothing is evaluated and @p out stays untouched.
+    return cameraPoseFromEvaluated(scene);
+}
+
+std::optional<CameraPose> SceneAnimator::cameraPoseFromEvaluated(const SceneDesc& stamped) {
+    if (stamped.camera.nodeId) {
+        const std::string& want = *stamped.camera.nodeId;
         const auto it = std::find_if(
             stamped.nodes.begin(), stamped.nodes.end(), [&want](const NodeDesc& node) { return node.id == want; });
         if (it == stamped.nodes.end()) {
@@ -554,12 +562,12 @@ std::optional<CameraPose> SceneAnimator::evaluateCamera(const SceneDesc& scene, 
         return pose;
     }
 
-    if (!scene.camera.translation && !scene.camera.rotation) {
+    if (!stamped.camera.translation && !stamped.camera.rotation) {
         return std::nullopt; // no placement authored (no node, no TRS)
     }
     CameraPose pose;
-    pose.position = scene.camera.translation.value_or(Vec3{0.0F, 0.0F, 0.0F});
-    pose.rotation = scene.camera.rotation.value_or(Quat{0.0F, 0.0F, 0.0F, 1.0F});
+    pose.position = stamped.camera.translation.value_or(Vec3{0.0F, 0.0F, 0.0F});
+    pose.rotation = stamped.camera.rotation.value_or(Quat{0.0F, 0.0F, 0.0F, 1.0F});
     return pose;
 }
 
