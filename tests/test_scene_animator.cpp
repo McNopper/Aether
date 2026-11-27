@@ -1,11 +1,14 @@
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
+#include "aether/format/NodeGraph.hpp"
 #include "aether/format/SceneAnimator.hpp"
 #include "aether/format/SceneParser.hpp"
 
@@ -1120,6 +1123,432 @@ vertical_field_of_view = 45.0
     ASSERT_TRUE(s.scene.has_value()) << s.error;
     EXPECT_FALSE(aether::SceneAnimator::evaluateCamera(*s.scene, 0.0F).has_value());
     EXPECT_FALSE(aether::SceneAnimator::evaluateCameraAtTick(*s.scene, 0).has_value());
+}
+
+// ── Reusable-output evaluation (the output storage is the caller's) ─────────
+
+// Exact equality of two evaluated scenes: EVERY SceneDesc field (the math
+// types compare member-wise through slang-math's operator==, strings and
+// containers through theirs). `instance` names the failing element.
+void expectSceneEqual(const aether::SceneDesc& a, const aether::SceneDesc& b) {
+    EXPECT_EQ(a.camera.nodeId, b.camera.nodeId);
+    EXPECT_EQ(a.camera.translation, b.camera.translation);
+    EXPECT_EQ(a.camera.rotation, b.camera.rotation);
+    EXPECT_EQ(a.camera.scale, b.camera.scale);
+    EXPECT_EQ(a.camera.vfov, b.camera.vfov);
+    EXPECT_EQ(a.camera.ev100, b.camera.ev100);
+    EXPECT_EQ(a.spp, b.spp);
+    EXPECT_EQ(a.maxDepth, b.maxDepth);
+    EXPECT_EQ(a.envUnitNits, b.envUnitNits);
+    EXPECT_EQ(a.envMapFile, b.envMapFile);
+    EXPECT_EQ(a.tonemapper, b.tonemapper);
+    EXPECT_EQ(a.postTonemapRenderer, b.postTonemapRenderer);
+    EXPECT_EQ(a.workingColorSpace, b.workingColorSpace);
+    EXPECT_EQ(a.hazeDensity, b.hazeDensity);
+    EXPECT_EQ(a.hazeHeight, b.hazeHeight);
+    EXPECT_EQ(a.mtllibs, b.mtllibs);
+    EXPECT_EQ(a.animationFps, b.animationFps);
+
+    const auto linkMeta = [](const aether::LinkMeta& x, const aether::LinkMeta& y) {
+        EXPECT_EQ(x.kind, y.kind);
+        EXPECT_EQ(x.description, y.description);
+        EXPECT_EQ(x.triangles, y.triangles);
+        EXPECT_EQ(x.groups, y.groups);
+        EXPECT_EQ(x.materials, y.materials);
+        EXPECT_EQ(x.bounds.has_value(), y.bounds.has_value());
+        if (x.bounds.has_value() && y.bounds.has_value()) {
+            EXPECT_EQ(x.bounds->min, y.bounds->min);
+            EXPECT_EQ(x.bounds->max, y.bounds->max);
+            EXPECT_EQ(x.bounds->frame, y.bounds->frame);
+            EXPECT_EQ(x.bounds->orientation, y.bounds->orientation);
+        }
+    };
+    ASSERT_EQ(a.links.size(), b.links.size());
+    for (auto ia = a.links.begin(), ib = b.links.begin(); ia != a.links.end(); ++ia, ++ib) {
+        EXPECT_EQ(ia->first, ib->first);
+        linkMeta(ia->second, ib->second);
+    }
+    EXPECT_EQ(a.meta.has_value(), b.meta.has_value());
+    if (a.meta.has_value() && b.meta.has_value()) {
+        EXPECT_EQ(a.meta->schema, b.meta->schema);
+        EXPECT_EQ(a.meta->version, b.meta->version);
+        EXPECT_EQ(a.meta->model, b.meta->model);
+        EXPECT_EQ(a.meta->title, b.meta->title);
+        EXPECT_EQ(a.meta->description, b.meta->description);
+        EXPECT_EQ(a.meta->units, b.meta->units);
+        EXPECT_EQ(a.meta->generator, b.meta->generator);
+        EXPECT_EQ(a.meta->assembly, b.meta->assembly);
+        ASSERT_EQ(a.meta->links.size(), b.meta->links.size());
+        for (auto ia = a.meta->links.begin(), ib = b.meta->links.begin(); ia != a.meta->links.end(); ++ia, ++ib) {
+            EXPECT_EQ(ia->first, ib->first);
+            linkMeta(ia->second, ib->second);
+        }
+    }
+
+    ASSERT_EQ(a.meshes.size(), b.meshes.size());
+    for (std::size_t i = 0; i < a.meshes.size(); ++i) {
+        SCOPED_TRACE("mesh " + std::to_string(i));
+        EXPECT_EQ(a.meshes[i].kind, b.meshes[i].kind);
+        EXPECT_EQ(a.meshes[i].name, b.meshes[i].name);
+        EXPECT_EQ(a.meshes[i].objPath, b.meshes[i].objPath);
+        EXPECT_EQ(a.meshes[i].sphereRadius, b.meshes[i].sphereRadius);
+        EXPECT_EQ(a.meshes[i].boxHalf, b.meshes[i].boxHalf);
+        EXPECT_EQ(a.meshes[i].bounds.has_value(), b.meshes[i].bounds.has_value());
+        if (a.meshes[i].bounds.has_value() && b.meshes[i].bounds.has_value()) {
+            EXPECT_EQ(a.meshes[i].bounds->min, b.meshes[i].bounds->min);
+            EXPECT_EQ(a.meshes[i].bounds->max, b.meshes[i].bounds->max);
+        }
+        EXPECT_EQ(a.meshes[i].opacityMicromaps, b.meshes[i].opacityMicromaps);
+    }
+
+    ASSERT_EQ(a.nodes.size(), b.nodes.size());
+    for (std::size_t i = 0; i < a.nodes.size(); ++i) {
+        SCOPED_TRACE("node " + std::to_string(i));
+        EXPECT_EQ(a.nodes[i].id, b.nodes[i].id);
+        EXPECT_EQ(a.nodes[i].parent, b.nodes[i].parent);
+        EXPECT_EQ(a.nodes[i].translation, b.nodes[i].translation);
+        EXPECT_EQ(a.nodes[i].rotation, b.nodes[i].rotation);
+        EXPECT_EQ(a.nodes[i].scale, b.nodes[i].scale);
+        EXPECT_EQ(a.nodes[i].meshName, b.nodes[i].meshName);
+        EXPECT_EQ(a.nodes[i].materialName, b.nodes[i].materialName);
+        EXPECT_EQ(a.nodes[i].groupMaterials, b.nodes[i].groupMaterials);
+        EXPECT_EQ(a.nodes[i].description, b.nodes[i].description);
+        EXPECT_EQ(a.nodes[i].tags, b.nodes[i].tags);
+    }
+    ASSERT_EQ(a.nodeWorlds.size(), b.nodeWorlds.size());
+    for (std::size_t i = 0; i < a.nodeWorlds.size(); ++i) {
+        EXPECT_EQ(a.nodeWorlds[i], b.nodeWorlds[i]) << "nodeWorld " << i;
+    }
+
+    ASSERT_EQ(a.animations.size(), b.animations.size());
+    for (std::size_t i = 0; i < a.animations.size(); ++i) {
+        SCOPED_TRACE("animation " + std::to_string(i));
+        EXPECT_EQ(a.animations[i].target, b.animations[i].target);
+        EXPECT_EQ(a.animations[i].nodeIndex, b.animations[i].nodeIndex);
+        EXPECT_EQ(a.animations[i].parameter, b.animations[i].parameter);
+        EXPECT_EQ(a.animations[i].componentIndex, b.animations[i].componentIndex);
+        EXPECT_EQ(a.animations[i].interpolation, b.animations[i].interpolation);
+        EXPECT_EQ(a.animations[i].times, b.animations[i].times);
+        EXPECT_EQ(a.animations[i].values, b.animations[i].values);
+    }
+
+    ASSERT_EQ(a.instances.size(), b.instances.size());
+    for (std::size_t i = 0; i < a.instances.size(); ++i) {
+        SCOPED_TRACE("instance " + std::to_string(i));
+        EXPECT_EQ(a.instances[i].meshName, b.instances[i].meshName);
+        EXPECT_EQ(a.instances[i].translation, b.instances[i].translation);
+        EXPECT_EQ(a.instances[i].rotation, b.instances[i].rotation);
+        EXPECT_EQ(a.instances[i].scale, b.instances[i].scale);
+        EXPECT_EQ(a.instances[i].materialName, b.instances[i].materialName);
+        EXPECT_EQ(a.instances[i].groupMaterials, b.instances[i].groupMaterials);
+    }
+
+    ASSERT_EQ(a.skins.size(), b.skins.size());
+    for (std::size_t i = 0; i < a.skins.size(); ++i) {
+        SCOPED_TRACE("skin " + std::to_string(i));
+        EXPECT_EQ(a.skins[i].nodeId, b.skins[i].nodeId);
+        EXPECT_EQ(a.skins[i].joints, b.skins[i].joints);
+        EXPECT_EQ(a.skins[i].inverseBind, b.skins[i].inverseBind);
+        EXPECT_EQ(a.skins[i].boneIndices, b.skins[i].boneIndices);
+        EXPECT_EQ(a.skins[i].boneWeights, b.skins[i].boneWeights);
+        EXPECT_EQ(a.skins[i].blend, b.skins[i].blend);
+    }
+    ASSERT_EQ(a.morphs.size(), b.morphs.size());
+    for (std::size_t i = 0; i < a.morphs.size(); ++i) {
+        SCOPED_TRACE("morph " + std::to_string(i));
+        EXPECT_EQ(a.morphs[i].meshName, b.morphs[i].meshName);
+        EXPECT_EQ(a.morphs[i].name, b.morphs[i].name);
+        ASSERT_EQ(a.morphs[i].deltas.size(), b.morphs[i].deltas.size());
+        for (std::size_t v = 0; v < a.morphs[i].deltas.size(); ++v) {
+            EXPECT_EQ(a.morphs[i].deltas[v], b.morphs[i].deltas[v]);
+        }
+    }
+    EXPECT_EQ(a.morphWeights, b.morphWeights);
+}
+
+void expectPoseEqual(const std::optional<aether::CameraPose>& a, const std::optional<aether::CameraPose>& b) {
+    ASSERT_EQ(a.has_value(), b.has_value());
+    if (a.has_value() && b.has_value()) {
+        EXPECT_EQ(a->position, b->position);
+        EXPECT_EQ(a->rotation, b->rotation);
+    }
+}
+
+void expectSkinsEqual(const std::vector<aether::SkinPose>& a, const std::vector<aether::SkinPose>& b) {
+    ASSERT_EQ(a.size(), b.size());
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        EXPECT_EQ(a[i].nodeId, b[i].nodeId);
+        ASSERT_EQ(a[i].skinMatrices.size(), b[i].skinMatrices.size());
+        for (std::size_t m = 0; m < a[i].skinMatrices.size(); ++m) {
+            EXPECT_EQ(a[i].skinMatrices[m], b[i].skinMatrices[m]) << "skin " << i << " matrix " << m;
+        }
+    }
+}
+
+// Flat instances + a node hierarchy + per-node material maps + every track
+// kind + a node-bound camera + a morph weight track: every evaluation path.
+constexpr std::string_view kReusableMixed = R"toml([animation_clock]
+fps = 30
+
+[camera]
+node = "cam"
+vertical_field_of_view = 45.0
+
+[[mesh]]
+name = "ball"
+type = "sphere"
+radius = 0.5
+
+[[mesh]]
+name = "box"
+type = "box"
+half_extents = [0.5, 0.5, 0.5]
+
+[[instance]]
+mesh = "ball"
+translate = [10.0, 0.0, 0.0]
+material = "FlatMat"
+materials = { whole = "FlatMat", edge = "EdgeMat" }
+
+[[node]]
+id = "pivot"
+
+[[node]]
+id = "arm"
+parent = "pivot"
+mesh = "ball"
+translate = [1.0, 0.0, 0.0]
+materials = { a = "MatA", b = "MatB" }
+
+[[node]]
+id = "hand"
+parent = "arm"
+mesh = "box"
+translate = [0.0, 2.0, 0.0]
+scale = [2.0, 2.0, 2.0]
+
+[[node]]
+id = "cam"
+
+[[animation]]
+target = "nodes/pivot/rotation"
+interpolation = "linear"
+times = [0.0, 2.0]
+values = [0.0, 0.0, 0.0, 1.0, 0.0, 0.7071068, 0.0, 0.7071068]
+
+[[animation]]
+target = "nodes/hand/translation/y"
+interpolation = "step"
+times = [0.0, 1.0, 2.0]
+values = [2.0, 3.0, 4.0]
+
+[[animation]]
+target = "nodes/hand/scale/x"
+interpolation = "cubic_spline"
+times = [0.0, 1.0]
+values = [0.0, 2.0, 3.0, 0.0, 5.0, 0.0]
+
+[[animation]]
+target = "nodes/cam/translation"
+interpolation = "linear"
+times = [0.0, 2.0]
+values = [0.0, 0.0, 5.0, 0.0, 3.0, 8.0]
+
+[[animation]]
+target = "nodes/arm/rotation/w"
+interpolation = "linear"
+times = [0.0, 2.0]
+values = [1.0, 0.5]
+
+[[morph]]
+mesh = "box"
+name = "bulge"
+weight = 0.25
+deltas = [[0.0, 0.0, 0.0], [0.0, 0.25, 0.0]]
+
+[[animation]]
+target = "morphs/box/bulge"
+interpolation = "linear"
+times = [0.0, 2.0]
+values = [0.0, 1.0]
+)toml";
+
+TEST(SceneAnimator, ReusableEvaluateMatchesFreshForEverySceneTickAndOrder) {
+    // One output SceneDesc serves every scene and tick below: it starts
+    // default-constructed (a fresh output), then holds the previous tick of
+    // the same scene (arbitrary order, forward and backward) and, at every
+    // scene change, the stale output of ANOTHER scene. Each time it must end
+    // exactly equal to the fresh two-argument result - every SceneDesc field,
+    // plus the camera pose, the skin poses and the morph weights read from it.
+    AnimScene mixed{"reusable_mixed", std::string{kReusableMixed}};
+    ASSERT_TRUE(mixed.scene.has_value()) << mixed.error;
+    ASSERT_EQ(mixed.scene->instances.size(), 3U); // the flat instance + arm + hand
+    const auto cornell = aether::SceneParser::parse(assetsDir() / "cornell_classic.scene.toml");
+    ASSERT_TRUE(cornell.has_value());
+    const auto orbit = aether::SceneParser::parse(assetsDir() / "camera_orbit.scene.toml");
+    ASSERT_TRUE(orbit.has_value());
+    const auto skinned = aether::SceneParser::parse(assetsDir() / "skinned_orbit.scene.toml");
+    ASSERT_TRUE(skinned.has_value());
+    ASSERT_FALSE(skinned->skins.empty());
+    ASSERT_FALSE(skinned->morphs.empty());
+    const std::vector<aether::SceneDesc> scenes{*mixed.scene, *cornell, *skinned, *orbit, *mixed.scene};
+    // The objects the inputs were copied from: after every evaluation the
+    // inputs must still equal them.
+    const std::vector<const aether::SceneDesc*> originals{&*mixed.scene, &*cornell, &*skinned, &*orbit, &*mixed.scene};
+
+    aether::SceneDesc out;
+    const std::uint64_t ticks[] = {0, 1, 7, 15, 30, 58, 199, 400, 7, 0, 400};
+    for (const aether::SceneDesc& scene : scenes) {
+        for (const std::uint64_t tick : ticks) {
+            SCOPED_TRACE("tick " + std::to_string(tick));
+            const aether::SceneDesc fresh = aether::SceneAnimator::evaluateAtTick(scene, tick);
+            aether::SceneAnimator::evaluateAtTick(scene, tick, out);
+            expectSceneEqual(fresh, out);
+
+            // The seconds-based pair on the same reused output.
+            const float seconds = static_cast<float>(tick) / 7.0F;
+            aether::SceneAnimator::evaluate(scene, seconds, out);
+            expectSceneEqual(aether::SceneAnimator::evaluate(scene, seconds), out);
+
+            // Camera, skins and morph weights through the shared scratch.
+            expectPoseEqual(aether::SceneAnimator::evaluateCameraAtTick(scene, tick),
+                            aether::SceneAnimator::evaluateCameraAtTick(scene, tick, out));
+            expectPoseEqual(aether::SceneAnimator::evaluateCamera(scene, seconds),
+                            aether::SceneAnimator::evaluateCamera(scene, seconds, out));
+            expectSkinsEqual(aether::SceneAnimator::evaluateSkinsAtTick(scene, tick),
+                             aether::SceneAnimator::evaluateSkinsAtTick(scene, tick, out));
+            expectSkinsEqual(aether::SceneAnimator::evaluateSkins(scene, seconds),
+                             aether::SceneAnimator::evaluateSkins(scene, seconds, out));
+            EXPECT_EQ(aether::SceneAnimator::evaluateMorphWeightsAtTick(scene, tick),
+                      aether::SceneAnimator::evaluateMorphWeightsAtTick(scene, tick, out));
+            EXPECT_EQ(aether::SceneAnimator::evaluateMorphWeights(scene, seconds),
+                      aether::SceneAnimator::evaluateMorphWeights(scene, seconds, out));
+        }
+    }
+    // The input scene is never modified by any of it.
+    for (std::size_t s = 0; s < scenes.size(); ++s) {
+        expectSceneEqual(*originals[s], scenes[s]);
+    }
+}
+
+TEST(SceneAnimator, ReusableEvaluateMatchesHandComputedPoses) {
+    // An oracle independent of the library's own fresh evaluation: poses
+    // computed by hand from the track keys of kReusableMixed (fps 30,
+    // t = tick / 30), read out of ONE output reused across ticks in this order.
+    //   pivot: identity -> Ry(90°) over [0, 2] s (Ry(22.5°) at t = 0.5, Ry(45°) at t = 1)
+    //   arm:   local (1, 0, 0), identity rotation (its w-only track keeps
+    //          (0, 0, 0, w) normalized = identity), scale 1
+    //   hand:  local (0, y, 0) with y = 2 | 3 | 4 on [0,1) | [1,2) | [2,∞),
+    //          scale x = Hermite(2, out 3 -> 5, in 0) over [0, 1] s: x(0.5) = 3.875
+    //   cam:   (0, 0, 5) -> (0, 3, 8) over [0, 2] s, identity rotation
+    //   morph: weight 0 -> 1 over [0, 2] s
+    // Instances: the flat ball first, then arm, then hand.
+    AnimScene f{"reusable_hand_computed", std::string{kReusableMixed}};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+
+    aether::SceneDesc out;
+    const auto at = [&](std::uint64_t tick) -> const aether::SceneDesc& {
+        aether::SceneAnimator::evaluateAtTick(*f.scene, tick, out);
+        return out;
+    };
+
+    // tick 60 (t = 2 s): pivot at Ry(90°) maps +X to -Z.
+    const aether::SceneDesc& s60 = at(60);
+    ASSERT_EQ(s60.instances.size(), 3U);
+    expectVec3Near(s60.instances[0].translation, 10.0F, 0.0F, 0.0F); // flat instance stays
+    EXPECT_EQ(s60.instances[0].materialName, "FlatMat");
+    EXPECT_EQ(s60.instances[0].groupMaterials.size(), 2U);
+    expectVec3Near(s60.instances[1].translation, 0.0F, 0.0F, -1.0F);
+    expectQuatNear(s60.instances[1].rotation, 0.0F, 0.70710678F, 0.0F, 0.70710678F);
+    expectVec3Near(s60.instances[2].translation, 0.0F, 4.0F, -1.0F);
+    expectVec3Near(s60.instances[2].scale, 5.0F, 2.0F, 2.0F);
+    expectVec3Near(s60.nodes[3].translation, 0.0F, 3.0F, 8.0F); // cam
+    EXPECT_FLOAT_EQ(s60.morphWeights[0], 1.0F);
+
+    // tick 15 (t = 0.5 s, u = 0.25 of the 2 s swing), on the SAME reused
+    // output: pivot at Ry(22.5°).
+    const aether::SceneDesc& s15 = at(15);
+    ASSERT_EQ(s15.instances.size(), 3U);
+    expectVec3Near(s15.instances[1].translation, 0.92387953F, 0.0F, -0.38268343F);
+    expectQuatNear(s15.instances[2].rotation, 0.0F, 0.19509032F, 0.0F, 0.98078528F);
+    expectVec3Near(s15.instances[2].translation, 0.92387953F, 2.0F, -0.38268343F);
+    expectVec3Near(s15.instances[2].scale, 3.875F, 2.0F, 2.0F);
+    expectVec3Near(s15.nodes[3].translation, 0.0F, 0.75F, 5.75F);
+    EXPECT_FLOAT_EQ(s15.morphWeights[0], 0.25F);
+    const auto pose15 = aether::SceneAnimator::evaluateCameraAtTick(*f.scene, 15, out);
+    ASSERT_TRUE(pose15.has_value());
+    expectVec3Near(pose15->position, 0.0F, 0.75F, 5.75F);
+    EXPECT_NEAR(pose15->rotation.w, 1.0F, kTrsEpsilon);
+
+    // tick 30 (t = 1 s, u = 0.5): pivot at Ry(45°), the step track flips to
+    // y = 3 and the spline ends at x = 5.
+    const aether::SceneDesc& s30 = at(30);
+    ASSERT_EQ(s30.instances.size(), 3U);
+    expectQuatNear(s30.instances[1].rotation, 0.0F, 0.38268343F, 0.0F, 0.92387953F);
+    expectVec3Near(s30.instances[2].translation, 0.70710678F, 3.0F, -0.70710678F);
+    expectVec3Near(s30.instances[2].scale, 5.0F, 2.0F, 2.0F);
+    EXPECT_FLOAT_EQ(s30.morphWeights[0], 0.5F);
+
+    // tick 0, backwards on the same output: the authored pose again.
+    const aether::SceneDesc& s0 = at(0);
+    ASSERT_EQ(s0.instances.size(), 3U);
+    expectVec3Near(s0.instances[1].translation, 1.0F, 0.0F, 0.0F);
+    expectQuatNear(s0.instances[1].rotation, 0.0F, 0.0F, 0.0F, 1.0F);
+    expectVec3Near(s0.instances[2].translation, 1.0F, 2.0F, 0.0F);
+    expectVec3Near(s0.instances[2].scale, 2.0F, 2.0F, 2.0F);
+    EXPECT_FLOAT_EQ(s0.morphWeights[0], 0.0F);
+}
+
+TEST(SceneAnimator, ReusableEvaluateRejectsAliasedOutput) {
+    // The output must be a distinct object: an aliased call is refused before
+    // it writes anything, so the input scene stays untouched.
+    AnimScene f{"reusable_alias",
+                std::string{kBallNode} +
+                    R"toml([[animation]]
+target = "nodes/n/translation"
+times = [0.0, 1.0]
+values = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+)toml"};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    aether::SceneDesc& scene = *f.scene;
+    const aether::SceneDesc before = scene;
+    EXPECT_ANY_THROW(aether::SceneAnimator::evaluate(scene, 1.0F, scene));
+    EXPECT_ANY_THROW(aether::SceneAnimator::evaluateAtTick(scene, 7, scene));
+    EXPECT_ANY_THROW((void)aether::SceneAnimator::evaluateCamera(scene, 1.0F, scene));
+    EXPECT_ANY_THROW((void)aether::SceneAnimator::evaluateCameraAtTick(scene, 7, scene));
+    EXPECT_ANY_THROW((void)aether::SceneAnimator::evaluateSkins(scene, 1.0F, scene));
+    EXPECT_ANY_THROW((void)aether::SceneAnimator::evaluateSkinsAtTick(scene, 7, scene));
+    EXPECT_ANY_THROW((void)aether::SceneAnimator::evaluateMorphWeights(scene, 1.0F, scene));
+    EXPECT_ANY_THROW((void)aether::SceneAnimator::evaluateMorphWeightsAtTick(scene, 7, scene));
+    expectSceneEqual(before, scene);
+}
+
+TEST(SceneAnimator, ReusableEvaluateDegenerateClockCopiesVerbatim) {
+    // A hand-built scene without a usable clock: the reusable tick entry
+    // points mirror the two-argument ones (verbatim copy, static placement,
+    // empty skins and weights).
+    aether::SceneDesc desc;
+    desc.animationFps = 0.0;
+    aether::NodeDesc node;
+    node.id = "n";
+    node.meshName = "ball";
+    aether::MeshDesc mesh;
+    mesh.name = "ball";
+    mesh.kind = aether::MeshDesc::Kind::Sphere;
+    desc.meshes.push_back(mesh);
+    desc.nodes.push_back(node);
+    desc.camera.nodeId = "n";
+    ASSERT_TRUE(aether::resolveNodes(desc, nullptr));
+
+    const auto cornell = aether::SceneParser::parse(assetsDir() / "cornell_classic.scene.toml");
+    ASSERT_TRUE(cornell.has_value());
+    aether::SceneDesc out = *cornell; // stale content from another scene
+    aether::SceneAnimator::evaluateAtTick(desc, 7, out);
+    expectSceneEqual(aether::SceneAnimator::evaluateAtTick(desc, 7), out);
+    expectPoseEqual(aether::SceneAnimator::evaluateCameraAtTick(desc, 7),
+                    aether::SceneAnimator::evaluateCameraAtTick(desc, 7, out));
+    EXPECT_TRUE(aether::SceneAnimator::evaluateSkinsAtTick(desc, 7, out).empty());
+    EXPECT_TRUE(aether::SceneAnimator::evaluateMorphWeightsAtTick(desc, 7, out).empty());
 }
 
 } // namespace

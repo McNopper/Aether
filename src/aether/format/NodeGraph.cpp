@@ -15,7 +15,7 @@ constexpr std::size_t kNoParent = std::numeric_limits<std::size_t>::max();
 
 } // namespace
 
-bool resolveNodes(SceneDesc& desc, std::string* error) {
+bool resolveNodes(SceneDesc& desc, std::string* error, const std::size_t authoredInstanceCount) {
     if (desc.nodes.empty()) {
         desc.nodeWorlds.clear(); // no nodes -> no worlds (and nothing here can fail)
         return true;
@@ -97,6 +97,12 @@ bool resolveNodes(SceneDesc& desc, std::string* error) {
     // matrix (the instance convention) for the skin evaluation.
     desc.nodeWorlds.resize(desc.nodes.size());
 
+    // Instance slots: the authored flat instances stay first. Entries beyond
+    // them at entry are node-derived instances of an earlier resolution and
+    // are overwritten in place, in this same pre-order (element-wise
+    // assignment keeps their string buffers and material-map nodes).
+    std::size_t nextSlot = std::min(authoredInstanceCount, desc.instances.size());
+
     // Pre-order DFS (children in declaration order): a parent's world TRS is
     // always stored before any of its children is visited.
     std::vector<std::size_t> stack(roots.rbegin(), roots.rend());
@@ -116,20 +122,36 @@ bool resolveNodes(SceneDesc& desc, std::string* error) {
         desc.nodeWorlds[i] = sm::trs(worldT[i], worldR[i], worldS[i]);
 
         if (!node.meshName.empty()) {
-            InstanceDesc inst{};
-            inst.meshName = node.meshName;
-            inst.translation = worldT[i];
-            inst.rotation = worldR[i];
-            inst.scale = worldS[i];
-            inst.materialName = node.materialName;
-            inst.groupMaterials = node.groupMaterials;
-            desc.instances.push_back(std::move(inst));
+            if (nextSlot < desc.instances.size()) {
+                // A reused slot: assign in place (same values as a fresh instance).
+                InstanceDesc& inst = desc.instances[nextSlot];
+                inst.meshName = node.meshName;
+                inst.translation = worldT[i];
+                inst.rotation = worldR[i];
+                inst.scale = worldS[i];
+                inst.materialName = node.materialName;
+                inst.groupMaterials = node.groupMaterials;
+            } else {
+                InstanceDesc inst{};
+                inst.meshName = node.meshName;
+                inst.translation = worldT[i];
+                inst.rotation = worldR[i];
+                inst.scale = worldS[i];
+                inst.materialName = node.materialName;
+                inst.groupMaterials = node.groupMaterials;
+                desc.instances.push_back(std::move(inst));
+            }
+            ++nextSlot;
         }
 
         for (std::size_t c = children[i].size(); c > 0; --c) {
             stack.push_back(children[i][c - 1]); // reversed: pop-back keeps declaration order
         }
     }
+
+    // Fewer meshed nodes than reused slots (the output served another scene):
+    // the surplus stale entries go.
+    desc.instances.resize(nextSlot);
 
     return true;
 }

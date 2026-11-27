@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -420,12 +421,46 @@ void sampleTrack(const AnimationTrack& track, const AnimationTargetBinding& bind
     return count;
 }
 
+/// ANI2 - the tick clock, shared by every tick entry point: integer tick →
+/// seconds in double precision, then the float the sampler runs on. The
+/// conversion is a pure function of (tick, fps): the same tick always yields
+/// bit-identical times, so repeated evaluations - and evaluations across
+/// SceneDesc copies - produce identical instance lists regardless of the
+/// render rate.
+[[nodiscard]] float tickSeconds(const SceneDesc& scene, std::uint64_t tick) {
+    return static_cast<float>(static_cast<double>(tick) / scene.animationFps);
+}
+
+/// The output storage must be a distinct object: the evaluation reads the
+/// immutable input while it writes the output. Aliasing the two would let the
+/// sampled tracks stamp the input scene, so it is rejected before any write
+/// (the library's evaluation API has no error out-parameter; an invalid
+/// argument is reported as an exception, in every build type).
+void requireDistinctOutput(const SceneDesc& scene, const SceneDesc& out) {
+    if (&out == &scene) {
+        throw std::invalid_argument(
+            "SceneAnimator: the output SceneDesc must not be the input scene - evaluate into a separate SceneDesc");
+    }
+}
+
 } // namespace
 
 SceneDesc SceneAnimator::evaluate(const SceneDesc& scene, float timeSeconds) {
-    SceneDesc out = scene; // the ONE per-call copy: sampled tracks mutate the copy's nodes
+    SceneDesc out;
+    evaluate(scene, timeSeconds, out);
+    return out;
+}
+
+void SceneAnimator::evaluate(const SceneDesc& scene, float timeSeconds, SceneDesc& out) {
+    requireDistinctOutput(scene, out);
+
+    // The ONE sync with the input: a copy assignment. Every element is
+    // assigned in place, so a reused @p out keeps its storage (vector
+    // capacities, string buffers, material-map nodes) — a repeated evaluation
+    // of the same scene copies values, not allocations.
+    out = scene; // the sampled tracks mutate the copy's nodes
     if (out.animations.empty()) {
-        return out; // animation-free scenes: the parse result verbatim, for any t
+        return; // animation-free scenes: the parse result verbatim, for any t
     }
 
     // 1) Evaluate tracks -> node local TRS (or, ANI5, the morph weight).
@@ -448,35 +483,45 @@ SceneDesc SceneAnimator::evaluate(const SceneDesc& scene, float timeSeconds) {
     }
 
     // 2) Re-compound: the authored flat instances stay first; the node-derived
-    //    ones are re-resolved from the sampled world TRS. Validation passed at
-    //    parse time, so this cannot fail for a parser-produced scene (and
-    //    resolveNodes validates before it mutates — a hand-built broken graph
-    //    simply keeps its flat list).
+    //    ones are re-resolved from the sampled world TRS, overwriting the
+    //    parse-time entries in place. Validation passed at parse time, so this
+    //    cannot fail for a parser-produced scene (and resolveNodes validates
+    //    before it mutates - a hand-built broken graph simply keeps its flat
+    //    list, like before).
     const std::size_t flatCount = out.instances.size() - std::min(out.instances.size(), meshedNodeCount(out.nodes));
-    out.instances.resize(flatCount);
-    [[maybe_unused]] const bool resolved = resolveNodes(out, nullptr);
-    return out;
+    if (!resolveNodes(out, nullptr, flatCount)) {
+        out.instances.resize(flatCount);
+    }
 }
 
 SceneDesc SceneAnimator::evaluateAtTick(const SceneDesc& scene, std::uint64_t tick) {
+    SceneDesc out;
+    evaluateAtTick(scene, tick, out);
+    return out;
+}
+
+void SceneAnimator::evaluateAtTick(const SceneDesc& scene, std::uint64_t tick, SceneDesc& out) {
+    requireDistinctOutput(scene, out);
     if (!(scene.animationFps > 0.0)) {
-        return scene; // degenerate hand-built clock: no meaningful time axis
+        out = scene; // degenerate hand-built clock: no meaningful time axis
+        return;
     }
-    // Integer tick → seconds in double precision, then the float the sampler
-    // runs on. The conversion is a pure function of (tick, fps): the same
-    // tick always yields bit-identical times, so repeated evaluations - and
-    // evaluations across SceneDesc copies - produce identical instance lists
-    // regardless of the render rate.
-    const float timeSeconds = static_cast<float>(static_cast<double>(tick) / scene.animationFps);
-    return evaluate(scene, timeSeconds);
+    evaluate(scene, tickSeconds(scene, tick), out);
 }
 
 std::optional<CameraPose> SceneAnimator::evaluateCamera(const SceneDesc& scene, float timeSeconds) {
+    SceneDesc stamped;
+    return evaluateCamera(scene, timeSeconds, stamped);
+}
+
+std::optional<CameraPose> SceneAnimator::evaluateCamera(const SceneDesc& scene, float timeSeconds, SceneDesc& out) {
+    requireDistinctOutput(scene, out);
     if (scene.camera.nodeId) {
         // evaluate() stamps the node locals AND re-resolves nodeWorlds, so
         // the world read below is exactly this frame's (same contract the
         // skin evaluation relies on).
-        const SceneDesc stamped = evaluate(scene, timeSeconds);
+        evaluate(scene, timeSeconds, out);
+        const SceneDesc& stamped = out;
         const std::string& want = *scene.camera.nodeId;
         const auto it = std::find_if(
             stamped.nodes.begin(), stamped.nodes.end(), [&want](const NodeDesc& node) { return node.id == want; });
@@ -519,20 +564,33 @@ std::optional<CameraPose> SceneAnimator::evaluateCamera(const SceneDesc& scene, 
 }
 
 std::optional<CameraPose> SceneAnimator::evaluateCameraAtTick(const SceneDesc& scene, std::uint64_t tick) {
+    SceneDesc stamped;
+    return evaluateCameraAtTick(scene, tick, stamped);
+}
+
+std::optional<CameraPose>
+SceneAnimator::evaluateCameraAtTick(const SceneDesc& scene, std::uint64_t tick, SceneDesc& out) {
+    requireDistinctOutput(scene, out);
     if (!(scene.animationFps > 0.0)) {
-        return evaluateCamera(scene, 0.0F); // degenerate hand-built clock: static placement
+        return evaluateCamera(scene, 0.0F, out); // degenerate hand-built clock: static placement
     }
-    const float timeSeconds = static_cast<float>(static_cast<double>(tick) / scene.animationFps);
-    return evaluateCamera(scene, timeSeconds);
+    return evaluateCamera(scene, tickSeconds(scene, tick), out);
 }
 
 std::vector<SkinPose> SceneAnimator::evaluateSkins(const SceneDesc& scene, float timeSeconds) {
+    SceneDesc stamped;
+    return evaluateSkins(scene, timeSeconds, stamped);
+}
+
+std::vector<SkinPose> SceneAnimator::evaluateSkins(const SceneDesc& scene, float timeSeconds, SceneDesc& out) {
+    requireDistinctOutput(scene, out);
     if (scene.skins.empty()) {
         return {}; // skin-free scenes: no poses for any t (mirrors evaluate)
     }
     // evaluate() stamps the joint node locals AND re-resolves nodeWorlds, so
     // the world transforms read below are exactly the frame's.
-    const SceneDesc stamped = evaluate(scene, timeSeconds);
+    evaluate(scene, timeSeconds, out);
+    const SceneDesc& stamped = out;
     if (stamped.nodeWorlds.size() != stamped.nodes.size()) {
         return {}; // hand-built scene without a resolved graph - nothing to read
     }
@@ -578,33 +636,50 @@ std::vector<SkinPose> SceneAnimator::evaluateSkins(const SceneDesc& scene, float
 }
 
 std::vector<SkinPose> SceneAnimator::evaluateSkinsAtTick(const SceneDesc& scene, std::uint64_t tick) {
+    SceneDesc stamped;
+    return evaluateSkinsAtTick(scene, tick, stamped);
+}
+
+std::vector<SkinPose> SceneAnimator::evaluateSkinsAtTick(const SceneDesc& scene, std::uint64_t tick, SceneDesc& out) {
+    requireDistinctOutput(scene, out);
     if (!(scene.animationFps > 0.0)) {
         return {};
     }
-    const float timeSeconds = static_cast<float>(static_cast<double>(tick) / scene.animationFps);
-    return evaluateSkins(scene, timeSeconds);
+    return evaluateSkins(scene, tickSeconds(scene, tick), out);
 }
 
 std::vector<float> SceneAnimator::evaluateMorphWeights(const SceneDesc& scene, float timeSeconds) {
+    SceneDesc stamped;
+    return evaluateMorphWeights(scene, timeSeconds, stamped);
+}
+
+std::vector<float> SceneAnimator::evaluateMorphWeights(const SceneDesc& scene, float timeSeconds, SceneDesc& out) {
+    requireDistinctOutput(scene, out);
     if (scene.morphs.empty()) {
         return {}; // morph-free scenes: no weights for any t (mirrors evaluateSkins)
     }
-    // evaluate() stamps the morph-weight tracks into the copy's morphWeights
+    // evaluate() stamps the morph-weight tracks into the output's morphWeights
     // (and re-resolves the node graph as a side effect); animation-free scenes
     // short-circuit inside evaluate() to the verbatim copy - authored weights.
-    const SceneDesc stamped = evaluate(scene, timeSeconds);
-    if (stamped.morphWeights.size() != scene.morphs.size()) {
+    evaluate(scene, timeSeconds, out);
+    if (out.morphWeights.size() != scene.morphs.size()) {
         return {}; // hand-built scene with a non-parallel weight vector
     }
-    return stamped.morphWeights;
+    return out.morphWeights;
 }
 
 std::vector<float> SceneAnimator::evaluateMorphWeightsAtTick(const SceneDesc& scene, std::uint64_t tick) {
+    SceneDesc stamped;
+    return evaluateMorphWeightsAtTick(scene, tick, stamped);
+}
+
+std::vector<float>
+SceneAnimator::evaluateMorphWeightsAtTick(const SceneDesc& scene, std::uint64_t tick, SceneDesc& out) {
+    requireDistinctOutput(scene, out);
     if (!(scene.animationFps > 0.0)) {
         return {};
     }
-    const float timeSeconds = static_cast<float>(static_cast<double>(tick) / scene.animationFps);
-    return evaluateMorphWeights(scene, timeSeconds);
+    return evaluateMorphWeights(scene, tickSeconds(scene, tick), out);
 }
 
 } // namespace aether

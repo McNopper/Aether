@@ -432,12 +432,30 @@ class SceneAnimator {
     /// Scenes without `[[animation]]` evaluate to an unchanged copy for any
     /// @p timeSeconds. Per-frame cost path: evaluate tracks → update node
     /// local TRS → re-compound. Allocation budget: ONE SceneDesc copy per
-    /// call (the tracks mutate the copy) — nothing per sample or per track;
-    /// sampling itself reads the registry-sized stack scratch. @p scene must
-    /// come from a successful parse (bindings and the node graph are then
-    /// valid by construction). A later track driving the same node parameter
-    /// wins (declaration order).
+    /// call of this two-argument form (the tracks mutate the copy; the
+    /// reusable-output overload below assigns into existing storage) — nothing
+    /// per sample or per track; sampling itself reads the registry-sized stack
+    /// scratch. @p scene must come from a successful parse (bindings and the
+    /// node graph are then valid by construction). A later track driving the
+    /// same node parameter wins (declaration order).
     [[nodiscard]] static SceneDesc evaluate(const SceneDesc& scene, float timeSeconds);
+
+    /// Reusable-output evaluation: exactly `evaluate(scene, timeSeconds)`
+    /// written into @p out, which a caller may keep and hand back on the next
+    /// call (a renderer's per-frame scratch scene). @p out is first brought to
+    /// a copy of @p scene element by element, so a reused output keeps its
+    /// storage (vector capacities, string buffers, material-map nodes) and the
+    /// node-derived instances are overwritten in place: a repeated evaluation
+    /// of the same scene copies values, not allocations. Every field of @p out
+    /// ends bit-identical to the two-argument result, whatever @p out held
+    /// before (a default, an earlier tick, or another scene's output). What a
+    /// repeated evaluation still allocates is the node resolution's own
+    /// scratch (its node-index map and cycle check), not the scene.
+    ///
+    /// PRECONDITION: @p out must not be the input scene itself — the input is
+    /// never modified, and the sampled tracks stamp the output's nodes. An
+    /// aliased call throws `std::invalid_argument` before it writes anything.
+    static void evaluate(const SceneDesc& scene, float timeSeconds, SceneDesc& out);
 
     /// Evaluate @p scene at @p tick over the scene's animation clock
     /// (`animationFps`): `seconds = tick / animationFps`, then exactly
@@ -452,6 +470,11 @@ class SceneAnimator {
     /// return the unchanged copy for any tick, like `evaluate`.
     [[nodiscard]] static SceneDesc evaluateAtTick(const SceneDesc& scene, std::uint64_t tick);
 
+    /// Reusable-output mirror of `evaluateAtTick` (the same precondition on
+    /// @p out as `evaluate(scene, timeSeconds, out)`); a degenerate clock
+    /// copies the scene verbatim into @p out.
+    static void evaluateAtTick(const SceneDesc& scene, std::uint64_t tick, SceneDesc& out);
+
     /// ANI8 - evaluate the camera placement at @p timeSeconds:
     ///   * `[camera] node = "<id>"` - the evaluated WORLD matrix of that node
     ///     (its tracks run through the same `evaluate` path, so an animated
@@ -465,9 +488,21 @@ class SceneAnimator {
     /// per call, exactly like `evaluateSkins`.
     [[nodiscard]] static std::optional<CameraPose> evaluateCamera(const SceneDesc& scene, float timeSeconds);
 
+    /// `evaluateCamera` with the evaluation written into the caller's reusable
+    /// @p out (the same output and the same precondition as
+    /// `evaluate(scene, timeSeconds, out)`), instead of a per-call copy. The
+    /// scratch is left holding the evaluated scene; a static placement does
+    /// not evaluate and leaves it untouched.
+    [[nodiscard]] static std::optional<CameraPose>
+    evaluateCamera(const SceneDesc& scene, float timeSeconds, SceneDesc& out);
+
     /// ANI8 - tick-clock mirror of `evaluateCamera` (`seconds = tick /
     /// animationFps`, then exactly `evaluateCamera`).
     [[nodiscard]] static std::optional<CameraPose> evaluateCameraAtTick(const SceneDesc& scene, std::uint64_t tick);
+
+    /// Reusable-output mirror of `evaluateCameraAtTick`.
+    [[nodiscard]] static std::optional<CameraPose>
+    evaluateCameraAtTick(const SceneDesc& scene, std::uint64_t tick, SceneDesc& out);
 
     /// ANI4 - evaluate every `[[skin]]` binding at @p timeSeconds: stamps the
     /// joint node locals (via `evaluate`), reads the resolved joint world
@@ -479,10 +514,18 @@ class SceneAnimator {
     /// parse-time node worlds are used, exactly like `evaluate`.
     [[nodiscard]] static std::vector<SkinPose> evaluateSkins(const SceneDesc& scene, float timeSeconds);
 
+    /// `evaluateSkins` with the evaluation written into the caller's reusable
+    /// @p out (same contract as `evaluate(scene, timeSeconds, out)`).
+    [[nodiscard]] static std::vector<SkinPose> evaluateSkins(const SceneDesc& scene, float timeSeconds, SceneDesc& out);
+
     /// ANI4 - tick-clock mirror of `evaluateSkins` (`seconds = tick /
     /// animationFps`, then `evaluateSkins`): the deterministic per-frame entry
     /// point for the renderers' BLAS refit.
     [[nodiscard]] static std::vector<SkinPose> evaluateSkinsAtTick(const SceneDesc& scene, std::uint64_t tick);
+
+    /// Reusable-output mirror of `evaluateSkinsAtTick`.
+    [[nodiscard]] static std::vector<SkinPose>
+    evaluateSkinsAtTick(const SceneDesc& scene, std::uint64_t tick, SceneDesc& out);
 
     /// ANI5 - evaluate the morph-weight tracks at @p timeSeconds and return
     /// the weights parallel to `scene.morphs` (a target without a track keeps
@@ -492,9 +535,18 @@ class SceneAnimator {
     /// feed `deformMorphs`.
     [[nodiscard]] static std::vector<float> evaluateMorphWeights(const SceneDesc& scene, float timeSeconds);
 
+    /// `evaluateMorphWeights` with the evaluation written into the caller's
+    /// reusable @p out (same contract as `evaluate(scene, timeSeconds, out)`).
+    [[nodiscard]] static std::vector<float>
+    evaluateMorphWeights(const SceneDesc& scene, float timeSeconds, SceneDesc& out);
+
     /// ANI5 - tick-clock mirror of `evaluateMorphWeights` (seconds = tick /
     /// animationFps).
     [[nodiscard]] static std::vector<float> evaluateMorphWeightsAtTick(const SceneDesc& scene, std::uint64_t tick);
+
+    /// Reusable-output mirror of `evaluateMorphWeightsAtTick`.
+    [[nodiscard]] static std::vector<float>
+    evaluateMorphWeightsAtTick(const SceneDesc& scene, std::uint64_t tick, SceneDesc& out);
 };
 
 } // namespace aether

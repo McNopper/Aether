@@ -703,6 +703,17 @@ tracks evaluates to an unchanged copy. The skin, morph-weight and camera functio
 empty result when the scene has no skin, no morph target or no camera placement (no node and
 neither `translate` nor `rotate`).
 
+Every entry point also has a reusable-output overload with a trailing `SceneDesc& out`:
+`evaluate(scene, seconds, out)`, `evaluateAtTick(scene, tick, out)`, `evaluateCameraAtTick(scene, tick, out)`
+and likewise for skins and morph weights. It writes the same result into a scene the caller keeps
+between calls, for example a renderer's per-tick scratch scene. The output is assigned element by
+element and its node-derived instances are overwritten in place, so a scene with many instances is
+not re-created on every tick. The result is identical to the returned one, whatever `out` held
+before: a default, an earlier tick or another scene. `out` must be a different object than the
+scene; a call that passes the scene itself throws `std::invalid_argument` before it writes
+anything. The skin, morph-weight and camera overloads leave the evaluated scene in `out`, so one
+scratch can serve the camera pose and the instance list of the same tick.
+
 ### Camera bound to a node
 
 `[camera] node = "<id>"` binds the camera to a node of the graph. The id must name a node; the parse

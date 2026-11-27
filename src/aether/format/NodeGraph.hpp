@@ -1,6 +1,8 @@
 #ifndef AETHER_FORMAT_NODEGRAPH_HPP
 #define AETHER_FORMAT_NODEGRAPH_HPP
 
+#include <cstddef>
+#include <limits>
 #include <string>
 
 #include "aether/types/SceneDesc.hpp"
@@ -22,7 +24,19 @@ namespace aether {
 /// happens before any mutation, so a @c false return leaves @p desc
 /// untouched (including `nodeWorlds`). Scenes without nodes keep their flat
 /// instance list exactly as authored and `nodeWorlds` empty.
-[[nodiscard]] bool resolveNodes(SceneDesc& desc, std::string* error);
+///
+/// @p authoredInstanceCount is the number of authored flat instances at the
+/// front of `desc.instances`; the resolution appends one instance per meshed
+/// node after them. Entries beyond that count when the function is entered
+/// are node-derived instances of an earlier resolution: they are overwritten
+/// in place, in the same order, instead of being destroyed and re-created, so
+/// a repeated evaluation (SceneAnimator::evaluate into a reused output)
+/// allocates nothing for them. The list ends at `authoredInstanceCount` plus
+/// one entry per meshed node. The default treats every existing entry as
+/// authored (the parse, which only appends).
+[[nodiscard]] bool resolveNodes(SceneDesc& desc,
+                                std::string* error,
+                                std::size_t authoredInstanceCount = std::numeric_limits<std::size_t>::max());
 
 } // namespace aether
 #endif // AETHER_FORMAT_NODEGRAPH_HPP
