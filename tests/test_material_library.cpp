@@ -143,6 +143,27 @@ TEST(MaterialLibrary, PerMaterialColorSpaceOverride) {
     EXPECT_EQ(f.lib.get("Narrow")->inputColorSpace, aether::MaterialColorSpace::LinRec709);
 }
 
+TEST(MaterialLibrary, AcesCgFileMaterialAndTextureTokensAreAccepted) {
+    MaterialFixture f{"colorspace = \"lin_ap1_scene\"\n"
+                      "[Ap1]\n"
+                      "map_base_color = \"t.png\"\n"
+                      "map_base_color_colorspace = \"lin_ap1_scene\"\n"};
+    ASSERT_TRUE(f.loaded);
+    const auto mat = f.lib.get("Ap1");
+    ASSERT_TRUE(mat.has_value());
+    EXPECT_EQ(mat->inputColorSpace, aether::MaterialColorSpace::LinAcesCg);
+    EXPECT_EQ(mat->map_base_color.colorSpace, aether::TextureColorSpace::LinAcesCgScene);
+}
+
+TEST(MaterialLibrary, AcesCgMaterialRejectsRec709ColorTexture) {
+    MaterialFixture f{"[Mixed]\n"
+                      "colorspace = \"lin_ap1_scene\"\n"
+                      "map_base_color = \"t.png\"\n"
+                      "map_base_color_colorspace = \"lin_rec709_scene\"\n"};
+    ASSERT_TRUE(f.loaded);
+    EXPECT_FALSE(f.lib.get("Mixed").has_value());
+}
+
 TEST(MaterialLibrary, MixedPrimariesPerMaterialIsRejected) {
     // Rec.2020 material with a Rec.709-encoded color texture → gamut mixing.
     MaterialFixture f{"[Mixed]\n"

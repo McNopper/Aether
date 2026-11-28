@@ -38,12 +38,13 @@ struct Aabb {
 /// it.
 struct CameraDesc {
     std::optional<Vec3> translation;
-    std::optional<Quat> rotation;       ///< slang-math order (x, y, z, w)
-    std::optional<Vec3> scale;          ///< parsed for parity with instances; unused by cameras
-    std::optional<float> vfov;          ///< vertical field of view in degrees
-    std::optional<float> ev100;         ///< physical camera EV100 override
-    std::optional<float> lensRadius;    ///< thin-lens aperture radius in metres; 0 or absent = pinhole
-    std::optional<float> focusDistance; ///< thin-lens focus distance in metres; positive when authored
+    std::optional<Quat> rotation;                ///< slang-math order (x, y, z, w)
+    std::optional<Vec3> scale;                   ///< parsed for parity with instances; unused by cameras
+    std::optional<float> vfov;                   ///< vertical field of view in degrees
+    std::optional<float> ev100;                  ///< physical camera EV100 override
+    std::optional<float> exposureCompensationEv; ///< additional global stops; exposure multiplier 2^E
+    std::optional<float> lensRadius;             ///< thin-lens aperture radius in metres; 0 or absent = pinhole
+    std::optional<float> focusDistance;          ///< thin-lens focus distance in metres; positive when authored
 
     /// Camera-from-node (ANI8): placement follows this NH1 node's WORLD
     /// matrix, re-evaluated per animation tick through

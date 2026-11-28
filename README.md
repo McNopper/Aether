@@ -432,7 +432,7 @@ Each of the five sections is optional. Only the keys that are present are applie
 | `max_depth` | integer | Maximum ray depth |
 | `environment_map` | string | Equirectangular EXR used as image-based lighting |
 | `environment_unit_nits` | number | cd/m² per unit of the environment map's values |
-| `working_color_space` | string | Scene-referred working colour space, `lin_rec2020_scene` or `lin_rec709_scene`. Absent: the consumer's default (Rec.2020). All assets are converted into it |
+| `working_color_space` | string | Scene-referred working colour space: `lin_rec2020_scene`, `lin_rec709_scene`, or `lin_ap1_scene` (ACEScg). Absent: the consumer's default (Rec.2020). All assets are converted into it |
 
 `[camera]`:
 
@@ -441,6 +441,7 @@ Each of the five sections is optional. Only the keys that are present are applie
 | `translate`, `rotate`, `rotate_x`, `rotate_y`, `rotate_z`, `scale` | see [Transforms](#transforms) | Placement. Forward is `rotation * (0, 0, -1)`, up is `rotation * (0, 1, 0)`. `scale` is read for symmetry with instances and has no meaning for a camera |
 | `vertical_field_of_view` | number | Vertical field of view in degrees |
 | `ev100` | number | Exposure value of the camera |
+| `exposure_compensation_ev` | number | Additional scene-wide exposure in stops; the consumer multiplies exposure by `2^value`. Absent: 0 |
 | `lens_radius` | number | Thin-lens aperture radius in metres. 0 or absent keeps the pinhole camera |
 | `focus_distance` | number | Thin-lens focus distance in metres; must be finite and positive when authored |
 | `node` | string | Binds the camera to a node; see [Camera bound to a node](#camera-bound-to-a-node) |
@@ -782,7 +783,7 @@ unit = "lux"
 | `type` | all | Required: `point`, `spot`, `rect` or `directional` |
 | `translate`, `rotate`, `rotate_x`, `rotate_y`, `rotate_z` | all | The placement keys of the camera block. A light has no `scale`; the key is rejected |
 | `color` | all | Optional, default white. Linear RGB chromaticity in the space named by `color_space` |
-| `color_space` | all | Optional, default `lin_rec709_scene`; `lin_rec2020_scene` is the other value |
+| `color_space` | all | Optional, default `lin_rec709_scene`; also `lin_rec2020_scene` or `lin_ap1_scene` (ACEScg) |
 | `intensity` | all | Required, finite and above 0 |
 | `unit` | all | Required. `candela` or `lumen` for `point` and `spot`, `nit` for `rect`, `lux` for `directional` |
 | `range` | `point`, `spot` | Optional, default 0. Distance in metres beyond which the light is off; 0 is the physical falloff without a cutoff |
@@ -978,7 +979,7 @@ map_opacity_colorspace = "data"
 | File-level key | Default | Meaning |
 |----------------|---------|---------|
 | `model` | `"openpbr"` | Tags the material model of the parameters. Only `"openpbr"` is understood; a material with another model is skipped with a warning on stderr |
-| `colorspace` | `"lin_rec709_scene"` | Colour space of the colour values and colour textures: `lin_rec709_scene` or `lin_rec2020_scene` |
+| `colorspace` | `"lin_rec709_scene"` | Colour space of the colour values and colour textures: `lin_rec709_scene`, `lin_rec2020_scene`, or `lin_ap1_scene` (ACEScg) |
 
 Both keys can be overridden inside a material. Colour values are always linear; the token names
 the primaries. Aether records the declared colour space on each material and converts nothing; the
@@ -1085,8 +1086,8 @@ corresponding keys.
   `emission_luminance`. Legacy mapped libraries with scalar zero use an implicit scale of one.
 - The effective opacity is `geometry_opacity` multiplied by the value of `map_opacity`. There is no
   alpha-test threshold: the opacity is the coverage, resolved stochastically by the renderers.
-- The `<key>_colorspace` tokens are `data`, `srgb_rec709_scene`, `lin_rec709_scene` and
-  `lin_rec2020_scene`. An unknown token keeps the default and prints a warning on stderr.
+- The `<key>_colorspace` tokens are `data`, `srgb_rec709_scene`, `lin_rec709_scene`,
+  `lin_rec2020_scene` and `lin_ap1_scene`. An unknown token keeps the default and prints a warning on stderr.
 - One material uses one set of primaries: the colour maps `map_base_color` and `map_emission_color`
   must have the same primaries as the material's `colorspace` (an sRGB encoding with Rec.709
   primaries matches `lin_rec709_scene`). A material that mixes them is skipped with a warning.

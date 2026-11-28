@@ -12,7 +12,7 @@ namespace aether {
 /// Declared input color space for a material's color-valued parameters and
 /// color textures. Tokens are ColorInterop interop IDs; values are always
 /// linear (only textures may additionally be sRGB-encoded):
-///   colorspace = "lin_rec709_scene" | "lin_rec2020_scene"
+///   colorspace = "lin_rec709_scene" | "lin_rec2020_scene" | "lin_ap1_scene"
 /// Aether records this but does **not** convert; the consumer (Harmonia /
 /// renderer) converts to its working color space on load.
 ///
@@ -23,6 +23,7 @@ namespace aether {
 enum class MaterialColorSpace : std::uint8_t {
     LinRec709 = 0, ///< "lin_rec709_scene"  — default, convert on load
     LinRec2020,    ///< "lin_rec2020_scene"
+    LinAcesCg,     ///< "lin_ap1_scene" — ACEScg AP1, ACES D60 white
 };
 
 /// A texture map reference: file path (relative to the material-library directory) plus the

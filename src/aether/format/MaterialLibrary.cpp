@@ -94,13 +94,16 @@ void applyKw(MaterialDesc& p, std::string_view rawKw, const toml::node& value) {
 namespace {
 
 /// Parse a material color space token (ColorInterop interop ID:
-/// "lin_rec709_scene" | "lin_rec2020_scene"). Unknown → nullopt.
+/// "lin_rec709_scene" | "lin_rec2020_scene" | "lin_ap1_scene"). Unknown → nullopt.
 [[nodiscard]] std::optional<MaterialColorSpace> parseMaterialColorSpace(std::string_view token) noexcept {
     if (token == "lin_rec709_scene") {
         return MaterialColorSpace::LinRec709;
     }
     if (token == "lin_rec2020_scene") {
         return MaterialColorSpace::LinRec2020;
+    }
+    if (token == "lin_ap1_scene") {
+        return MaterialColorSpace::LinAcesCg;
     }
     return std::nullopt;
 }
@@ -117,6 +120,8 @@ namespace {
         return mat == MaterialColorSpace::LinRec709;
     case TextureColorSpace::LinRec2020Scene:
         return mat == MaterialColorSpace::LinRec2020;
+    case TextureColorSpace::LinAcesCgScene:
+        return mat == MaterialColorSpace::LinAcesCg;
     }
     return false;
 }

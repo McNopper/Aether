@@ -3,6 +3,18 @@
 Notes of each Aether release, newest first. A short history of all releases is in
 [PLAN.md](PLAN.md#release-history); older details are in `git log`.
 
+## Aether v1.0.0-pre-alpha (2026-11-28) — prerelease
+
+Pre-alpha development snapshot and GitHub backup. Adds ACEScg/`lin_ap1_scene` material, texture,
+light and working-space tokens, scene-wide camera `exposure_compensation_ev`, and the reusable
+OpenPBR asset-preparation tools. The release carries the modified OpenPBR Shader Playground
+Aether-format package as a separately licensed release asset; the release description records its
+size, redistribution, and attribution requirements.
+
+Verification: **206/206** CTest tests, **111** graph checks, **17** golden conversions, **5**
+lat-long checks, and **6** USD-audit checks pass. This is a prerelease, not a claim that every
+OpenPBR renderer or every material/camera configuration is fully conformant.
+
 ## Aether v1.0.0 (2026-11-26) — stable release
 
 Stable public baseline of the GPU-agnostic file-format library. It coordinates with slang-math

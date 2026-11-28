@@ -105,6 +105,9 @@ void applyCamera(const toml::table& cam, SceneDesc& desc) {
     if (const auto ev = cam["ev100"].value<double>()) {
         desc.camera.ev100 = static_cast<float>(*ev);
     }
+    if (const auto exposure = cam["exposure_compensation_ev"].value<double>()) {
+        desc.camera.exposureCompensationEv = static_cast<float>(*exposure);
+    }
     if (const auto radius = cam["lens_radius"].value<double>()) {
         desc.camera.lensRadius = static_cast<float>(*radius);
     }
@@ -692,8 +695,9 @@ bool parseLights(const toml::table& root, SceneDesc& desc, std::string* error) {
         }
         if (const auto* cs = t->get("color_space")) {
             const auto token = cs->value<std::string>();
-            if (!token || (*token != "lin_rec709_scene" && *token != "lin_rec2020_scene")) {
-                return fail(label() + ": unknown color_space (lin_rec709_scene | lin_rec2020_scene)");
+            if (!token ||
+                (*token != "lin_rec709_scene" && *token != "lin_rec2020_scene" && *token != "lin_ap1_scene")) {
+                return fail(label() + ": unknown color_space (lin_rec709_scene | lin_rec2020_scene | lin_ap1_scene)");
             }
             light.colorSpace = *token;
         }

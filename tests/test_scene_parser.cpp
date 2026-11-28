@@ -138,6 +138,19 @@ vertical_field_of_view = 50.0
     EXPECT_FLOAT_EQ(*f.scene->camera.focusDistance, 1.02F);
 }
 
+TEST(SceneParser, ReadsCameraExposureCompensation) {
+    NodeScene f("cam_exposure_compensation", R"toml([camera]
+ev100 = 7.0
+exposure_compensation_ev = 1.5
+vertical_field_of_view = 50.0
+)toml");
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_TRUE(f.scene->camera.ev100.has_value());
+    ASSERT_TRUE(f.scene->camera.exposureCompensationEv.has_value());
+    EXPECT_FLOAT_EQ(*f.scene->camera.ev100, 7.0F);
+    EXPECT_FLOAT_EQ(*f.scene->camera.exposureCompensationEv, 1.5F);
+}
+
 TEST(SceneParser, RejectsInvalidThinLensParameters) {
     for (const auto* body : {"[camera]\nlens_radius = -0.1\nvertical_field_of_view = 50.0\n",
                              "[camera]\nfocus_distance = 0.0\nvertical_field_of_view = 50.0\n"}) {
