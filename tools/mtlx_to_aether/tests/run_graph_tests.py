@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT))
 
 import mtlx_graph
 import mtlx_to_toml as conv
+import package_textures
 
 FAILURES: list[str] = []
 CHECKS = 0
@@ -1284,6 +1285,56 @@ def negative_controls(ws: Workspace) -> list[str]:
     return broken
 
 
+def test_texture_packager_preserves_precision(ws: Workspace) -> None:
+    import numpy as np
+    from PIL import Image
+
+    source = ws.root / "converted"
+    (source / "materials").mkdir(parents=True)
+    (source / "tex").mkdir()
+    hdr = np.zeros((4, 4, 4), dtype=np.uint16)
+    hdr[..., 0] = np.arange(16, dtype=np.uint16).reshape(4, 4) * 4096
+    hdr[..., 1] = 65535 - hdr[..., 0]
+    hdr[..., 2] = 32768
+    hdr[..., 3] = 65535
+    mtlx_graph.save_png16(source / "tex/hdr.png", hdr)
+    Image.fromarray(np.arange(4 * 4 * 3, dtype=np.uint8).reshape(4, 4, 3)).save(
+        source / "tex/color.png"
+    )
+    (source / "manifest.json").write_text("{}", encoding="utf-8")
+    original = (
+        'model = "openpbr"\n[A]\nmap_emission_luminance = "../tex/hdr.png"\n'
+        'map_base_color = "../tex/color.png"\n[B]\nmap_orm = "../tex/hdr.png"\n'
+    )
+    (source / "materials/library.materials.toml").write_text(original, encoding="utf-8")
+    output = ws.root / "small"
+    payload = package_textures.package(source, output, 2)
+    check(
+        payload["texture_references"] == 3
+        and payload["unique_textures"] == 2
+        and payload["high_precision"] == 1,
+        f"packager deduplicates references and counts precision: {payload}",
+    )
+    check(payload["problems"] == [], f"packager reports no oversize output: {payload['problems']}")
+    packed_hdr = package_textures.read_png16(output / "textures/hdr_preview.png")
+    check(
+        packed_hdr.dtype == np.uint16
+        and packed_hdr.shape == (2, 2, 4)
+        and int(packed_hdr.max()) > 255,
+        f"RGBA16 survives Lanczos resize without an 8-bit round trip: {packed_hdr.dtype} {packed_hdr.shape}",
+    )
+    check(
+        Image.open(output / "textures/color_preview.png").size == (2, 2),
+        "8-bit RGB output respects the same dimension cap",
+    )
+    converted = (output / "materials/library.materials.toml").read_text(encoding="utf-8")
+    check(
+        converted.count("../textures/") == 3 and "../tex/" not in converted and original != converted,
+        f"all material paths are rewritten to packaged textures: {converted}",
+    )
+    raises(lambda: package_textures.package(source, source), ValueError, "differ")
+
+
 TESTS = [
     test_image_float_reads_red,
     test_extract,
@@ -1310,6 +1361,7 @@ TESTS = [
     test_content_hash_deduplication,
     test_udim_tiles_and_manifest,
     test_udim_normalization_is_opt_in,
+    test_texture_packager_preserves_precision,
     test_command_line,
 ]
 

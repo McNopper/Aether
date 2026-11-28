@@ -119,7 +119,7 @@ Details of the recent releases are in [RELEASE_NOTES.md](RELEASE_NOTES.md); earl
 
 | Version | Date | Content | Tests |
 |---------|------|---------|-------|
-| Unreleased | — | OpenPBR 1.1.2 MaterialX graph conversion with UDIM variants, precision-preserving derived textures, HDR emission scales and specified length units; the 17 golden conversions and 105 graph checks pass. Blender export adds camera/light fidelity, mirrored winding compensation and the `flip_uv_v` option. A sub-mesh keeps both its object/group name and its `usemtl` name. Adds `motion_blur`, `haze`, analytic-light and DOF scenes. | 203 + 105 graph checks + 9 Blender mesh/UV checks |
+| Unreleased | — | OpenPBR 1.1.2 MaterialX graph conversion with UDIM variants, precision-preserving derived textures, HDR emission scales and specified length units; generic converted-package texture resizing preserves RGB/RGBA16, lat-long EXR orientation and Blender/USD metadata auditing are reusable authoring tools; the 17 golden conversions and 111 graph checks pass. Blender export adds camera/light fidelity, mirrored winding compensation and the `flip_uv_v` option. A sub-mesh keeps both its object/group name and its `usemtl` name. Adds `motion_blur`, `haze`, analytic-light and DOF scenes. | 203 + 111 graph checks + 9 Blender mesh/UV checks + 5 lat-long checks + 6 USD-audit checks |
 | v1.0.0 | 2026-11-26 | Stable baseline: analyzer cleanup in scene parsing and skinning, strict documentation-reference checks. Project version and slang-math pin 1.0.0 | 168 |
 | v0.12.0 | 2026-11-24 | Family version alignment for Harmonia's shared camera assembly; no source change | |
 | v0.11.0 | 2026-11-23 | `constexpr` keyword tables, binding layout, designated initializers and explicit index types | |

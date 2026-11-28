@@ -1,7 +1,8 @@
 # Aether authoring tools
 
-Helper tools for authoring and preparing Aether assets: scenes, materials and geometry. The Python
-tools use the standard library only and need no build step; `aether-validate` is a small C++
+Helper tools for authoring and preparing Aether assets: scenes, materials and geometry. Most Python
+tools use the standard library only and need no build step; the MaterialX graph/packaging tools also
+use NumPy and Pillow, and `tools/rotate_latlong.py` uses OpenEXR for file I/O. `aether-validate` is a small C++
 program built together with the library. The file format the tools write is described in the
 [repository README](../README.md#file-format-reference).
 
@@ -15,6 +16,8 @@ Blender has no OpenPBR surface. The intended workflow with Blender is therefore:
 |------|---------|
 | [`aether-validate`](#scene-validator-aether-validate) | Check a scene file the way the library reads it |
 | [`blender_to_aether`](#blender-scene-exporter-blender_to_aether) | Export a Blender scene: scene TOML, camera preset, OBJ files, animation, skinning, morph targets |
+| [`tools/blender_usd_audit.py`](#usd-metadata-audit) | Read composed USD bindings, UVs, visibility, matte flags, lights and cameras without importing the scene |
+| [`tools/rotate_latlong.py`](#lat-long-environment-rotation) | Rotate an equirectangular EXR by XYZ Euler degrees without changing radiance |
 | [`mtlx_to_aether`](#materialx-to-toml-converter-mtlx_to_aether) | Convert an OpenPBR MaterialX library to a TOML material library |
 | [`obj_transform.py`](#obj-transform-obj_transformpy) | Rotate, translate or scale an OBJ file |
 | [`obj_bounds.py`](#obj-bounds-obj_boundspy) | Compute the bounding box of an OBJ file as a `bounds` block |
@@ -518,6 +521,35 @@ reported, so the warning is not shown: a scene in imperial units or with a scale
 | Flat `[[instance]]` blocks | Every object becomes a `[[node]]`; the parser resolves the same flat list |
 | `[meta]` `schema`, `version`, `model`, `units`, `assembly` | The parser's defaults hold for an export (`aether-scene`, `1`, `openpbr`, `m`, empty); `title` and `description` are the two keys the export writes |
 
+## USD metadata audit
+
+Reads a USD stage through Blender's bundled OpenUSD and writes JSON; it does not import, modify or
+render the scene. Composed material bindings, `st` count/interpolation, Arnold visibility chains,
+matte flags, light input values and camera projection parameters remain available even when a DCC
+importer discards them.
+
+```bash
+blender -b --python tools/blender_usd_audit.py -- input.usda output.json
+blender -b --python-exit-code 1 --python tools/test_blender_usd_audit.py
+```
+
+The test constructs an in-memory USD stage and checks six metadata contracts without external assets.
+
+## Lat-long environment rotation
+
+Rotates an equirectangular EXR into a new file while preserving scene-referred values and dimensions.
+Angles are XYZ Euler degrees, local-to-world (`Rz @ Ry @ Rx`). Its direction convention is the renderers':
+`u = atan2(z,x)/(2π)+0.5`, `v = acos(y)/π`, with `v=0` at +Y. World output rays sample the source through
+the inverse rotation. Filtering is bilinear with horizontal wrap and vertical clamp.
+
+```bash
+python tools/rotate_latlong.py input.exr output.exr --rotation -21.9 -846.5 5.3
+python tools/test_rotate_latlong.py
+```
+
+The CPU test covers direction round trips, a known 90-degree turn and identity resampling. OpenEXR is
+needed only for file I/O; the array functions use NumPy.
+
 ## MaterialX to TOML converter: `mtlx_to_aether`
 
 Converts an OpenPBR MaterialX library (`.mtlx`) into an Aether material library
@@ -581,6 +613,22 @@ What it converts:
   manifest also records duplicate inputs, dropped tiles and unsupported inputs. The scene
   assembler uses it to split and bind geometry by tile.
 
+### Converted-package texture resizing
+
+`tools/mtlx_to_aether/package_textures.py` post-processes one converter output directory (`materials/` plus `manifest.json`).
+It converts every referenced source/derived image to PNG, deduplicates resolved paths, rewrites all
+material references and applies a longest-axis cap with Lanczos filtering. RGB/RGBA PNG16 and 16-bit
+TIFF inputs stay uint16 through decode, resize and write; there is no Pillow RGB8 round trip. The
+output manifest records dimensions, precision, hashes, byte counts and any oversize problem.
+
+```bash
+python tools/mtlx_to_aether/package_textures.py converted_dir small_dir --max-dimension 1024
+```
+
+Source and output directories must differ. Resizing occurs in each image's encoded/sampled space; no
+color-space conversion or material parameter change is performed. The graph suite includes a synthetic
+RGBA16 + RGB package and checks deduplication, path rewrites, dimensions and preserved values above 255.
+
 **OpenPBR only.** A document without an `open_pbr_surface` node is rejected. When it uses another
 surface model (`standard_surface`, `gltf_pbr`, `disney_principled`, `usd_preview_surface`) the
 error names it. Standard Surface, OpenPBR's predecessor, is what most third-party libraries still
@@ -605,8 +653,9 @@ python tools/mtlx_to_aether/tests/run_graph_tests.py
 ```
 
 It checks pixel-level channel operations, color spaces, ORM composition, UDIM variants and manifests,
-duplicate policies, normalization, content-hash deduplication and command-line behavior. Negative
-controls cover malformed UDIM, an unsupported node and deliberately broken channel operations.
+duplicate policies, normalization, content-hash deduplication, command-line behavior and bounded
+8/16-bit texture packaging. Negative controls cover malformed UDIM, an unsupported node and deliberately
+broken channel operations.
 `tests/validate_libraries.py` validates converted TOML against Aether's keyword tables; the local
 `aether-validate` build then checks that all material references assemble into a scene.
 
