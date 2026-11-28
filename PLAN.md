@@ -17,10 +17,11 @@ a finished feature is described in the [README](README.md), and its release is r
 | Metadata for material libraries | Material libraries have no metadata block of their own. A link summary in a scene lists material names only; a one-line description per material is not available |
 | Opacity micromaps from Blender | The Blender exporter does not write `opacity_micromaps`. The baker produces the descriptor and the sidecar; the mesh reference is assembled in the scene by hand |
 | Reusable and animated-subtree-only scene evaluation | In progress (approved 2026-11-27). Done: reusable output storage — every evaluation entry point has an overload with a trailing `SceneDesc& out` (`SceneAnimator::evaluate(scene, seconds, out)`), the two-argument forms are compatibility wrappers, and the result is proved identical for flat instances, node hierarchies, skins, morphs and animation-free scenes. On the local stress scene (31,297 nodes) one evaluation went from 79 ms and 829,138 allocations to 45 ms and 142,164 allocations, the bound camera from 63 ms to 29 ms. Open: re-compound only the affected node subtrees (the remaining cost is the full node resolution on every tick: its node-index map, its cycle check and every instance slot) and the renderer integration. The evaluator and its tests are scene-independent: no production-scene names, hard-coded object counts or camera paths |
-| MaterialX OpenPBR node-graph conversion | Not started | The converter accepts only flat documents with literal inputs and direct image nodes. The official OpenPBR Shader Playground uses nested graphs, UDIM filenames, `colorcorrect`, channel extraction/inversion/combine and normal-map nodes. Implement a scene-independent graph resolver that preserves parameter mappings and reports unsupported nodes instead of dropping them; test the official documents and the existing flat fixtures. Twenty-six official documents contain raw `<UDIM>` tokens in XML attributes: preserve those originals and create explicitly documented normalized copies with escaped tokens |
-| Analytic scene-light round-trip | Not started | Blender → Aether export has no scene-light definitions even though Harmonia supports point, spot, rectangular, directional and sky lights. Add a generic scene schema and exporter/loader mapping for USD/Blender light type, transform, color and photometric intensity, or provide a generic emissive-geometry conversion with documented energy. The official OpenPBR scene has five analytic lights that currently cannot round-trip |
-| Thin-lens camera fields | Not started | Add explicit lens radius and focus-distance inputs to the camera format and pass them through `CameraAssembly`; the renderers' integrator work is tracked in `Harmonia/PLAN.md`. Preserve the existing pinhole result when lens radius is zero and verify both renderers against a thin-lens reference |
-| High-precision texture sources | Not started | Harmonia currently decodes every PNG/TIFF to 8-bit RGBA, including the official scene's 16-bit height maps. Add 16-bit integer and half-float texture loading with independent precision tests while keeping RGBA8 compatibility. DDS/BC7 work is tracked in `Harmonia/PLAN.md` and must not hide this separate source-precision gap |
+| MaterialX OpenPBR node-graph conversion | Implemented, CPU verification complete | Graph resolver, UDIM normalization, per-tile manifests, duplicate handling and texture baking are implemented. Base tests: 17 passed; graph tests: 96 checks in 25 tests plus 3 caught negative controls; official v4 conversion: 54/54 documents, 68 variants and 0 unsupported inputs. The independent library validator now shares all 16 slots and accepts v4: 154 texture references, 147 unique files, 0 problems; `aether-validate` accepts all 68 material bindings. Aether/Harmonia accept 16 map slots, including coat, transmission, subsurface, emission luminance and fuzz. OpenPBR GPU image verification is in progress |
+| Analytic scene-light round-trip | Implemented, CPU verification complete | Aether schema, Blender exporter and Harmonia loader pass 203 Aether and 171 Harmonia CPU tests. The 683 mismatch, rect roll and world-space area sizes are fixed. Analytic NEE is connected to Hyperion and Theia GI; GPU image and Vulkan validation are pending |
+| Thin-lens camera fields | Implemented, GPU verification pending | Aether accepts lens radius/focus distance, the Blender exporter converts DOF, and CameraAssembly carries both values into CameraData. Theia raster/GI now share a per-pixel lens ray; Hyperion already samples the lens. Pinhole output is unchanged by construction. The `dof` scene is ready for both-renderer comparison |
+| Blender camera sensor fit | Fixed in working tree, focused CPU verification complete | The exporter copied `angle_y` even for `HORIZONTAL` fit; the OpenPBR title exported 57.71° instead of 44.9073° at 16:9. `camera_vertical_fov` now applies horizontal/vertical/Auto fit and pixel-aspect-corrected frame aspect. `test_blender_camera.py` passes 12 checks; OpenPBR re-render is pending |
+| High-precision texture sources | Implemented, final package verification pending | Harmonia preserves unconverted 16-bit data as RGBA16 and uses half-float for converted/float sources; focused GPU readback tests pass. The baker keeps exact 8-bit-grid outputs compact and writes non-grid scalar/ORM content as independently decoded RGB16 PNG; graph suite: 96 checks in 25 tests plus 3 caught negative controls. Official v4 preserves 94/98 established derived names, changes four libraries, and identifies six high-precision package inputs. The resumable final packager preserves those six instead of BC7-quantizing them |
 
 The next format item is the OpenPBR Surface 1.2 track. The renderers' use of the format
 (deformation on the GPU, animated cameras, sequence capture) is planned in the sibling
@@ -45,14 +46,14 @@ File format:
 - Opacity micromaps are addressed by the `o`/`g` name of a sub-mesh and need
   `VK_KHR_opacity_micromap`; Harmonia fails the scene load when the device lacks it (there is no
   opaque fallback).
-- Harmonia uploads eight of the ten texture maps. `map_roughness` and `map_metalness` are parsed
-  and recorded only.
+- Harmonia uploads all 16 material texture slots. `map_roughness` and `map_metalness` are parsed
+  and recorded only; MaterialX conversion packs them into `map_orm`.
 
 Blender exporter (details in [tools/README.md](tools/README.md#blender-scene-exporter-blender_to_aether)):
 
 - Shear is not representable in a quaternion transform: the closest transform is exported, with a
-  warning. A negative scale is exported as it is and warned about, because it flips triangle
-  winding.
+  warning. Negative scale is preserved; mirrored mesh objects receive a separate OBJ with reversed
+  winding so world-space geometric and shading normals stay aligned.
 - F-curve modifiers, NLA tracks, layers of an action beyond the first and drivers are not exported.
   Blender's easing modes are approximated as cubic splines. Euler keys are exported as quaternions,
   so the motion between keys differs slightly from Blender's.
@@ -62,19 +63,9 @@ Blender exporter (details in [tools/README.md](tools/README.md#blender-scene-exp
 - Geometry is exported unscaled and Aether scenes are in metres. The exporter inspects the scene's
   unit system and scale length, but its warning is added after the warnings have been reported, so
   a scene in imperial units or with a scale length other than 1 exports without a notice.
-- Texture coordinates are written as Blender holds them (`v` is 0 at the bottom of a picture), and
-  the renderers show the first row of an image file at `v = 0`: a picture on a face unwrapped in
-  Blender is vertically mirrored in a render, and an OpenGL normal map on it is inverted in relief.
-  No scene of this repository has a texture with a top and a bottom, so it does not show here. The
-  flip belongs either in the exporter or in the loader of Harmonia (with `tools/omm_bake.py` and
-  the baked opacity micromaps following); until it is decided, a library stores its maps for the
-  pipeline as it is.
 
 MaterialX converter (details in [tools/README.md](tools/README.md#materialx-to-toml-converter-mtlx_to_aether)):
 
-- Only flat documents convert: literal inputs and image nodes that are direct children of the root.
-  An unknown input is dropped without a message; a textured `geometry_opacity` produces no
-  `map_opacity`.
 - `thin_film_thickness` is copied as written. The MaterialX examples carry 0.42 (Pearl) and 0.5
   (Soap_Bubble); OpenPBR's default of 0.5 corresponds to Aether's default of 500 nanometres.
 
@@ -128,7 +119,7 @@ Details of the recent releases are in [RELEASE_NOTES.md](RELEASE_NOTES.md); earl
 
 | Version | Date | Content | Tests |
 |---------|------|---------|-------|
-| Unreleased | — | A sub-mesh keeps both its object/group name and its `usemtl` name, and a scene's material key may use either, so a Blender export with several materials per object renders each part with its material. The Blender exporter writes a binding only for the materials that exported faces use. The scene `motion_blur` for the motion-blur comparison between the renderers. The scene section `[haze]`: `density` and `height` describe a distance haze that both renderers apply to the camera rays (`haze` is the scene for the comparison between them). The Blender exporter writes the section from `haze_density` and `haze_height`. Without `map_tangent`, the anisotropy of a material follows the u direction of its texture coordinates, and a tangent map stores the direction along which the highlight stretches | 174 |
+| Unreleased | — | OpenPBR 1.1.2 MaterialX graph conversion with UDIM variants, precision-preserving derived textures, HDR emission scales and specified length units; the 17 golden conversions and 105 graph checks pass. Blender export adds camera/light fidelity, mirrored winding compensation and the `flip_uv_v` option. A sub-mesh keeps both its object/group name and its `usemtl` name. Adds `motion_blur`, `haze`, analytic-light and DOF scenes. | 203 + 105 graph checks + 9 Blender mesh/UV checks |
 | v1.0.0 | 2026-11-26 | Stable baseline: analyzer cleanup in scene parsing and skinning, strict documentation-reference checks. Project version and slang-math pin 1.0.0 | 168 |
 | v0.12.0 | 2026-11-24 | Family version alignment for Harmonia's shared camera assembly; no source change | |
 | v0.11.0 | 2026-11-23 | `constexpr` keyword tables, binding layout, designated initializers and explicit index types | |

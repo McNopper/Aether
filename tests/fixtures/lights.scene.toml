@@ -1,0 +1,33 @@
+# Validator fixture: the four analytic light types and nothing else.
+# aether-validate must accept it and report 4 lights.
+
+[[light]]
+name = "Bulb"
+type = "point"
+translate = [0.0, 2.0, 0.0]
+intensity = 800.0
+unit = "lumen"
+
+[[light]]
+name = "Cone"
+type = "spot"
+translate = [0.0, 4.0, 0.0]
+rotate_x = 180.0
+intensity = 1000.0
+unit = "candela"
+inner_angle = 12.0
+outer_angle = 30.0
+
+[[light]]
+name = "Panel"
+type = "rect"
+translate = [0.0, 3.0, 0.0]
+intensity = 1500.0
+unit = "nit"
+half_extents = [0.5, 0.25]
+
+[[light]]
+name = "Sun"
+type = "directional"
+intensity = 100000.0
+unit = "lux"

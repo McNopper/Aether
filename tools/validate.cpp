@@ -5,7 +5,8 @@
 //
 //   aether-validate <scene.toml> [--tree] [--all]
 //
-//   (default)  one-line summary: instances / meshes / nodes / material libraries
+//   (default)  one-line summary: instances / meshes / nodes / material
+//              libraries / lights (the [[light]] entries of the scene)
 //   --tree     additionally print the node hierarchy (two spaces per depth)
 //   --all      additionally list every resolved instance with its full TRS
 //
@@ -194,12 +195,14 @@ int main(const int argc, char* argv[]) {
     }
 
     const aether::SceneDesc& desc = *scene;
-    std::cout << std::format("{} scene OK \xE2\x80\x94 {} instances, {} meshes, {} nodes, {} material libraries\n",
+    std::cout << std::format("{} scene OK \xE2\x80\x94 {} instances, {} meshes, {} nodes, {} material libraries, "
+                             "{} lights\n",
                              kOkGlyph,
                              desc.instances.size(),
                              desc.meshes.size(),
                              desc.nodes.size(),
-                             desc.mtllibs.size());
+                             desc.mtllibs.size(),
+                             desc.lights.size());
     if (desc.meta.has_value()) {
         std::cout << std::format("  meta: present | animations: {}\n", desc.animations.size());
     }

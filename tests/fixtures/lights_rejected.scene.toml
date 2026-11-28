@@ -1,0 +1,11 @@
+# Validator fixture: a light the format rejects. A rect light's unit is nit;
+# candela is a point or spot unit. aether-validate must exit 1.
+# The accepted twin is lights.scene.toml next to this file.
+
+[[light]]
+name = "Panel"
+type = "rect"
+translate = [0.0, 3.0, 0.0]
+intensity = 1500.0
+unit = "candela"
+half_extents = [0.5, 0.25]

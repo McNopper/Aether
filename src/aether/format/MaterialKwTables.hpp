@@ -90,7 +90,7 @@ template <typename T, std::size_t N> struct KwTable {
 /// to `map_*` keys). Foreign-format names (UsdPreviewSurface / MaterialX /
 /// Wavefront MTL) are intentionally NOT accepted — files are authored in
 /// OpenPBR.
-inline constexpr KwTable<TextureSlot, 10> texturePathSetters{{
+inline constexpr KwTable<TextureSlot, 18> texturePathSetters{{
     {"map_base_color", &MaterialDesc::map_base_color},
     {"map_normal", &MaterialDesc::map_normal},
     {"map_orm", &MaterialDesc::map_orm},
@@ -101,13 +101,21 @@ inline constexpr KwTable<TextureSlot, 10> texturePathSetters{{
     {"map_tangent", &MaterialDesc::map_tangent},
     {"map_coat_tangent", &MaterialDesc::map_coat_tangent},
     {"map_opacity", &MaterialDesc::map_opacity},
+    {"map_coat_weight", &MaterialDesc::map_coat_weight},
+    {"map_transmission_weight", &MaterialDesc::map_transmission_weight},
+    {"map_subsurface_color", &MaterialDesc::map_subsurface_color},
+    {"map_subsurface_weight", &MaterialDesc::map_subsurface_weight},
+    {"map_transmission_color", &MaterialDesc::map_transmission_color},
+    {"map_transmission_scatter", &MaterialDesc::map_transmission_scatter},
+    {"map_emission_luminance", &MaterialDesc::map_emission_luminance},
+    {"map_fuzz_weight", &MaterialDesc::map_fuzz_weight},
 }};
 
 /// Texture map color spaces (ColorInterop interop IDs): `map_X_colorspace` →
 /// the same slot + its warning label. Unknown tokens keep the slot's default
 /// and warn (in applyKw) — silently treating a wrong color space as data
 /// would render wrong colors.
-inline constexpr KwTable<ColorSpaceSetter, 10> colorspaceSetters{{
+inline constexpr KwTable<ColorSpaceSetter, 18> colorspaceSetters{{
     {"map_base_color_colorspace", {&MaterialDesc::map_base_color, "map_base_color"}},
     {"map_normal_colorspace", {&MaterialDesc::map_normal, "map_normal"}},
     {"map_orm_colorspace", {&MaterialDesc::map_orm, "map_orm"}},
@@ -118,6 +126,14 @@ inline constexpr KwTable<ColorSpaceSetter, 10> colorspaceSetters{{
     {"map_tangent_colorspace", {&MaterialDesc::map_tangent, "map_tangent"}},
     {"map_coat_tangent_colorspace", {&MaterialDesc::map_coat_tangent, "map_coat_tangent"}},
     {"map_opacity_colorspace", {&MaterialDesc::map_opacity, "map_opacity"}},
+    {"map_coat_weight_colorspace", {&MaterialDesc::map_coat_weight, "map_coat_weight"}},
+    {"map_transmission_weight_colorspace", {&MaterialDesc::map_transmission_weight, "map_transmission_weight"}},
+    {"map_subsurface_color_colorspace", {&MaterialDesc::map_subsurface_color, "map_subsurface_color"}},
+    {"map_subsurface_weight_colorspace", {&MaterialDesc::map_subsurface_weight, "map_subsurface_weight"}},
+    {"map_transmission_color_colorspace", {&MaterialDesc::map_transmission_color, "map_transmission_color"}},
+    {"map_transmission_scatter_colorspace", {&MaterialDesc::map_transmission_scatter, "map_transmission_scatter"}},
+    {"map_emission_luminance_colorspace", {&MaterialDesc::map_emission_luminance, "map_emission_luminance"}},
+    {"map_fuzz_weight_colorspace", {&MaterialDesc::map_fuzz_weight, "map_fuzz_weight"}},
 }};
 
 /// Colour keywords (3-element arrays). Aether records colors verbatim in the

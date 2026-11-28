@@ -1,0 +1,98 @@
+# Cornell Box - Analytic Lights
+# The classic box lit by analytic lights instead of an emissive ceiling panel:
+# the reference scene for the [[light]] section.
+#
+# The ceiling panel of cornell_classic carries emission_luminance = 10000
+# (cd/m2). Here the same surface is a white wall and a rect light of the same
+# 10000 nit stands where it is, so the two scenes differ only in how the panel
+# emits. A warm point light and a spot on the short box complete the set. There
+# is no directional light: the box is closed, so it would only be shadowed.
+#
+# Syntax reference: see SceneParser.hpp
+
+material_libraries = ["cornell.materials.toml"]
+
+[render]
+reference = "presets/preview.render.toml"
+
+[camera]
+reference = "presets/cornell.camera.toml"
+translate = [0.0, 2.73, -8.0]
+rotate_x = 0.0000
+rotate_y = 180.0000
+
+# ── Meshes (declared once; object space) ────────────────────────────────────
+
+[[mesh]]
+name = "cornell"
+path = "cornell.obj"
+
+[[mesh]]
+name = "box"
+type = "box"
+half_extents = [0.825, 0.825, 0.825]
+
+[[mesh]]
+name = "box_2"
+type = "box"
+half_extents = [0.825, 1.65, 0.825]
+
+# ── Instances (place a mesh with a transform + material) ────────────────────
+
+[[instance]]
+mesh = "cornell"
+# rotate_y = 180 compensates for the 180° Y bake baked into cornell.obj
+# The ceiling panel ("AreaLight" group) is a white wall here: the rect light
+# below is the emitter.
+materials = { "Floor" = "WhiteWall", "Ceiling" = "WhiteWall", "AreaLight" = "WhiteWall", "BackWall" = "WhiteWall", "LeftWall" = "RedWall", "RightWall" = "GreenWall" }
+rotate_y = 180.0
+
+# Short box  (82.5 × 82.5 × 82.5,  rotated -18° around Y)
+[[instance]]
+mesh = "box"
+material = "WhiteWall"
+translate = [-0.93, 0.825, 1.69]
+rotate = [0.0, -0.1564, 0.0, 0.9877]
+
+# Tall box  (82.5 × 165.0 × 82.5,  rotated +15° around Y)
+[[instance]]
+mesh = "box_2"
+material = "WhiteWall"
+translate = [0.9, 1.65, 3.51]
+rotate = [0.0, 0.1305, 0.0, 0.9914]
+
+# ── Lights (world space; local -Z is the emission axis) ─────────────────────
+
+# The ceiling panel: x from -0.65 to 0.65, z from 2.27 to 3.32, just under the
+# 5.49 m ceiling. rotate_x = -90 turns the emission axis (local -Z) downward.
+[[light]]
+name = "CeilingPanel"
+type = "rect"
+translate = [0.0, 5.47, 2.795]
+rotate_x = -90.0
+color = [1.0, 1.0, 1.0]
+intensity = 10000.0
+unit = "nit"
+half_extents = [0.65, 0.525]
+
+# A warm bulb near the left front corner.
+[[light]]
+name = "WarmBulb"
+type = "point"
+translate = [-1.6, 4.6, 1.2]
+color = [1.0, 0.72, 0.45]
+intensity = 600.0
+unit = "candela"
+
+# A spot on the top of the short box (its axis points from (1.9, 5.2, 0.9) at
+# (-0.93, 1.6, 1.69)).
+[[light]]
+name = "SpotOnShortBox"
+type = "spot"
+translate = [1.9, 5.2, 0.9]
+rotate = [-0.6013041, 0.4726919, 0.0, 0.6442016]
+color = [1.0, 0.86, 0.70]
+intensity = 1500.0
+unit = "candela"
+inner_angle = 18.0
+outer_angle = 32.0

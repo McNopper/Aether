@@ -1,5 +1,7 @@
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
@@ -121,6 +123,28 @@ vertical_field_of_view = 50.0
 )toml");
     ASSERT_FALSE(f.scene.has_value());
     EXPECT_NE(f.error.find("camera references unknown node 'nope'"), std::string::npos) << f.error;
+}
+
+TEST(SceneParser, ReadsThinLensParameters) {
+    NodeScene f("cam_thin_lens", R"toml([camera]
+lens_radius = 0.00625
+focus_distance = 1.02
+vertical_field_of_view = 50.0
+)toml");
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_TRUE(f.scene->camera.lensRadius.has_value());
+    ASSERT_TRUE(f.scene->camera.focusDistance.has_value());
+    EXPECT_FLOAT_EQ(*f.scene->camera.lensRadius, 0.00625F);
+    EXPECT_FLOAT_EQ(*f.scene->camera.focusDistance, 1.02F);
+}
+
+TEST(SceneParser, RejectsInvalidThinLensParameters) {
+    for (const auto* body : {"[camera]\nlens_radius = -0.1\nvertical_field_of_view = 50.0\n",
+                             "[camera]\nfocus_distance = 0.0\nvertical_field_of_view = 50.0\n"}) {
+        NodeScene f("cam_bad_lens", body);
+        ASSERT_FALSE(f.scene.has_value()) << f.error;
+        EXPECT_NE(f.error.find("camera"), std::string::npos) << f.error;
+    }
 }
 
 TEST(SceneParser, ReadsGlobalRenderSettings) {
@@ -1155,6 +1179,555 @@ description = "Studio IBL placeholder."
     EXPECT_EQ(f.scene->links.at("env.exr").kind, "env");
     EXPECT_TRUE(f.scene->meshes.empty());
     EXPECT_TRUE(f.scene->instances.empty());
+}
+
+// ── [[light]] ───────────────────────────────────────────────────────────────
+
+// A light-only scene body with the given [[light]] entries.
+std::string lightScene(std::string_view lights) {
+    return std::string{lights};
+}
+
+// The scene must be rejected and the message must contain @p needle.
+void expectLightRejected(std::string_view name, std::string_view toml, std::string_view needle) {
+    NodeScene f{name, toml};
+    EXPECT_FALSE(f.scene.has_value()) << "accepted a scene it must reject:\n" << toml;
+    EXPECT_NE(f.error.find(needle), std::string::npos) << "error: " << f.error;
+}
+
+using LightDesc = aether::LightDesc;
+
+TEST(SceneParser, LightsEveryTypeRoundTrips) {
+    NodeScene f{"lights_types", lightScene(R"toml([[light]]
+name = "Bulb"
+type = "point"
+translate = [1.0, 2.0, 3.0]
+color = [1.0, 0.5, 0.25]
+intensity = 800.0
+unit = "candela"
+range = 5.0
+
+[[light]]
+name = "Cone"
+type = "spot"
+translate = [-1.0, 4.0, 0.0]
+rotate_x = 90.0
+color_space = "lin_rec2020_scene"
+intensity = 1000.0
+unit = "lumen"
+inner_angle = 12.0
+outer_angle = 30.0
+
+[[light]]
+name = "Panel"
+type = "rect"
+translate = [0.0, 3.0, 0.0]
+rotate = [0.0, 0.0, 0.0, 2.0]
+intensity = 1500.0
+unit = "nit"
+half_extents = [0.25, 0.5]
+
+[[light]]
+name = "Sun"
+type = "directional"
+rotate = [0.3826834, 0.0, 0.0, 0.9238795]
+intensity = 100000.0
+unit = "lux"
+)toml")};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_EQ(f.scene->lights.size(), 4U);
+
+    const LightDesc& bulb = f.scene->lights[0];
+    EXPECT_EQ(bulb.type, LightDesc::Type::Point);
+    EXPECT_EQ(bulb.name, "Bulb");
+    expectVec3Near(bulb.translation, 1.0F, 2.0F, 3.0F);
+    expectQuatNear(bulb.rotation, 0.0F, 0.0F, 0.0F, 1.0F);
+    expectVec3Near(bulb.color, 1.0F, 0.5F, 0.25F);
+    EXPECT_FLOAT_EQ(bulb.intensity, 800.0F);
+    EXPECT_EQ(bulb.unit, LightDesc::Unit::Candela);
+    EXPECT_EQ(bulb.colorSpace, "lin_rec709_scene") << "default color space";
+    EXPECT_FLOAT_EQ(bulb.range, 5.0F);
+
+    const LightDesc& cone = f.scene->lights[1];
+    EXPECT_EQ(cone.type, LightDesc::Type::Spot);
+    EXPECT_EQ(cone.unit, LightDesc::Unit::Lumen);
+    EXPECT_EQ(cone.colorSpace, "lin_rec2020_scene");
+    EXPECT_FLOAT_EQ(cone.intensity, 1000.0F);
+    EXPECT_FLOAT_EQ(cone.innerAngle, 12.0F);
+    EXPECT_FLOAT_EQ(cone.outerAngle, 30.0F);
+    EXPECT_FLOAT_EQ(cone.range, 0.0F) << "no range key = no cutoff";
+    expectVec3Near(cone.color, 1.0F, 1.0F, 1.0F); // no color key = white
+    // Placement: rotate_x = 90 turns the local -Z emission axis onto +Y.
+    const aether::Vec3 axis = cone.rotation * aether::Vec3{0.0F, 0.0F, -1.0F};
+    expectVec3Near(axis, 0.0F, 1.0F, 0.0F);
+
+    const LightDesc& panel = f.scene->lights[2];
+    EXPECT_EQ(panel.type, LightDesc::Type::Rect);
+    EXPECT_EQ(panel.unit, LightDesc::Unit::Nit);
+    EXPECT_FLOAT_EQ(panel.intensity, 1500.0F);
+    EXPECT_FLOAT_EQ(panel.halfWidth, 0.25F);
+    EXPECT_FLOAT_EQ(panel.halfHeight, 0.5F);
+    expectQuatNear(panel.rotation, 0.0F, 0.0F, 0.0F, 1.0F); // rotate is normalized
+    // Local axes: X and Y span the emitting rectangle, -Z is its emission normal.
+    const aether::Vec3 localX = panel.rotation * aether::Vec3{1.0F, 0.0F, 0.0F};
+    const aether::Vec3 localY = panel.rotation * aether::Vec3{0.0F, 1.0F, 0.0F};
+    const aether::Vec3 normal = panel.rotation * aether::Vec3{0.0F, 0.0F, -1.0F};
+    expectVec3Near(localX, 1.0F, 0.0F, 0.0F);
+    expectVec3Near(localY, 0.0F, 1.0F, 0.0F);
+    expectVec3Near(normal, 0.0F, 0.0F, -1.0F);
+
+    const LightDesc& sun = f.scene->lights[3];
+    EXPECT_EQ(sun.type, LightDesc::Type::Directional);
+    EXPECT_EQ(sun.unit, LightDesc::Unit::Lux);
+    EXPECT_FLOAT_EQ(sun.intensity, 100000.0F);
+    // Travel direction: rotation * (0, 0, -1) for a 45 degree turn about X.
+    const aether::Vec3 travel = sun.rotation * aether::Vec3{0.0F, 0.0F, -1.0F};
+    expectVec3Near(travel, 0.0F, 0.7071068F, -0.7071068F);
+}
+
+TEST(SceneParser, LightsSpotEdgeCasesAccepted) {
+    // Equal angles are a spot without penumbra; 90 degrees is a hemisphere.
+    NodeScene f{"lights_spot_edges", lightScene(R"toml([[light]]
+name = "Hard"
+type = "spot"
+intensity = 10.0
+unit = "candela"
+inner_angle = 30.0
+outer_angle = 30.0
+
+[[light]]
+name = "Half"
+type = "spot"
+intensity = 10.0
+unit = "lumen"
+inner_angle = 0.0
+outer_angle = 90.0
+)toml")};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    ASSERT_EQ(f.scene->lights.size(), 2U);
+    EXPECT_FLOAT_EQ(f.scene->lights[0].innerAngle, f.scene->lights[0].outerAngle);
+    EXPECT_FLOAT_EQ(f.scene->lights[1].outerAngle, 90.0F);
+}
+
+TEST(SceneParser, LightsAreOptional) {
+    // No [[light]]: nothing changes for an existing scene.
+    NodeScene f{"lights_none", lightScene(R"toml([[mesh]]
+name = "Box"
+type = "box"
+half_extents = [1.0, 1.0, 1.0]
+
+[[instance]]
+mesh = "Box"
+)toml")};
+    ASSERT_TRUE(f.scene.has_value()) << f.error;
+    EXPECT_TRUE(f.scene->lights.empty());
+    EXPECT_EQ(f.scene->instances.size(), 1U);
+    const auto cornell = aether::SceneParser::parse(assetsDir() / "cornell_classic.scene.toml");
+    ASSERT_TRUE(cornell.has_value());
+    EXPECT_TRUE(cornell->lights.empty());
+}
+
+TEST(SceneParser, LightsRejectUnknownTypeUnitAndColorSpace) {
+    expectLightRejected("light_type",
+                        lightScene(R"([[light]]
+name = "A"
+type = "sphere"
+intensity = 1.0
+unit = "candela"
+)"),
+                        "unknown type 'sphere'");
+    expectLightRejected("light_unit",
+                        lightScene(R"([[light]]
+name = "A"
+type = "point"
+intensity = 1.0
+unit = "watt"
+)"),
+                        "unknown unit 'watt'");
+    expectLightRejected("light_unit_missing",
+                        lightScene(R"([[light]]
+name = "A"
+type = "point"
+intensity = 1.0
+)"),
+                        "missing 'unit'");
+    expectLightRejected("light_unit_fit",
+                        lightScene(R"([[light]]
+name = "A"
+type = "rect"
+intensity = 1.0
+unit = "candela"
+half_extents = [1.0, 1.0]
+)"),
+                        "does not fit type 'rect' (nit)");
+    expectLightRejected("light_unit_fit2",
+                        lightScene(R"([[light]]
+name = "A"
+type = "directional"
+intensity = 1.0
+unit = "nit"
+)"),
+                        "does not fit type 'directional' (lux)");
+    expectLightRejected("light_unit_fit3",
+                        lightScene(R"([[light]]
+name = "A"
+type = "point"
+intensity = 1.0
+unit = "lux"
+)"),
+                        "does not fit type 'point' (candela | lumen)");
+    expectLightRejected("light_color_space",
+                        lightScene(R"([[light]]
+name = "A"
+type = "point"
+intensity = 1.0
+unit = "candela"
+color_space = "srgb_rec709_scene"
+)"),
+                        "unknown color_space");
+}
+
+TEST(SceneParser, LightsRejectBadNamesAndShapes) {
+    expectLightRejected("light_name_missing",
+                        lightScene(R"([[light]]
+type = "point"
+intensity = 1.0
+unit = "candela"
+)"),
+                        "missing 'name'");
+    expectLightRejected("light_name_twice",
+                        lightScene(R"([[light]]
+name = "A"
+type = "point"
+intensity = 1.0
+unit = "candela"
+
+[[light]]
+name = "A"
+type = "point"
+intensity = 1.0
+unit = "candela"
+)"),
+                        "more than one light");
+    expectLightRejected("light_not_table", lightScene("light = [1]\n"), "must be a table");
+    expectLightRejected("light_no_type",
+                        lightScene(R"([[light]]
+name = "A"
+intensity = 1.0
+unit = "candela"
+)"),
+                        "unknown type ''");
+}
+
+TEST(SceneParser, LightsRejectMissingNonFiniteAndNegativeIntensity) {
+    const char* body = R"([[light]]
+name = "A"
+type = "point"
+unit = "candela"
+intensity = %s
+)";
+    for (const char* bad : {"0.0", "-5.0", "nan", "inf", "-inf", "\"bright\"", "true"}) {
+        char toml[256];
+        std::snprintf(toml, sizeof(toml), body, bad);
+        expectLightRejected("light_intensity", toml, "intensity must be a finite number above 0");
+    }
+    expectLightRejected("light_intensity_missing",
+                        lightScene(R"([[light]]
+name = "A"
+type = "point"
+unit = "candela"
+)"),
+                        "missing 'intensity'");
+}
+
+TEST(SceneParser, LightsRejectBadColorAndPlacement) {
+    expectLightRejected("light_color_negative",
+                        lightScene(R"([[light]]
+name = "A"
+type = "point"
+intensity = 1.0
+unit = "candela"
+color = [1.0, -0.1, 0.5]
+)"),
+                        "color must hold 3 finite numbers, each at least 0");
+    expectLightRejected("light_color_nan",
+                        lightScene(R"([[light]]
+name = "A"
+type = "point"
+intensity = 1.0
+unit = "candela"
+color = [1.0, nan, 0.5]
+)"),
+                        "color must hold 3 finite numbers, each at least 0");
+    expectLightRejected("light_color_arity",
+                        lightScene(R"([[light]]
+name = "A"
+type = "point"
+intensity = 1.0
+unit = "candela"
+color = [1.0, 0.5]
+)"),
+                        "color must hold 3 finite numbers, each at least 0");
+    expectLightRejected("light_translate",
+                        lightScene(R"([[light]]
+name = "A"
+type = "point"
+translate = [1.0, 2.0]
+intensity = 1.0
+unit = "candela"
+)"),
+                        "translate must hold 3 finite numbers");
+    expectLightRejected("light_translate_inf",
+                        lightScene(R"([[light]]
+name = "A"
+type = "point"
+translate = [1.0, inf, 0.0]
+intensity = 1.0
+unit = "candela"
+)"),
+                        "translate must hold 3 finite numbers");
+    expectLightRejected("light_scale",
+                        lightScene(R"([[light]]
+name = "A"
+type = "point"
+scale = [2.0, 2.0, 2.0]
+intensity = 1.0
+unit = "candela"
+)"),
+                        "a light has no scale");
+    expectLightRejected("light_rotate_zero",
+                        lightScene(R"([[light]]
+name = "A"
+type = "spot"
+rotate = [0.0, 0.0, 0.0, 0.0]
+intensity = 1.0
+unit = "candela"
+inner_angle = 10.0
+outer_angle = 20.0
+)"),
+                        "forming a rotation");
+    expectLightRejected("light_rotate_nan",
+                        lightScene(R"([[light]]
+name = "A"
+type = "spot"
+rotate = [nan, 0.0, 0.0, 1.0]
+intensity = 1.0
+unit = "candela"
+inner_angle = 10.0
+outer_angle = 20.0
+)"),
+                        "forming a rotation");
+    expectLightRejected("light_euler_type",
+                        lightScene(R"([[light]]
+name = "A"
+type = "spot"
+rotate_x = "up"
+intensity = 1.0
+unit = "candela"
+inner_angle = 10.0
+outer_angle = 20.0
+)"),
+                        "rotate_x must be a finite number");
+}
+
+TEST(SceneParser, LightsRejectBadTypeSpecificValues) {
+    // rect
+    expectLightRejected("light_rect_missing",
+                        lightScene(R"([[light]]
+name = "A"
+type = "rect"
+intensity = 1.0
+unit = "nit"
+)"),
+                        "missing 'half_extents'");
+    expectLightRejected("light_rect_zero",
+                        lightScene(R"([[light]]
+name = "A"
+type = "rect"
+intensity = 1.0
+unit = "nit"
+half_extents = [0.0, 1.0]
+)"),
+                        "half_extents must hold 2 finite numbers, each above 0");
+    expectLightRejected("light_rect_negative",
+                        lightScene(R"([[light]]
+name = "A"
+type = "rect"
+intensity = 1.0
+unit = "nit"
+half_extents = [-1.0, 1.0]
+)"),
+                        "half_extents must hold 2 finite numbers, each above 0");
+    expectLightRejected("light_rect_nan",
+                        lightScene(R"([[light]]
+name = "A"
+type = "rect"
+intensity = 1.0
+unit = "nit"
+half_extents = [nan, 1.0]
+)"),
+                        "half_extents must hold 2 finite numbers, each above 0");
+    expectLightRejected("light_rect_arity",
+                        lightScene(R"([[light]]
+name = "A"
+type = "rect"
+intensity = 1.0
+unit = "nit"
+half_extents = [1.0, 1.0, 1.0]
+)"),
+                        "half_extents must hold 2 finite numbers, each above 0");
+    expectLightRejected("light_rect_on_point",
+                        lightScene(R"([[light]]
+name = "A"
+type = "point"
+intensity = 1.0
+unit = "candela"
+half_extents = [1.0, 1.0]
+)"),
+                        "half_extents is a rect key");
+    // spot
+    expectLightRejected("light_spot_missing",
+                        lightScene(R"([[light]]
+name = "A"
+type = "spot"
+intensity = 1.0
+unit = "candela"
+inner_angle = 10.0
+)"),
+                        "missing 'outer_angle'");
+    expectLightRejected("light_spot_order",
+                        lightScene(R"([[light]]
+name = "A"
+type = "spot"
+intensity = 1.0
+unit = "candela"
+inner_angle = 40.0
+outer_angle = 30.0
+)"),
+                        "inner_angle must not exceed outer_angle");
+    expectLightRejected("light_spot_outer_zero",
+                        lightScene(R"([[light]]
+name = "A"
+type = "spot"
+intensity = 1.0
+unit = "candela"
+inner_angle = 0.0
+outer_angle = 0.0
+)"),
+                        "outer_angle must be above 0");
+    expectLightRejected("light_spot_too_wide",
+                        lightScene(R"([[light]]
+name = "A"
+type = "spot"
+intensity = 1.0
+unit = "candela"
+inner_angle = 10.0
+outer_angle = 95.0
+)"),
+                        "inside [0, 90]");
+    expectLightRejected("light_spot_negative",
+                        lightScene(R"([[light]]
+name = "A"
+type = "spot"
+intensity = 1.0
+unit = "candela"
+inner_angle = -1.0
+outer_angle = 30.0
+)"),
+                        "inside [0, 90]");
+    expectLightRejected("light_spot_inf",
+                        lightScene(R"([[light]]
+name = "A"
+type = "spot"
+intensity = 1.0
+unit = "candela"
+inner_angle = 0.0
+outer_angle = inf
+)"),
+                        "inside [0, 90]");
+    expectLightRejected("light_angles_on_rect",
+                        lightScene(R"([[light]]
+name = "A"
+type = "rect"
+intensity = 1.0
+unit = "nit"
+half_extents = [1.0, 1.0]
+outer_angle = 30.0
+)"),
+                        "outer_angle is a spot key");
+    // range
+    expectLightRejected("light_range_negative",
+                        lightScene(R"([[light]]
+name = "A"
+type = "point"
+intensity = 1.0
+unit = "candela"
+range = -1.0
+)"),
+                        "range must be a finite number, at least 0");
+    expectLightRejected("light_range_nan",
+                        lightScene(R"([[light]]
+name = "A"
+type = "point"
+intensity = 1.0
+unit = "candela"
+range = nan
+)"),
+                        "range must be a finite number, at least 0");
+    expectLightRejected("light_range_on_rect",
+                        lightScene(R"([[light]]
+name = "A"
+type = "rect"
+intensity = 1.0
+unit = "nit"
+range = 3.0
+half_extents = [1.0, 1.0]
+)"),
+                        "range is a point or spot key");
+}
+
+TEST(SceneParser, LightsExampleSceneAndValidatorFixturesParse) {
+    // The committed example: the Cornell box with an analytic ceiling panel of
+    // the same 10000 cd/m2 the classic scene's emissive panel carries, a warm
+    // point light and a spot aimed at the short box.
+    const auto example = aether::SceneParser::parse(assetsDir() / "analytic_lights.scene.toml");
+    ASSERT_TRUE(example.has_value());
+    ASSERT_EQ(example->lights.size(), 3U);
+    EXPECT_EQ(example->lights[0].name, "CeilingPanel");
+    EXPECT_EQ(example->lights[0].type, LightDesc::Type::Rect);
+    EXPECT_FLOAT_EQ(example->lights[0].intensity, 10000.0F);
+    EXPECT_FLOAT_EQ(example->lights[0].halfWidth, 0.65F);
+    EXPECT_FLOAT_EQ(example->lights[0].halfHeight, 0.525F);
+    // Emits straight down (rotate_x = -90 turns local -Z onto -Y).
+    const aether::Vec3 down = example->lights[0].rotation * aether::Vec3{0.0F, 0.0F, -1.0F};
+    expectVec3Near(down, 0.0F, -1.0F, 0.0F);
+    // Its local X is the world X: the 1.3 m width spans x, the 1.05 m depth z.
+    const aether::Vec3 across = example->lights[0].rotation * aether::Vec3{1.0F, 0.0F, 0.0F};
+    expectVec3Near(across, 1.0F, 0.0F, 0.0F);
+    EXPECT_EQ(example->lights[1].type, LightDesc::Type::Point);
+    EXPECT_EQ(example->lights[2].type, LightDesc::Type::Spot);
+    // The spot aims from (1.9, 5.2, 0.9) at the top of the short box (-0.93, 1.6, 1.69).
+    const aether::Vec3 aim = example->lights[2].rotation * aether::Vec3{0.0F, 0.0F, -1.0F};
+    const aether::Vec3 toBox{-0.93F - 1.9F, 1.6F - 5.2F, 1.69F - 0.9F};
+    const float length = std::sqrt(toBox.x * toBox.x + toBox.y * toBox.y + toBox.z * toBox.z);
+    expectVec3Near(aim, toBox.x / length, toBox.y / length, toBox.z / length);
+    // The classic scene it is compared with has no analytic lights.
+    const auto classic = aether::SceneParser::parse(assetsDir() / "cornell_classic.scene.toml");
+    ASSERT_TRUE(classic.has_value());
+    EXPECT_TRUE(classic->lights.empty());
+
+    // The validator fixtures: one light per type, and a rejected twin.
+    const std::filesystem::path fixtures = assetsDir().parent_path() / "tests" / "fixtures";
+    const auto four = aether::SceneParser::parse(fixtures / "lights.scene.toml");
+    ASSERT_TRUE(four.has_value());
+    ASSERT_EQ(four->lights.size(), 4U);
+    EXPECT_EQ(four->lights[0].type, LightDesc::Type::Point);
+    EXPECT_EQ(four->lights[1].type, LightDesc::Type::Spot);
+    EXPECT_EQ(four->lights[2].type, LightDesc::Type::Rect);
+    EXPECT_EQ(four->lights[3].type, LightDesc::Type::Directional);
+    std::string error;
+    EXPECT_FALSE(aether::SceneParser::parse(fixtures / "lights_rejected.scene.toml", &error).has_value());
+    EXPECT_NE(error.find("does not fit type 'rect'"), std::string::npos) << error;
 }
 
 } // namespace

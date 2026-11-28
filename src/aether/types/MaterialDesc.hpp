@@ -60,9 +60,8 @@ struct MaterialDesc {
     // ── transmission ───────────────────────────────────────────────────────
     float transmission_weight = 0.0F;
     Vec3 transmission_color{1.0F, 1.0F, 1.0F};
-    float transmission_depth = 0.0F; ///< Beer-law depth; 0 = no absorption. OpenPBR 1.1.2 (#331):
-                                     ///< default unit cm unless metadata overrides — consumed
-                                     ///< unit-agnostically (sigma_t = -ln(color)/depth)
+    float transmission_depth = 0.0F; ///< Beer-law depth in metres; 0 = no absorption. MaterialX
+                                     ///< conversion maps OpenPBR's default centimetres to metres
     Vec3 transmission_scatter{0.0F, 0.0F, 0.0F};
     float transmission_scatter_anisotropy = 0.0F; ///< HG mean cosine g ∈ [-1,1]
     float transmission_dispersion_scale = 0.0F;   ///< chromatic dispersion strength; 0 = off
@@ -95,8 +94,8 @@ struct MaterialDesc {
     // ── subsurface (OpenPBR Surface 1.1.2 names & types) ───────────────────
     float subsurface_weight = 0.0F;
     Vec3 subsurface_color{0.8F, 0.8F, 0.8F};
-    float subsurface_radius = 1.0F;                  ///< scalar mean-free-path length (OpenPBR float, default 1.0;
-                                                     ///< 1.1.2 #331: default unit cm unless metadata overrides)
+    float subsurface_radius = 1.0F;                  ///< scalar mean-free-path length in metres; MaterialX
+                                                     ///< conversion maps OpenPBR's default centimetres to m
     Vec3 subsurface_radius_scale{1.0F, 0.5F, 0.25F}; ///< per-channel RGB MFP multiplier (OpenPBR color3)
     float subsurface_scatter_anisotropy = 0.0F;      ///< HG mean cosine g ∈ [-1,1]
 
@@ -117,7 +116,9 @@ struct MaterialDesc {
     // ── texture maps (path + source color space) ───────────────────────────
     // Slot order matches the renderer's bindless layout:
     //   [0] base_color [1] normal [2] ORM [3] emission
-    //   [4] coat_normal [5] tangent [6] coat_tangent
+    //   [4] coat_normal [5] tangent [6] coat_tangent [7] opacity
+    //   [8] coat_weight [9] transmission_weight [10] subsurface_color [11] subsurface_weight
+    //   [12] transmission_color [13] transmission_scatter [14] emission_luminance [15] fuzz_weight
     TextureRef map_base_color{"", TextureColorSpace::SrgbRec709Scene};
     TextureRef map_normal{"", TextureColorSpace::Data};
     TextureRef map_orm{"", TextureColorSpace::Data};
@@ -132,6 +133,14 @@ struct MaterialDesc {
     /// texture — it carries no colour primaries. There is no separate alpha-test
     /// threshold: α *is* the coverage, resolved stochastically by the renderers.
     TextureRef map_opacity{"", TextureColorSpace::Data};
+    TextureRef map_coat_weight{"", TextureColorSpace::Data};
+    TextureRef map_transmission_weight{"", TextureColorSpace::Data};
+    TextureRef map_subsurface_color{"", TextureColorSpace::SrgbRec709Scene};
+    TextureRef map_subsurface_weight{"", TextureColorSpace::Data};
+    TextureRef map_transmission_color{"", TextureColorSpace::SrgbRec709Scene};
+    TextureRef map_transmission_scatter{"", TextureColorSpace::Data};
+    TextureRef map_emission_luminance{"", TextureColorSpace::Data};
+    TextureRef map_fuzz_weight{"", TextureColorSpace::Data};
 };
 
 } // namespace aether

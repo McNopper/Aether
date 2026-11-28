@@ -54,6 +54,14 @@ Aether validates the two keys together (one without the other, a negative densit
 below or equal to zero is rejected) and hands them to the consumer; `Harmonia/shaders/haze.slang`
 models the medium in both renderers.
 
+A `[[light]]` entry is an analytic emitter: `type` (`point`, `spot`, `rect`, `directional`), the
+placement keys of the camera block, a linear `color` with its `color_space`, and a photometric
+`intensity` in a `unit` that follows the type (candela or lumen, nit, lux). Local -Z is the
+emission axis. Aether validates every value: an unknown type or unit, a unit that does not fit the
+type, a negative, zero or non-finite intensity and a key of another type are errors that name the
+light. The environment stays in `[render]`; there is no sky light type. The Blender exporter's
+conversion from radiant watts is derived in [tools/README.md](tools/README.md#lights).
+
 
 ### FetchContent asset trap (it bites every asset edit)
 

@@ -29,8 +29,12 @@ Python 3.11 introduced.
 
 `aether-validate` is a thin command line over `aether::SceneParser::parse` with no validation logic
 of its own. A green summary means exactly "the library accepts this file", including the checks of
-the node graph, skins, morph targets and animation tracks. It is built only when Aether is the
-top-level project.
+the node graph, skins, morph targets, animation tracks and analytic lights. It is built only when
+Aether is the top-level project.
+
+The light count of the summary is itself tested: `tests/fixtures/lights.scene.toml` holds one light
+per type and must report `4 lights`, and `tests/fixtures/lights_rejected.scene.toml`, a rect light
+in candela, must be refused with exit code 1 (two CTest cases next to the unit tests).
 
 ```powershell
 cmake --build build --target aether-validate
@@ -45,7 +49,7 @@ aether-validate <scene.toml> [--tree] [--all]
 
 | Argument | Output |
 |----------|--------|
-| none | One summary line: `✔ scene OK — <n> instances, <n> meshes, <n> nodes, <n> material libraries`; a second line with the animation count follows when the scene has a `[meta]` table |
+| none | One summary line: `✔ scene OK — <n> instances, <n> meshes, <n> nodes, <n> material libraries, <n> lights`; a second line with the animation count follows when the scene has a `[meta]` table |
 | `--tree` | The node hierarchy below the summary, two spaces of indent per level; a meshed node shows `[mesh: <name>]` |
 | `--all` | Every resolved instance below the summary: index, mesh, translation, quaternion, scale and whole-mesh material (`-` when none) |
 
@@ -93,7 +97,12 @@ blender --background --python-expr "import sys; sys.path.append('tools'); \
 | Option | Default | Effect |
 |--------|---------|--------|
 | `selected_only` | off | Export only the selected objects |
+| `flip_uv_v` | on | Convert Blender/USD bottom-left UVs to Aether's first-image-row-at-`v=0` convention; off preserves legacy Blender OBJ UVs |
 | `include_camera` | on | Write the camera preset |
+| `include_lights` | on | Write a `[[light]]` per light object that Aether can carry; unsupported lights are reported in the warnings |
+| `light_luminous_efficacy` | 1.0 | Lumens per radiant watt for every light; 1.0 writes Blender's numbers as the photometric values |
+| `area_light_size` | `world` | `world`: data size × object world scale (what Blender's renderer draws); `data`: the size property unscaled |
+| `source_meters_per_unit` | 1.0 | Unit conversion applied to the content's transforms (a USD stage's `metersPerUnit`); the power of point, spot and Normalize-on area lights is multiplied by its square |
 | `material_libraries` | empty | Comma-separated material-library files to reference |
 | `render_reference` | `presets/preview.render.toml` | Render preset the scene references |
 | `tonemap_reference` | `presets/aces.tonemap.toml` | Tonemap preset the scene references |
@@ -132,15 +141,18 @@ blocks; the parser compounds the node graph into its flat instance list itself.
   reproduce the matrix, a warning is printed and the closest transform is exported. This happens
   for a re-rooted `selected_only` node whose world transform contains shear (a non-uniform parent
   scale combined with a child rotation).
-- A negative (mirrored) scale round-trips exactly, but it is warned about: it flips the triangle
-  winding downstream.
+- A negative (mirrored) scale round-trips exactly and is warned about. The mesh object gets a
+  separate OBJ whose triangle corner order is reversed; its vertex normals and UVs stay unchanged,
+  so the negative world transform restores outward winding and geometric normals agree with the
+  inverse-transpose shading normals.
 - A mesh object additionally binds `mesh` and, when it has materials, `material` or `materials`
   (below). Objects without mesh data (empties, collection instances, lights, the scene camera)
   become grouping nodes; their children still parent to them.
 - Objects that share one mesh datablock (Blender instancing) share one OBJ and one `[[mesh]]`;
   each object is a node that references the mesh. The first exported object that uses the datablock
   names the mesh. An object that carries modifiers of its own always gets its own OBJ, because its
-  baked geometry differs.
+  baked geometry differs. Opposite transform-determinant signs also cannot share an OBJ because
+  only the mirrored one carries reversed winding.
 - The OBJ file name, and with it the mesh name, is the object name reduced to letters, digits,
   `_`, `.` and `-`; a collision with an already used name gets a numeric suffix.
 - Nodes are written parents first. The parser resolves parents by id regardless of the file order.
@@ -256,12 +268,11 @@ wins), with the numbers rounded to single precision as the importer sees them. T
 `tests/test_blender_roundtrip.cpp` checks this contract against the committed `skinned` and
 `skinned_dqs` fixtures, including a 6-versus-4 negative control.
 
-**Texture coordinates.** The exporter writes the `vt` lines as Blender holds them: `v` is 0 at the
-bottom of a picture and 1 at its top. The renderers show the first row of an image file at `v = 0`,
-so a picture on a face unwrapped in Blender comes out vertically mirrored, and an OpenGL normal map
-on it comes out inverted in relief. A library with such pictures stores its maps for the pipeline
-as it is. Whether the exporter or the loader should flip `v` is an open decision, listed in the
-[known limitations](../PLAN.md#known-limitations).
+**Texture coordinates.** With `flip_uv_v` on (the default), the exporter converts Blender/USD's
+bottom-left image origin to Aether's convention, where the first image-file row is at `v = 0`.
+The U coordinate is unchanged. Disable the option only for a Blender mesh whose UVs were authored
+pre-flipped. Native OBJ assets bypass this conversion and keep their stored coordinates, so the
+established OBJ path is unaffected.
 
 ### Pose-bone animation
 
@@ -286,10 +297,13 @@ Blender itself evaluated (see the `skinned_pose` test scene).
 ### Camera
 
 The camera preset holds `translate`, `rotate`, `vertical_field_of_view` (the camera's vertical
-angle in degrees) and `ev100` (the export option). When the camera object is part of the export,
-the preset also holds `node = "<camera object>"`, and the renderers place the camera from that
-node's evaluated transform at every animation tick; the static transform is the load-time
-fallback. A `selected_only` export without the camera writes the static transform only.
+angle in degrees) and `ev100` (the export option). The FOV follows Blender's `sensor_fit` and the
+render frame aspect (pixel aspects included): horizontal fit derives vertical FOV from `angle_x`,
+vertical fit keeps `angle_y`, and Auto chooses horizontal for landscape/square frames and vertical
+for portrait frames. It does not blindly copy `angle_y` for a horizontal-fit camera. When the camera
+object is part of the export, the preset also holds `node = "<camera object>"`, and the renderers
+place the camera from that node's evaluated transform at every animation tick; the static transform
+is the load-time fallback. A `selected_only` export without the camera writes the static transform only.
 
 Two rules keep the aim correct:
 
@@ -305,6 +319,160 @@ Two rules keep the aim correct:
   as well. A camera parented to another camera is not supported.
 
 The renderer flag `--frame N` sets the tick at which playback or capture starts.
+
+### Lights
+
+Every Blender light object still becomes its meshless `[[node]]`, as before. With `include_lights` it
+also becomes a `[[light]]` with its **world** placement at the current frame, in the static camera
+block's form (`CONV * matrix_world`), so the light's local −Z is the emission axis in Aether exactly
+as in Blender. A scene without lights writes no `[[light]]` and its file is unchanged: the seven
+committed light-free fixtures regenerate byte for byte.
+
+| Blender light | Aether `type` | `unit` | Type-specific keys |
+|---------------|---------------|--------|--------------------|
+| Point | `point` | `lumen` | – |
+| Spot | `spot` | `lumen` | `outer_angle` = `spot_size / 2`, `inner_angle` (below) |
+| Area, shape Rectangle or Square | `rect` | `nit` | `half_extents` = half the world size |
+| Sun | `directional` | `lux` | – |
+
+`color` is Blender's light color unchanged and `color_space` is `lin_rec709_scene`: a Blender light
+color is scene-linear, and the scene-linear role of the active OCIO config of Blender 5.3 is Linear
+Rec.709. This is the material convention of the format (linear Rec.709 unless declared otherwise);
+no display transform is ever applied.
+
+#### What Blender defines
+
+Established from the source of Blender 5.3 (the RNA of the installed build; the light
+synchronization and the spot and area light kernels of Cycles) and measured on the installed build
+with Cycles on the CPU. The measurements are tiny linear renders: the light seen directly for its
+size and radiance, a white Lambertian plane for an irradiance, and the ratio of two spot renders for
+the cone.
+
+| Quantity | Definition | Measured |
+|----------|------------|----------|
+| power | `energy * 2^exposure` | 500 W at +1 EV give the same irradiance as 1000 W |
+| point, spot | radiant flux Φ into the full sphere, `I = Φ / 4π`. A spot's energy is what it would emit without its cone | 1000 W at 2 m: 19.8936 W/m², expected 19.8944 |
+| area, size | data size × the object's world scale, axis by axis (Cycles: extent = transform column × size) | 2 × 1 m at object scale (2, 2, 2) is 4 × 2 m |
+| area, Normalize on | radiance `Φ / (π A)`, flux `Φ` | 1500 W over 2 × 1 m: 238.73; over 4 × 2 m: 59.68 |
+| area, Normalize off | radiance `Φ / π`, flux `Φ A` | 477.46 at either size |
+| sun | an irradiance `E` | 100 → 100.0 |
+| spot cone | a smoothstep of `(cos θ − cos(spot_size / 2)) * spot_smooth` with `spot_smooth = 1 / ((1 − cos(spot_size / 2)) * blend)`: zero at `spot_size / 2`, full from `cos θ = 1 − (1 − blend)(1 − cos(spot_size / 2))` | 60° with blend 0.25: edges at 25.99° and 30.01°, the formula gives 25.91° and 30°: within one pixel |
+
+#### Power conversion
+
+Aether lights are photometric and Blender's watt is radiant. The exporter writes
+
+| Type | Normalize | Aether writes | Flux it stands for |
+|------|-----------|---------------|--------------------|
+| point, spot | – | `lumen = efficacy * Φ * s²` | the same |
+| rect | on | `nit = efficacy * Φ * s² / (π A)` | `efficacy * Φ * s²` |
+| rect | off | `nit = efficacy * Φ / π` | `efficacy * Φ * A` |
+| directional | – | `lux = efficacy * E` | – |
+
+with `A` the world area of the rectangle and the two factors below. A light with Normalize on keeps
+its total flux when its object scale is folded into its size: only the radiance changes, with the
+area. A light with Normalize off keeps its radiance and its flux follows the area, by the area ratio.
+
+#### The two factors, neither applied by default
+
+**`light_luminous_efficacy`** (`efficacy`, default 1.0) is the luminous flux in lumens per radiant
+watt. Blender's watt carries no photometric calibration: the manual tells the user to set the
+brightness with the film exposure, and it gives only indicative values (a 1000 lm bulb at 2.9 W, a
+clear sky at 1000 W/m²). The default therefore applies no factor and writes Blender's own numbers as
+the photometric values. That is also the numeric identity Blender's USD importer assumes for area
+lights. For a light whose spectrum is known, the option takes its luminous efficacy: 683 lm/W is the
+monochromatic maximum at 555 nm, a white lamp is roughly 300 to 380.
+
+A Blender-native scene renders in Blender at film exposure 0 with the numbers as they are. The same
+numbers as photometric values correspond, through Harmonia's camera exposure `1 / (1.2 * 2^EV100)`,
+to EV100 = log2(efficacy / 1.2): −0.26 at the default, 9.15 at 683.
+
+**`source_meters_per_unit`** (`s`, default 1.0) is the unit conversion that was applied to the
+transforms of the content while its light powers stayed as authored. The power of point, spot and
+Normalize-on area lights is multiplied by `s²`.
+
+*Why the square.* Take a scene and rescale it uniformly by `s`: every length, the sizes of its area
+lights included. The irradiance of a point light is `Φ / (4π d²)`; with the distance scaled to
+`s d`, only `Φ s²` leaves it unchanged. A Normalize-on area light has the radiance `Φ / (π A)`; with
+the area scaled to `s² A`, only `Φ s²` leaves the radiance, and with it every irradiance, unchanged.
+A light given by a radiance (Normalize off) or by an irradiance (sun) needs no factor: its flux
+already scales with its area. `tools/test_blender_lights.py` checks the law numerically for
+`s` = 1, 0.01, 0.5 and 2, together with its negative control: without the factor the scene rescaled
+by 0.01 has 10⁴ times the irradiance.
+
+The factor belongs to a unit conversion of the *geometry*. A Blender file whose content is simply
+authored in centimetres, geometry and lights alike, is one consistent scene: it exports unchanged,
+because Aether treats one unit as one metre exactly as Blender does.
+
+#### Area light size
+
+**`area_light_size`** selects the size of an exported area light: `world` (the default) is the data
+size scaled by the object's world scale, axis by axis, which is what Blender's renderer draws;
+`data` is the size property unscaled. A parent's scale counts, as it does in Blender. A light whose
+world transform shears it is a parallelogram; it is reported and exported as a rectangle with the
+axis lengths. A zero-scale axis leaves no orientation and the light is not exported.
+
+#### Spot cone
+
+`outer_angle` is `spot_size / 2`: `spot_size` is the beam's angular diameter, and Blender's
+attenuation reaches zero at that cone. `inner_angle` is where its smoothstep reaches full strength,
+`acos(1 − (1 − blend)(1 − cos(outer)))`. Blend 0 is a hard edge (inner = outer), blend 1 is full
+strength on the axis only. The edges are Blender's; the falloff between them is not: Aether's is
+linear in the cosine of the angle, Blender's a smoothstep.
+
+#### What is reported and not exported
+
+A light is never dropped silently; each of these prints `Aether export: <name>: ...` and writes no
+`[[light]]`:
+
+- a power (energy × 2^exposure) that is 0, negative or not finite;
+- an area light with shape Disk or Ellipse, or with a spread below 180°;
+- a color with a non-finite component;
+- a world transform with a zero-scale axis.
+
+A light is reported in the same way and still exported when it has a point or spot radius (Aether has
+ideal points) or a color temperature (the light exports with its plain color).
+
+#### Lights imported from USD
+
+The USD stage is not read by this exporter. For content that came through Blender's USD importer,
+these facts were checked on the installed Blender 5.3 (its USD light reader, usd_reader_light.cc):
+
+- `energy = intensity * π` for point, spot and area lights and `intensity * 4` for a distant light
+  (the source comments the latter as *unclear why, but approximately matches Karma*).
+- USD `exposure` is kept, in Blender's separate `exposure` property of the light; the exporter
+  applies it as the factor `2^exposure`. `color` is copied.
+- A USD cone half angle becomes `spot_size = 2 * angle`, the cone softness becomes `spot_blend`.
+- With `apply_unit_conversion_scale` on, the stage's `metersPerUnit` becomes a scale on the root
+  transforms. The imported scene is then in metres through `matrix_world`, and Cycles scales every
+  area light by its object's world transform, so the lights have their USD size.
+
+The conversion is faithful to the stage's geometry and to the size of its lights, and to one power
+rule: USD's Normalize-on `intensity` is a total power, and Blender's importer keeps it as the light's
+total power. What it does not do is follow the unit conversion of the geometry with that power. A
+Normalize-on RectLight of intensity `I` and exposure `e` has, by USD's own rule, the luminance
+`I * 2^e / world area`, in the units of the stage. In Blender the area shrank by `metersPerUnit²`
+while the power did not, which raises every irradiance by `1 / metersPerUnit²`: this is the law of
+`source_meters_per_unit`, and the reason a Cycles render of such an import is over-lit. For
+`mainLamp_spill_AL` of the OpenPBR Shader Playground stage (intensity 1500, exposure 2.6, local
+scale 6.1585 under a root scale of 0.01):
+
+| | world size | luminance |
+|---|---|---|
+| USD's rule, in the stage's units | 12.3 × 12.3 | 1500 · 2^2.6 / 151.7 = 59.94 |
+| Blender, and the exporter at the default `s` = 1 | 0.123 × 0.123 m | 599,420 |
+| the exporter with `source_meters_per_unit = 0.01` | 0.123 × 0.123 m | 59.94 |
+
+The last line is the stage's own lighting in metres. For that stage the export options are
+`source_meters_per_unit = 0.01` and the default efficacy; with USD's camera exposure kept (EV100 0)
+the exported numbers are USD's numbers. A normalized USD SphereLight also needs no correction of
+its far-field intensity. USD defines `intensity` as base luminance and Normalize divides it by the
+sphere's surface area `4πr²`; a Lambertian sphere's far-field luminous intensity is its luminance
+times projected area `πr²`, hence USD intensity / 4. Blender's imported `energy = intensity * π`
+and its point-light rule `I = energy / 4π` produce the same value. The radius is not silently lost:
+the exporter reports its value after `source_meters_per_unit` and states that Aether uses an ideal
+point. `LEDmeetMat` therefore reports 3 source units = 0.03 m, while keeping the correct far-field
+flux; no ×4 intensity factor is applied.
 
 ### Scene-level output
 
@@ -358,37 +526,60 @@ Converts an OpenPBR MaterialX library (`.mtlx`) into an Aether material library
 
 ```bash
 python tools/mtlx_to_aether/mtlx_to_toml.py input.mtlx [output] [--colorspace lin_rec709_scene|lin_rec2020_scene] [--force]
+python tools/mtlx_to_aether/mtlx_to_toml.py input_dir output_dir --normalize-udim --texture-dir output_dir/textures --manifest output_dir/manifest.json
 ```
 
 | Argument | Meaning |
 |----------|---------|
-| `input` | The `.mtlx` file |
+| `input` | The `.mtlx` file or a directory of them |
 | `output` | Output file, or a directory (a path that exists as a directory or ends with a slash); the file is then named after the input. Omitted: `<input name>.materials.toml` next to the input |
 | `--colorspace` | Overrides the library's `colorspace` |
 | `--force` | Overwrite an existing output file; without it an existing file is an error |
+| `--texture-dir` | Where derived textures are baked and deduplicated; default `<output>/textures` |
+| `--no-bake` | Keep only direct source-image references; graphs needing baking are errors |
+| `--normalize-udim` | Escape raw `<UDIM>` tokens in copies of malformed source documents and report each copy; originals are untouched |
+| `--normalized-dir` | Where normalized copies go, outside the source tree |
+| `--allow-unsupported` | Keep the default of an input that cannot be realized and report it instead of failing |
+| `--duplicate-inputs` | `first` (MaterialX `getInput` behavior), `last`, or `error` |
+| `--max-resolution` | Optional box-filter limit on the longest texture axis |
+| `--manifest` | JSON manifest of materials, UDIM variants, texture paths/color spaces and unresolved inputs |
 
-Exit code 0 on success, 1 when the input is missing, is not OpenPBR, cannot be parsed or the output
-exists. The converter prints one line with the number of materials and the colour space.
+Exit code 0 on success, 1 when the input is missing, is not OpenPBR, cannot be parsed, needs a
+required bake, or the output exists. Every converted document is reported; a directory conversion
+also reports variants, source/derived textures, unsupported inputs and normalized documents.
 
 What it converts:
 
-- Each `open_pbr_surface` node that is a direct child of the document root becomes a material, named
-  after the `surfacematerial` that references it, else after the node name.
-- Literal inputs are written under their OpenPBR names: scalars, three-component colours and the
-  two Booleans. The output starts with `model = "openpbr"` and `colorspace`: the document's
-  `colorspace` attribute becomes `lin_rec2020_scene` when it contains `2020`, otherwise
-  `lin_rec709_scene`.
-- An input connected to an `image` node (a direct child of the root, by `nodename` or `nodegraph`)
-  becomes a texture map with its colour space: `srgb_rec709_scene` for `base_color` and
-  `emission_color`, `data` for the rest, unless the image declares one. Texture paths are rewritten
-  relative to the output file. The input-to-slot mapping: `base_color` → `map_base_color`;
-  `specular_roughness` → `map_roughness`; `base_metalness` → `map_metalness`; `geometry_normal` →
-  `map_normal`; `geometry_coat_normal` → `map_coat_normal`; `geometry_tangent` → `map_tangent`;
-  `geometry_coat_tangent` → `map_coat_tangent`; `emission_color` → `map_emission_color`;
-  `orm` (or `occlusion_roughness_metalness`) → `map_orm`. The short names `roughness`,
-  `metalness`, `normal`, `coat_normal`, `tangent` and `coat_tangent` are accepted as well.
-- An input the converter does not know is dropped without a message. In particular a textured
-  `geometry_opacity` produces no `map_opacity`.
+- Every `open_pbr_surface` node and its connected graph, not only direct root children. Materials are
+  named after their `surfacematerial`, else after the surface node.
+- Literal inputs use their OpenPBR names. The graph resolver follows image nodes and supports
+  `geompropvalue`, `colorcorrect`, `extract`, `invert`, `combine3`, `remap`, `ramp4`,
+  `heighttonormal` and `normalmap`. Unsupported nodes are named and fail unless
+  `--allow-unsupported` is set.
+- Color maps are decoded from their declared source space before mathematical operations and
+  baked back with the matching color space. Raw data, including transmission scatter, is never
+  sRGB-encoded. Normals retain MaterialX channel operations and remap exactly once.
+- `specular_roughness` and `base_metalness` become one packed ORM map (R=1, G=roughness,
+  B=metalness), avoiding the separate `map_roughness`/`map_metalness` slots that are recorded but
+  not uploaded by Harmonia. Direct references remain available in `--no-bake` symbolic mode.
+  Scalar/ORM outputs whose values already lie exactly on the 8-bit grid stay uint8; non-grid values
+  are written as uint16 PNG with an explicit big-endian RGB/RGBA16 writer, so Pillow cannot silently
+  reduce RGB16 to RGB8. The graph suite independently decodes the PNG bytes and checks every source
+  code value.
+- `transmission_depth` and `subsurface_radius` use OpenPBR/MaterialX's default centimetre unit and are
+  converted to Aether's metres at this boundary. `thin_film_thickness` likewise converts OpenPBR
+  micrometres to Aether nanometres. Active subsurface/thin-film materials materialize omitted defaults
+  (1 cm and 0.5 µm). Explicit non-default unit overrides are rejected rather than mis-converted.
+  Native Aether material libraries keep their metre/nanometre values and do not pass through the converter.
+- Derived `emission_luminance` textures preserve OpenPBR's [0,∞) HDR range: the converter normalizes
+  the texture by its authored maximum and writes that maximum as the material scalar. The renderers
+  multiply the two, so no highlight energy is clipped. Ordinary [0,1] weight masks are not scaled.
+- All Aether map slots are emitted: base color, normal, ORM, emission color/luminance, coat
+  normal/tangent/weight, tangent, opacity, transmission weight/color/scatter, subsurface color/weight
+  and fuzz weight.
+- UDIM materials produce `<material>_<tile>` variants and a manifest entry for each tile. The
+  manifest also records duplicate inputs, dropped tiles and unsupported inputs. The scene
+  assembler uses it to split and bind geometry by tile.
 
 **OpenPBR only.** A document without an `open_pbr_surface` node is rejected. When it uses another
 surface model (`standard_surface`, `gltf_pbr`, `disney_principled`, `usd_preview_surface`) the
@@ -406,6 +597,18 @@ For each OpenPBR fixture in `tools/mtlx_to_aether/tests/fixtures/` the converter
 library and compares it byte for byte with the golden file of the same name in
 `tools/mtlx_to_aether/tests/expected/`. The fixture whose name starts with `not_openpbr` must be
 rejected. 17 fixtures: 16 golden conversions and one rejection; exit code 0 when all pass.
+
+Graph conversion has a separate suite:
+
+```bash
+python tools/mtlx_to_aether/tests/run_graph_tests.py
+```
+
+It checks pixel-level channel operations, color spaces, ORM composition, UDIM variants and manifests,
+duplicate policies, normalization, content-hash deduplication and command-line behavior. Negative
+controls cover malformed UDIM, an unsupported node and deliberately broken channel operations.
+`tests/validate_libraries.py` validates converted TOML against Aether's keyword tables; the local
+`aether-validate` build then checks that all material references assemble into a scene.
 
 ### Examples
 
@@ -670,6 +873,23 @@ python tools/test_omm_bake.py
 
 They are not registered with CTest.
 
+The exporter's light conversion needs `bpy` and runs inside headless Blender. Its oracles are what
+Blender defines, none of them the exporter's own code: the conversion functions and the unit-scale
+law with its negative control, object scale folded into area lights with Normalize on and off, the
+spot cone edges, the rejection of zero, negative and non-finite power and of unsupported lights, a
+scene with known world transforms and powers exported through the real operator and parsed back,
+the export options through the real operator, and the unchanged file of a light-free scene. It exits
+1 on any failure:
+
+```text
+blender --background --factory-startup --python-exit-code 1 --python tools/test_blender_lights.py
+blender --background --factory-startup --python-exit-code 1 --python tools/test_blender_camera.py
+blender --background --factory-startup --python-exit-code 1 --python tools/test_blender_meshes.py
+```
+
+The camera script checks horizontal, vertical and automatic sensor fit over landscape, square and
+portrait aspects, the sourced OpenPBR title-camera numbers, and invalid-aspect rejection.
+
 ## Repository checks
 
 Four scripts support the C++ side of the repository. The commands in context are in the
@@ -732,7 +952,7 @@ summary. The full output is written to `build/clang_tidy.log`.
 
 Needs a configure with `-DAETHER_COVERAGE=ON` (a separate build directory keeps the main build
 untouched). Without `--skip-build` the script configures and builds the tree itself, in
-`build/coverage` by default, reusing the generator, compiler and toolchain of the main build. It
+a separate build directory, `coverage` under the main build tree by default, reusing the generator, compiler and toolchain of the main build. It
 then runs the unit tests with `LLVM_PROFILE_FILE` set, merges the profiles with `llvm-profdata` and
 prints the `llvm-cov report` of `src/` for every test binary that CTest lists (`--show` prints the
 annotated sources instead). The LLVM tools are looked up next to the compiler first.

@@ -38,10 +38,12 @@ struct Aabb {
 /// it.
 struct CameraDesc {
     std::optional<Vec3> translation;
-    std::optional<Quat> rotation; ///< slang-math order (x, y, z, w)
-    std::optional<Vec3> scale;    ///< parsed for parity with instances; unused by cameras
-    std::optional<float> vfov;    ///< vertical field of view in degrees
-    std::optional<float> ev100;   ///< physical camera EV100 override
+    std::optional<Quat> rotation;       ///< slang-math order (x, y, z, w)
+    std::optional<Vec3> scale;          ///< parsed for parity with instances; unused by cameras
+    std::optional<float> vfov;          ///< vertical field of view in degrees
+    std::optional<float> ev100;         ///< physical camera EV100 override
+    std::optional<float> lensRadius;    ///< thin-lens aperture radius in metres; 0 or absent = pinhole
+    std::optional<float> focusDistance; ///< thin-lens focus distance in metres; positive when authored
 
     /// Camera-from-node (ANI8): placement follows this NH1 node's WORLD
     /// matrix, re-evaluated per animation tick through
@@ -307,6 +309,48 @@ struct SceneMeta {
     std::map<std::string, LinkMeta> links;
 };
 
+/// An analytic light (`[[light]]`): an idealized emitter described by
+/// parameters, not by geometry.
+///
+/// PLACEMENT is the shared TRS vocabulary of the camera block: `translation`
+/// plus `rotation`. Lights have no scale (the parser rejects `scale`); a
+/// rectangular light is sized by its half extents. LOCAL AXES: local -Z is the
+/// emission axis of every type — the same convention as the camera's forward
+/// and as Blender and USD lights. A rectangular light lies in the local XY
+/// plane (emitting toward -Z, one-sided), a spot light's cone opens around -Z,
+/// and a directional light travels along -Z.
+///
+/// EMISSION is `color * intensity`: `color` is a linear RGB chromaticity (each
+/// component at least 0) in `colorSpace`, and `intensity` is the photometric
+/// quantity of the emitter as if the color were white, in `unit`. The unit
+/// follows the type, because the natural photometric quantity does:
+///   point, spot      candela (luminous intensity) or lumen (luminous flux of
+///                    the isotropic emitter; a spot light's lumen value is the
+///                    flux it would emit without its cone)
+///   rect             nit (cd/m², luminance of the emitting surface)
+///   directional      lux (lm/m², illuminance on a surface facing the light)
+///
+/// The scene environment (`[render] environment_map` and
+/// `environment_unit_nits`) is the sky; there is no sky light type.
+struct LightDesc {
+    enum class Type : std::uint8_t { Point, Spot, Rect, Directional };
+    enum class Unit : std::uint8_t { Candela, Lumen, Nit, Lux };
+
+    Type type = Type::Point;
+    std::string name;                      ///< unique within the scene
+    Vec3 translation{0.0F};                ///< world position (metres)
+    Quat rotation{0.0F, 0.0F, 0.0F, 1.0F}; ///< world rotation, slang-math order (x, y, z, w)
+    Vec3 color{1.0F};                      ///< linear RGB chromaticity in `colorSpace`
+    float intensity = 0.0F;                ///< photometric, in `unit`, above 0
+    Unit unit = Unit::Candela;
+    std::string colorSpace = "lin_rec709_scene"; ///< "lin_rec709_scene" | "lin_rec2020_scene"
+    float range = 0.0F;      ///< point, spot: distance in metres beyond which the light is off; 0 = none
+    float halfWidth = 0.0F;  ///< rect: half extent along the local X axis (metres)
+    float halfHeight = 0.0F; ///< rect: half extent along the local Y axis (metres)
+    float innerAngle = 0.0F; ///< spot: half angle in degrees up to which the emission is full
+    float outerAngle = 0.0F; ///< spot: half angle in degrees at which the emission reaches zero
+};
+
 /// Fully parsed `.scene.toml` file — pure CPU data, no GPU/renderer types.
 ///
 /// References (mtllibs, OBJ paths, env map) are recorded as relative paths; the
@@ -371,6 +415,10 @@ struct SceneDesc {
     /// independent of the render rate.
     double animationFps = 30.0;
     std::vector<InstanceDesc> instances; ///< placed instances, in declaration order
+    /// Analytic lights (optional; `[[light]]` entries, declaration order), in
+    /// world space. Empty unless the scene declares lights — light-free scenes
+    /// are unaffected.
+    std::vector<LightDesc> lights;
     /// ANI4 - skin bindings (optional; `[[skin]]` entries, declaration order).
     /// Parsed against the completed node graph; consumed by
     /// `SceneAnimator::evaluateSkins` + `deformSkinLbs` (the CPU reference).

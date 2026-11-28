@@ -139,6 +139,36 @@ namespace aether {
 /// see keyframes. Scenes without [[animation]] parse and evaluate exactly as
 /// before.
 ///
+/// LIGHTS (optional world-space analytic emitters)
+/// ─────────────────────────────────────────────
+///   [[light]]   optional ordered array of analytic lights
+///     name = "..."                        (required, unique in the scene)
+///     type = "point" | "spot" | "rect" | "directional"   (required)
+///     translate, rotate ([qx,qy,qz,qw]), rotate_x/y/z   (the camera block's
+///                  placement keys; a light has no scale - `scale` is rejected.
+///                  Local -Z is the emission axis of every type)
+///     color = [r, g, b]                   (optional, default white: a linear RGB
+///                  chromaticity, each component finite and >= 0)
+///     color_space = "lin_rec709_scene" | "lin_rec2020_scene"   (optional)
+///     intensity = <finite number above 0> (required, photometric)
+///     unit = "candela" | "lumen"           (point, spot)
+///         | "nit"                          (rect)
+///         | "lux"                          (directional)      (required)
+///     range = <metres, >= 0>               (point, spot; optional, 0 = none)
+///     inner_angle / outer_angle = <degrees>  (spot; required half angles from
+///                  the axis, 0 <= inner <= outer <= 90, outer > 0)
+///     half_extents = [hx, hy]              (rect; required, each > 0, along
+///                  the local X and Y axes)
+///
+/// Emission is color * intensity; the intensity is the photometric quantity of
+/// the emitter as if the color were white. Every value is validated: an
+/// unknown type, unit or color space, a unit that does not fit the type, a
+/// missing required key, a duplicate name, a negative, zero-intensity or
+/// non-finite value, a scale, and a key of another type are parse ERRORS
+/// naming the light (parse() returns nullopt). A scene without [[light]]
+/// parses exactly as before. The environment ([render] environment_map,
+/// environment_unit_nits) is the sky; there is no sky light type.
+///
 /// Transform composition follows the glTF convention: T × R × S.
 /// Unknown keys / mesh types are silently ignored.
 ///

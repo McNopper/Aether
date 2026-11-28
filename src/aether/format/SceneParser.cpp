@@ -105,6 +105,12 @@ void applyCamera(const toml::table& cam, SceneDesc& desc) {
     if (const auto ev = cam["ev100"].value<double>()) {
         desc.camera.ev100 = static_cast<float>(*ev);
     }
+    if (const auto radius = cam["lens_radius"].value<double>()) {
+        desc.camera.lensRadius = static_cast<float>(*radius);
+    }
+    if (const auto focus = cam["focus_distance"].value<double>()) {
+        desc.camera.focusDistance = static_cast<float>(*focus);
+    }
 }
 
 void applyRender(const toml::table& render, SceneDesc& desc) {
@@ -570,6 +576,226 @@ bool parseSkins(const toml::table& root, SceneDesc& desc, std::string* error) {
     return true;
 }
 
+// ── Lights ──────────────────────────────────────────────────────────────────
+
+[[nodiscard]] bool isFinite(const Vec3& v) {
+    return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+}
+
+[[nodiscard]] bool isFinite(const Quat& q) {
+    return std::isfinite(q.x) && std::isfinite(q.y) && std::isfinite(q.z) && std::isfinite(q.w);
+}
+
+/// Parse the `[[light]]` array into `desc.lights`. Every value is validated: a
+/// light that could not be rendered as authored is a parse error naming it,
+/// never a silently defaulted entry. The shared keys are `type`, `name`, the
+/// camera block's placement keys (`translate`, `rotate` or `rotate_x/y/z`; a
+/// light has no scale), `color`, `color_space`, `intensity` and `unit`; each
+/// type accepts only its own additional keys.
+bool parseLights(const toml::table& root, SceneDesc& desc, std::string* error) {
+    const toml::array* lights = root["light"].as_array();
+    if (lights == nullptr) {
+        return true; // light-free scenes
+    }
+
+    auto fail = [error](std::string message) {
+        if (error != nullptr) {
+            *error = std::move(message);
+        }
+        return false;
+    };
+
+    static const std::unordered_map<std::string, LightDesc::Type> kTypes{
+        {"point", LightDesc::Type::Point},
+        {"spot", LightDesc::Type::Spot},
+        {"rect", LightDesc::Type::Rect},
+        {"directional", LightDesc::Type::Directional},
+    };
+    static const std::unordered_map<std::string, LightDesc::Unit> kUnits{
+        {"candela", LightDesc::Unit::Candela},
+        {"lumen", LightDesc::Unit::Lumen},
+        {"nit", LightDesc::Unit::Nit},
+        {"lux", LightDesc::Unit::Lux},
+    };
+
+    for (auto&& elem : *lights) {
+        const toml::table* t = elem.as_table();
+        if (t == nullptr) {
+            return fail("light entry must be a table");
+        }
+        // Messages name the light by its `name`, or by its position when the
+        // name itself is what is wrong.
+        const std::string name = (*t)["name"].value_or<std::string>("");
+        const auto label = [&]() {
+            return name.empty() ? "light entry " + std::to_string(desc.lights.size() + 1) : "light '" + name + "'";
+        };
+
+        const std::string typeToken = (*t)["type"].value_or<std::string>("");
+        const auto typeIt = kTypes.find(typeToken);
+        if (typeIt == kTypes.end()) {
+            return fail(label() + ": unknown type '" + typeToken + "' (point | spot | rect | directional)");
+        }
+        const LightDesc::Type type = typeIt->second;
+        const bool punctual = type == LightDesc::Type::Point || type == LightDesc::Type::Spot;
+
+        if (name.empty()) {
+            return fail("light entry of type '" + typeToken + "' is missing 'name'");
+        }
+        for (const LightDesc& prior : desc.lights) {
+            if (prior.name == name) {
+                return fail(label() + ": the name is used by more than one light");
+            }
+        }
+
+        LightDesc light;
+        light.type = type;
+        light.name = name;
+
+        // Placement: the camera block's TRS vocabulary without scale.
+        if (const auto* tr = t->get("translate")) {
+            const auto p = asVec3(*tr);
+            if (!p || !isFinite(*p)) {
+                return fail(label() + ": translate must hold 3 finite numbers");
+            }
+            light.translation = *p;
+        }
+        if (t->contains("scale")) {
+            return fail(label() + ": a light has no scale (a rect light is sized by half_extents)");
+        }
+        if (const auto* r = t->get("rotate")) {
+            const auto q = asQuat(*r);
+            // A zero quaternion is not a rotation; anything else is normalized.
+            const float norm = q ? std::sqrt(q->x * q->x + q->y * q->y + q->z * q->z + q->w * q->w) : 0.0F;
+            if (!q || !isFinite(*q) || !(norm > 0.0F) || !std::isfinite(norm)) {
+                return fail(label() + ": rotate must hold 4 finite numbers [qx, qy, qz, qw] forming a rotation");
+            }
+            light.rotation = sm::normalize(*q);
+        } else if (t->contains("rotate_x") || t->contains("rotate_y") || t->contains("rotate_z")) {
+            for (const char* key : {"rotate_x", "rotate_y", "rotate_z"}) {
+                if (const auto* n = t->get(key); n != nullptr) {
+                    const auto v = n->value<double>();
+                    if (!v || !std::isfinite(*v)) {
+                        return fail(label() + ": " + key + " must be a finite number (degrees)");
+                    }
+                }
+            }
+            light.rotation = *parseEulerRotation(*t);
+        }
+
+        // Emission: color * intensity, in the unit that fits the type.
+        if (const auto* c = t->get("color")) {
+            const auto v = asVec3(*c);
+            if (!v || !isFinite(*v) || v->x < 0.0F || v->y < 0.0F || v->z < 0.0F) {
+                return fail(label() + ": color must hold 3 finite numbers, each at least 0");
+            }
+            light.color = *v;
+        }
+        if (const auto* cs = t->get("color_space")) {
+            const auto token = cs->value<std::string>();
+            if (!token || (*token != "lin_rec709_scene" && *token != "lin_rec2020_scene")) {
+                return fail(label() + ": unknown color_space (lin_rec709_scene | lin_rec2020_scene)");
+            }
+            light.colorSpace = *token;
+        }
+        const auto* intensity = t->get("intensity");
+        if (intensity == nullptr) {
+            return fail(label() + " is missing 'intensity'");
+        }
+        const auto intensityValue = intensity->value<double>();
+        if (!intensityValue || !std::isfinite(*intensityValue) || *intensityValue <= 0.0) {
+            return fail(label() + ": intensity must be a finite number above 0");
+        }
+        light.intensity = static_cast<float>(*intensityValue);
+
+        const std::string unitToken = (*t)["unit"].value_or<std::string>("");
+        const auto unitIt = kUnits.find(unitToken);
+        if (unitIt == kUnits.end()) {
+            return fail(t->contains("unit")
+                            ? label() + ": unknown unit '" + unitToken + "' (candela | lumen | nit | lux)"
+                            : label() + " is missing 'unit'");
+        }
+        light.unit = unitIt->second;
+        const bool unitFitsType = punctual
+                                      ? (light.unit == LightDesc::Unit::Candela || light.unit == LightDesc::Unit::Lumen)
+                                      : (type == LightDesc::Type::Rect ? light.unit == LightDesc::Unit::Nit
+                                                                       : light.unit == LightDesc::Unit::Lux);
+        if (!unitFitsType) {
+            const char* expected = punctual ? "candela | lumen" : (type == LightDesc::Type::Rect ? "nit" : "lux");
+            std::string message = label();
+            message += ": unit '";
+            message += unitToken;
+            message += "' does not fit type '";
+            message += typeToken;
+            message += "' (";
+            message += expected;
+            message += ")";
+            return fail(std::move(message));
+        }
+
+        // Type-specific keys.
+        if (const auto* n = t->get("range")) {
+            const auto v = n->value<double>();
+            if (!punctual) {
+                return fail(label() + ": range is a point or spot key");
+            }
+            if (!v || !std::isfinite(*v) || *v < 0.0) {
+                return fail(label() + ": range must be a finite number, at least 0 (0 = no cutoff)");
+            }
+            light.range = static_cast<float>(*v);
+        }
+        if (const auto* h = t->get("half_extents")) {
+            if (type != LightDesc::Type::Rect) {
+                return fail(label() + ": half_extents is a rect key");
+            }
+            const toml::array* arr = h->as_array();
+            const bool two = arr != nullptr && arr->size() == 2;
+            const auto w = two ? (*arr)[0].value<double>() : std::nullopt;
+            const auto v = two ? (*arr)[1].value<double>() : std::nullopt;
+            if (!w || !v || !std::isfinite(*w) || !std::isfinite(*v) || *w <= 0.0 || *v <= 0.0) {
+                return fail(label() + ": half_extents must hold 2 finite numbers, each above 0");
+            }
+            light.halfWidth = static_cast<float>(*w);
+            light.halfHeight = static_cast<float>(*v);
+        }
+        if (type == LightDesc::Type::Rect && !t->contains("half_extents")) {
+            return fail(label() + " is missing 'half_extents'");
+        }
+        struct Angle {
+            const char* key;
+            float LightDesc::* member;
+        };
+        for (const Angle& angle :
+             {Angle{"inner_angle", &LightDesc::innerAngle}, Angle{"outer_angle", &LightDesc::outerAngle}}) {
+            const auto* n = t->get(angle.key);
+            if (n == nullptr) {
+                if (type == LightDesc::Type::Spot) {
+                    return fail(label() + " is missing '" + angle.key + "'");
+                }
+                continue;
+            }
+            if (type != LightDesc::Type::Spot) {
+                return fail(label() + ": " + angle.key + " is a spot key");
+            }
+            const auto v = n->value<double>();
+            if (!v || !std::isfinite(*v) || *v < 0.0 || *v > 90.0) {
+                return fail(label() + ": " + angle.key + " must be a finite half angle in degrees inside [0, 90]");
+            }
+            light.*angle.member = static_cast<float>(*v);
+        }
+        if (type == LightDesc::Type::Spot) {
+            if (light.outerAngle <= 0.0F) {
+                return fail(label() + ": outer_angle must be above 0");
+            }
+            if (light.innerAngle > light.outerAngle) {
+                return fail(label() + ": inner_angle must not exceed outer_angle");
+            }
+        }
+
+        desc.lights.push_back(std::move(light));
+    }
+    return true;
+}
+
 } // namespace
 
 std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFile) {
@@ -638,6 +864,20 @@ std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFi
         }
     }
 
+    if (desc.camera.lensRadius && (!std::isfinite(*desc.camera.lensRadius) || *desc.camera.lensRadius < 0.0F)) {
+        if (errorMessage != nullptr) {
+            *errorMessage = "camera lens_radius must be finite and non-negative";
+        }
+        return std::nullopt;
+    }
+    if (desc.camera.focusDistance &&
+        (!std::isfinite(*desc.camera.focusDistance) || *desc.camera.focusDistance <= 0.0F)) {
+        if (errorMessage != nullptr) {
+            *errorMessage = "camera focus_distance must be finite and positive";
+        }
+        return std::nullopt;
+    }
+
     // ── Node graph (optional; resolves into the flat instance list) ──
     if (const toml::array* nodes = root["node"].as_array()) {
         for (const auto& elem : *nodes) {
@@ -678,6 +918,11 @@ std::optional<SceneDesc> SceneParser::parse(const std::filesystem::path& sceneFi
 
     // ── Animations (optional; bind against the completed node graph) ──
     if (!parseAnimations(root, desc, errorMessage)) {
+        return std::nullopt;
+    }
+
+    // ── Lights (optional; world-space analytic emitters) ──
+    if (!parseLights(root, desc, errorMessage)) {
         return std::nullopt;
     }
 

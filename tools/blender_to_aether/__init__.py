@@ -19,7 +19,13 @@ from typing import ClassVar
 from pathlib import Path
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, StringProperty
+from bpy.props import (
+    BoolProperty,
+    EnumProperty,
+    FloatProperty,
+    IntProperty,
+    StringProperty,
+)
 from bpy.types import Operator
 from bpy_extras.io_utils import ExportHelper
 from mathutils import Euler, Matrix, Quaternion, Vector
@@ -90,7 +96,9 @@ def _single_precision_text(value: float) -> _TomlFloat:
     prints as, and 220 stays 220.0."""
     packed = struct.pack("<f", value)
     # A whole number reads best in plain notation (220.0, not 2.2e+02).
-    candidates = [f"{value:.1f}"] if float(value).is_integer() and abs(value) < 1.0e15 else []
+    candidates = (
+        [f"{value:.1f}"] if float(value).is_integer() and abs(value) < 1.0e15 else []
+    )
     candidates += [f"{value:.{digits}g}" for digits in range(1, 10)]
     for text in candidates:
         if struct.pack("<f", float(text)) == packed:
@@ -115,7 +123,11 @@ def _format_value(value) -> str:
         return _quote(str(value))
     if isinstance(value, dict):
         # TOML inline table: { k = v, ... } (the [[mesh]] bounds block).
-        return "{ " + ", ".join(f"{key} = {_format_value(v)}" for key, v in value.items()) + " }"
+        return (
+            "{ "
+            + ", ".join(f"{key} = {_format_value(v)}" for key, v in value.items())
+            + " }"
+        )
     if isinstance(value, Sequence):
         return "[" + ", ".join(_format_value(item) for item in value) + "]"
     raise TypeError(f"Unsupported TOML value: {type(value)!r}")
@@ -194,10 +206,21 @@ def _obj_stats(obj_path: Path) -> dict[str, object] | None:
         return None
     if vertices == 0:
         return None
-    return {"min": lo, "max": hi, "triangles": triangles, "groups": max(1, groups), "usemtl": usemtl}
+    return {
+        "min": lo,
+        "max": hi,
+        "triangles": triangles,
+        "groups": max(1, groups),
+        "usemtl": usemtl,
+    }
 
 
-def _export_obj_file(obj: bpy.types.Object, obj_path: Path, export_materials: bool = False) -> None:
+def _export_obj_file(
+    obj: bpy.types.Object,
+    obj_path: Path,
+    export_materials: bool = False,
+    flip_uv_v: bool = True,
+) -> None:
     prev_active = bpy.context.view_layer.objects.active
     prev_selected = [o for o in bpy.context.selected_objects]
     # Export the mesh in LOCAL space (not baked): temporarily clear the world
@@ -254,9 +277,34 @@ def _export_obj_file(obj: bpy.types.Object, obj_path: Path, export_materials: bo
                 mtl_path.unlink()
             text = obj_path.read_text(encoding="utf-8", errors="replace")
             filtered = "".join(
-                line for line in text.splitlines(keepends=True) if not line.startswith("mtllib ")
+                line
+                for line in text.splitlines(keepends=True)
+                if not line.startswith("mtllib ")
             )
             obj_path.write_text(filtered, encoding="utf-8", newline="")
+        reverse_winding = saved_matrix.to_3x3().determinant() < 0.0
+        # Blender/USD UVs put v=0 at the bottom of a picture; Aether's renderers sample
+        # the first image-file row at v=0. Convert only Blender-exported OBJs here; native
+        # OBJ assets already use the renderer's convention and must not be flipped again.
+        # A negative-determinant world transform also reverses world-space winding, so
+        # reverse triangle corners in that object's OBJ while keeping vertex normals intact.
+        text = obj_path.read_text(encoding="utf-8", errors="replace")
+        converted_lines: list[str] = []
+        for line in text.splitlines():
+            if line.startswith("vt ") and flip_uv_v:
+                fields = line.split()
+                fields[2] = format(1.0 - float(fields[2]), ".9g")
+                line = " ".join(fields)
+            elif reverse_winding and line.startswith("f "):
+                fields = line.split()
+                if len(fields) != 4:
+                    raise RuntimeError(
+                        f"Mirrored OBJ export must be triangulated: {obj_path}: {line}"
+                    )
+                fields[2], fields[3] = fields[3], fields[2]
+                line = " ".join(fields)
+            converted_lines.append(line)
+        obj_path.write_text("\n".join(converted_lines) + "\n", encoding="utf-8", newline="\n")
     finally:
         obj.matrix_world = saved_matrix
         bpy.context.view_layer.update()
@@ -268,7 +316,24 @@ def _export_obj_file(obj: bpy.types.Object, obj_path: Path, export_materials: bo
             bpy.context.view_layer.objects.active = prev_active
 
 
-def _camera_block(camera: bpy.types.Object, ev100: float, node_id: str | None = None) -> list[str]:
+def camera_vertical_fov(camera_data, frame_aspect: float) -> float:
+    """Blender camera + frame aspect -> Aether vertical FOV, in degrees."""
+    if not math.isfinite(frame_aspect) or frame_aspect <= 0.0:
+        raise ValueError("frame_aspect must be finite and positive")
+    fit = getattr(camera_data, "sensor_fit", "AUTO")
+    horizontal = fit == "HORIZONTAL" or (fit == "AUTO" and frame_aspect >= 1.0)
+    if horizontal:
+        horizontal_fov = float(getattr(camera_data, "angle_x", camera_data.angle))
+        return math.degrees(2.0 * math.atan(math.tan(horizontal_fov * 0.5) / frame_aspect))
+    return math.degrees(float(getattr(camera_data, "angle_y", camera_data.angle)))
+
+
+def _camera_block(
+    camera: bpy.types.Object,
+    ev100: float,
+    node_id: str | None = None,
+    frame_aspect: float = 1.0,
+) -> list[str]:
     # Camera world transform mapped Blender Z-up -> Aether Y-up. A camera's
     # placement is a plain TRS (identical keys to a mesh instance): translate +
     # rotate. The scene format accepts rotate (quat [qx,qy,qz,qw]) or
@@ -280,7 +345,7 @@ def _camera_block(camera: bpy.types.Object, ev100: float, node_id: str | None = 
     world = CONV @ camera.matrix_world
     location = world.translation
     rotation = world.to_quaternion()
-    vfov = math.degrees(getattr(camera.data, "angle_y", camera.data.angle))
+    vfov = camera_vertical_fov(camera.data, frame_aspect)
     lines = []
     if node_id is not None:
         lines.append(f"node = {_quote(node_id)}")
@@ -292,7 +357,272 @@ def _camera_block(camera: bpy.types.Object, ev100: float, node_id: str | None = 
             f"ev100 = {ev100}",
         ]
     )
+    dof = getattr(camera.data, "dof", None)
+    if dof is not None and dof.use_dof and dof.aperture_fstop > 0.0:
+        # Blender stores focal length and f-stop in millimetres; Aether's thin lens is in metres.
+        lens_radius = (
+            float(camera.data.lens) / (2.0 * float(dof.aperture_fstop)) / 1000.0
+        )
+        lines.append(f"lens_radius = {lens_radius}")
+        lines.append(f"focus_distance = {float(dof.focus_distance)}")
     return lines
+
+
+# ── Lights (analytic, world space) ──────────────────────────────────────────
+# WHAT BLENDER DEFINES - Blender 5.3, established from its source (the RNA of
+# the installed build; Cycles scene/light.cpp, kernel/light/spot.h and
+# kernel/light/area.h) and measured on the installed build with Cycles on the
+# CPU (tools/README.md, "Lights"):
+#   power = energy * 2**exposure              (Cycles sync_light)
+#   point, spot   radiant flux Phi [W] into the full sphere: I = Phi / 4pi.
+#                A spot's energy is what it would emit without its cone.
+#   area          world size = data size x the object's WORLD scale per axis
+#                (Cycles: extent = transform column x size).
+#                  Normalize on : radiance L = Phi / (pi A), flux Phi
+#                  Normalize off: radiance L = Phi / pi,   flux Phi * A
+#   sun           irradiance E [W/m^2]
+#
+# THREE EXPLICIT FACTORS, each with one definition and no effect by default:
+#   light_luminous_efficacy  lumens per radiant watt, applied to every light.
+#     Blender's watt carries no photometric calibration (its manual has the
+#     user set the brightness with the film exposure), so the default 1.0
+#     writes Blender's numbers as the photometric values. That is also the
+#     numeric identity Blender's USD importer assumes for area lights.
+#   area_light_size          "world" (what Blender's renderer draws) or "data"
+#     (the unscaled size property).
+#   source_meters_per_unit   s, the unit conversion that was applied to the
+#     TRANSFORMS of the content (a USD stage's metersPerUnit) while its light
+#     powers stayed as authored. Total-power quantities (point, spot, and area
+#     lights with Normalize on) are multiplied by s^2: a uniform rescaling of a
+#     scene by s leaves the irradiance at corresponding points unchanged only
+#     if their power scales with s^2 (E = Phi / 4pi d^2). Lights given by a
+#     radiance (Normalize off) or an irradiance (sun) need no factor: their
+#     flux already scales with their area.
+LUMINOUS_EFFICACY_DEFAULT = 1.0
+
+
+def _light_power(data) -> float:
+    # Blender's effective radiant power: energy scaled by 2**exposure.
+    return float(data.energy) * 2.0 ** float(getattr(data, "exposure", 0.0) or 0.0)
+
+
+def point_power_to_lumen(
+    radiant_power_w: float, efficacy: float = LUMINOUS_EFFICACY_DEFAULT
+) -> float:
+    # Isotropic source: luminous flux = efficacy * radiant flux.
+    return efficacy * radiant_power_w
+
+
+def area_power_to_nit(
+    radiant_power_w: float,
+    width: float,
+    height: float,
+    efficacy: float = LUMINOUS_EFFICACY_DEFAULT,
+) -> float:
+    # Lambertian emitter with Normalize on, over A = width * height:
+    # radiance = efficacy * Phi / (pi A); the flux is efficacy * Phi.
+    return efficacy * radiant_power_w / (math.pi * width * height)
+
+
+def area_exitance_to_nit(
+    radiant_exitance_w_per_m2: float, efficacy: float = LUMINOUS_EFFICACY_DEFAULT
+) -> float:
+    # Area light with Normalize off: the power is per area and the radiance
+    # does not depend on the size. L = efficacy * M / pi; flux = efficacy * M * A.
+    return efficacy * radiant_exitance_w_per_m2 / math.pi
+
+
+def sun_strength_to_lux(
+    irradiance_w_per_m2: float, efficacy: float = LUMINOUS_EFFICACY_DEFAULT
+) -> float:
+    return efficacy * irradiance_w_per_m2
+
+
+def total_power_unit_scale(meters_per_unit: float) -> float:
+    # s^2, the factor of a total-power quantity under a unit conversion by s.
+    return float(meters_per_unit) ** 2
+
+
+def _point_radius_warning(name: str, radius: float, meters_per_unit: float) -> str:
+    """Reports the source sphere's converted radius without inventing sphere-light support."""
+    converted_radius = float(radius) * float(meters_per_unit)
+    return (
+        f"{name}: source point/USD sphere radius {radius:g} becomes {converted_radius:g} m "
+        "after the unit conversion; Aether uses an ideal point, so the radius is not exported"
+    )
+
+
+def _light_world_rotation(world: Matrix) -> Quaternion:
+    # The rotation of the conjugated world matrix with the object scale
+    # removed but the axis signs kept: a mirrored (negative-scale) transform
+    # turns the emission axis even though the scale does not change the
+    # light's orientation otherwise. Columns are the images of the local
+    # axes; X is flipped on a mirrored frame so the result stays a rotation.
+    x = world.col[0].xyz.normalized()
+    y = world.col[1].xyz.normalized()
+    z = world.col[2].xyz.normalized()
+    if world.to_3x3().determinant() < 0.0:
+        x = -x
+    return Matrix((x, y, z)).transposed().to_quaternion()
+
+
+def _world_axis_lengths(matrix_world: Matrix) -> tuple[float, float, bool]:
+    # Lengths of the world-space X and Y axes of a light: Blender's renderer
+    # scales an area light by its object's world transform, per axis (Cycles:
+    # extent = transform column x size). The third value reports a frame whose
+    # axes are not orthogonal: a sheared light is a parallelogram, which a
+    # rectangle cannot carry.
+    x = matrix_world.col[0].xyz
+    y = matrix_world.col[1].xyz
+    z = matrix_world.col[2].xyz
+    length_x, length_y, length_z = x.length, y.length, z.length
+    sheared = False
+    if length_x > 0.0 and length_y > 0.0 and length_z > 0.0:
+        nx = x / length_x
+        ny = y / length_y
+        nz = z / length_z
+        sheared = max(abs(nx.dot(ny)), abs(nx.dot(nz)), abs(ny.dot(nz))) > 1.0e-3
+    return length_x, length_y, sheared
+
+
+def _light_block(
+    obj: bpy.types.Object,
+    warnings: list[str],
+    area_size: str = "world",
+    meters_per_unit: float = 1.0,
+    efficacy: float = LUMINOUS_EFFICACY_DEFAULT,
+) -> dict[str, object] | None:
+    # One [[light]] from a Blender light object, or None after a warning that
+    # names what Aether cannot carry. The object still exports as its
+    # meshless [[node]] (unchanged); the light carries its WORLD placement in
+    # the static [camera] block's form (CONV @ matrix_world), so local -Z is
+    # the emission axis exactly as in Blender.
+    data = obj.data
+    name = obj.name
+    color = [float(value) for value in data.color]
+    power = _light_power(data)
+    total_scale = total_power_unit_scale(meters_per_unit)
+    # The transform is validated before anything reads its rotation: a
+    # zero-scale axis leaves a light without an orientation (and an area light
+    # without a rectangle).
+    scale_x, scale_y, sheared = _world_axis_lengths(obj.matrix_world)
+    if 0.0 in (
+        obj.matrix_world.col[0].xyz.length,
+        obj.matrix_world.col[1].xyz.length,
+        obj.matrix_world.col[2].xyz.length,
+    ):
+        warnings.append(
+            f"{name}: the light's world transform is degenerate (a zero-scale axis) — not exported"
+        )
+        return None
+    world = CONV @ obj.matrix_world
+    location = world.translation
+    rotation = _light_world_rotation(world)
+    if not all(math.isfinite(value) and value >= 0.0 for value in color):
+        warnings.append(
+            f"{name}: light color has a negative or non-finite component — not exported"
+        )
+        return None
+    if not math.isfinite(power) or power <= 0.0:
+        warnings.append(
+            f"{name}: light power is {power} (energy x 2^exposure), not above 0 — not exported"
+        )
+        return None
+    if getattr(data, "use_temperature", False):
+        warnings.append(
+            f"{name}: color temperature {getattr(data, 'temperature', 0.0)} K is not converted — "
+            "the light exports with its plain color"
+        )
+
+    block: dict[str, object] = {
+        "name": name,
+        "translate": [location.x, location.y, location.z],
+        "rotate": [rotation.x, rotation.y, rotation.z, rotation.w],
+        "color": color,
+        # Blender light colors are scene-linear; the scene-linear role of the
+        # active OCIO config is Linear Rec.709 (never the display transform).
+        "color_space": "lin_rec709_scene",
+    }
+    kind = data.type
+    if kind == "POINT":
+        block["type"] = "point"
+        block["intensity"] = point_power_to_lumen(power * total_scale, efficacy)
+        block["unit"] = "lumen"
+        radius = float(getattr(data, "shadow_soft_size", 0.0))
+        if radius > 0.0:
+            warnings.append(_point_radius_warning(name, radius, meters_per_unit))
+    elif kind == "SPOT":
+        block["type"] = "spot"
+        block["intensity"] = point_power_to_lumen(power * total_scale, efficacy)
+        block["unit"] = "lumen"
+        # Half angles from the axis. outer: where Blender's spot attenuation
+        # reaches zero - spot_size is the beam's angular diameter (RNA) and
+        # Cycles attenuates with smoothstep((cos(angle) - cos(spot_size / 2))
+        # * spot_smooth). inner: where that smoothstep reaches 1, from
+        # spot_smooth = 1 / ((1 - cos(outer)) * blend) (Cycles
+        # SpotLight::copy_to_kernel): cos(inner) = 1 - (1 - blend) (1 - cos(outer)).
+        # Blend 0 is a hard edge (inner = outer); measured on the installed
+        # build to within one pixel. Aether's falloff is linear in the cosine
+        # between the two angles, a different curve between the same edges.
+        outer = float(data.spot_size) * 0.5  # spot_size is in radians
+        blend = min(max(float(data.spot_blend), 0.0), 1.0)
+        inner = math.acos(1.0 - (1.0 - blend) * (1.0 - math.cos(outer)))
+        block["inner_angle"] = math.degrees(inner)
+        block["outer_angle"] = math.degrees(outer)
+        if float(getattr(data, "shadow_soft_size", 0.0)) > 0.0:
+            warnings.append(
+                f"{name}: spot radius {data.shadow_soft_size} is not representable — exported as a point"
+            )
+    elif kind == "AREA":
+        if data.shape not in {"RECTANGLE", "SQUARE"}:
+            warnings.append(
+                f"{name}: area light shape {data.shape} has no Aether type (rect only) — not exported"
+            )
+            return None
+        if float(getattr(data, "spread", math.pi)) < math.pi - 1.0e-6:
+            warnings.append(
+                f"{name}: area light spread below 180 degrees is not representable — not exported"
+            )
+            return None
+        width = float(data.size)
+        height = float(data.size_y) if data.shape == "RECTANGLE" else width
+        if area_size == "world":
+            width *= scale_x
+            height *= scale_y
+            if sheared:
+                warnings.append(
+                    f"{name}: the light's world transform shears it; it exports as a rectangle with "
+                    "the transform's axis lengths"
+                )
+        block["type"] = "rect"
+        if data.normalize:
+            # Total flux is the power: folding the object scale into the size
+            # keeps the flux and changes the radiance with the area.
+            block["intensity"] = area_power_to_nit(
+                power * total_scale, width, height, efficacy
+            )
+        else:
+            # Radiance is given: the flux follows the area, under the object
+            # scale and under a unit conversion alike, so neither is applied.
+            block["intensity"] = area_exitance_to_nit(power, efficacy)
+        block["unit"] = "nit"
+        block["half_extents"] = [width * 0.5, height * 0.5]
+    elif kind == "SUN":
+        # An irradiance does not change under a unit conversion.
+        block["type"] = "directional"
+        block["intensity"] = sun_strength_to_lux(power, efficacy)
+        block["unit"] = "lux"
+    else:
+        warnings.append(f"{name}: light type {kind} has no Aether type — not exported")
+        return None
+    # Declaration order of the keys follows the format documentation.
+    ordered: dict[str, object] = {"name": block["name"], "type": block["type"]}
+    for key in ("translate", "rotate", "color", "color_space", "intensity", "unit"):
+        ordered[key] = block[key]
+    for key in ("inner_angle", "outer_angle", "half_extents"):
+        if key in block:
+            ordered[key] = block[key]
+    return ordered
 
 
 def _write_simple_toml(path: Path, lines: list[str]) -> None:
@@ -340,8 +670,8 @@ def _decompose_checked(
     if min(scale) < 0.0:
         warnings.append(
             f"{name}: negative scale (mirrored transform) — the decomposed "
-            "TRS preserves it, but it flips triangle winding downstream; "
-            "verify the mesh renders as intended"
+            "TRS preserves it; mirrored mesh objects receive reversed OBJ "
+            "winding to preserve world-space orientation"
         )
     return location, rotation, scale
 
@@ -492,12 +822,16 @@ def _effective_fps(scene: bpy.types.Scene, warnings: list[str]) -> float:
     fps = float(scene.render.fps)
     fps_base = float(scene.render.fps_base)
     if fps <= 0.0:
-        warnings.append(f"{scene.name}: non-positive render fps — frame→second conversion falls back to 24 fps")
+        warnings.append(
+            f"{scene.name}: non-positive render fps — frame→second conversion falls back to 24 fps"
+        )
         return 24.0
     return fps / max(fps_base, 1e-9)
 
 
-def _action_fcurves(animation_data: bpy.types.AnimData, obj_name: str, warnings: list[str]) -> list[bpy.types.FCurve]:
+def _action_fcurves(
+    animation_data: bpy.types.AnimData, obj_name: str, warnings: list[str]
+) -> list[bpy.types.FCurve]:
     # Blender 4.4+ slotted actions (Blender 5.2: the only kind) keep their
     # F-curves per slot in a channelbag owned by a layer's strip; legacy
     # (pre-4.4) unslotted actions keep action.fcurves.
@@ -505,10 +839,16 @@ def _action_fcurves(animation_data: bpy.types.AnimData, obj_name: str, warnings:
     layers = getattr(action, "layers", None)
     if layers:
         if len(layers) > 1:
-            warnings.append(f"{obj_name}: layered action — only the first layer's F-curves are exported")
+            warnings.append(
+                f"{obj_name}: layered action — only the first layer's F-curves are exported"
+            )
         slot = animation_data.action_slot
         for strip in layers[0].strips:
-            bag = strip.channelbag(slot) if slot is not None and hasattr(strip, "channelbag") else None
+            bag = (
+                strip.channelbag(slot)
+                if slot is not None and hasattr(strip, "channelbag")
+                else None
+            )
             if bag is None and hasattr(strip, "channelbags") and len(strip.channelbags):
                 bag = strip.channelbags[0]
             if bag is not None:
@@ -578,7 +918,11 @@ def _track_interpolation(
 
 
 def _animation_block(
-    target: str, interpolation: str, times: list[float], values: list[float], warnings: list[str]
+    target: str,
+    interpolation: str,
+    times: list[float],
+    values: list[float],
+    warnings: list[str],
 ) -> dict[str, object] | None:
     # Emit-time self-check against the ANI1 parse rules: the exporter must
     # never write a track the Aether parser would reject.
@@ -593,7 +937,12 @@ def _animation_block(
     ):
         warnings.append(f"{target}: track failed its ANI1 self-check and was dropped")
         return None
-    return {"target": target, "interpolation": interpolation, "times": times, "values": values}
+    return {
+        "target": target,
+        "interpolation": interpolation,
+        "times": times,
+        "values": values,
+    }
 
 
 def _swizzle_translation(values: Sequence[float]) -> list[float]:
@@ -608,7 +957,9 @@ def _passthrough_value(components: Sequence[float]) -> list[float]:
     return list(components)
 
 
-def _passthrough_tangent(components: Sequence[float], tangent: Sequence[float]) -> list[float]:
+def _passthrough_tangent(
+    components: Sequence[float], tangent: Sequence[float]
+) -> list[float]:
     return list(tangent)
 
 
@@ -622,7 +973,9 @@ _COMPONENT_OF_INDEX = {
 }
 
 
-def _quaternion_value(components: Sequence[float], map_rot=_conjugate_rotation) -> list[float]:
+def _quaternion_value(
+    components: Sequence[float], map_rot=_conjugate_rotation
+) -> list[float]:
     # Blender rotation_quaternion channels are (w, x, y, z); the schema wants
     # (x, y, z, w). Component lerp can leave the key slightly off unit length,
     # so the key is normalized before the rotation map (the parser normalizes
@@ -665,7 +1018,13 @@ def _run_tracks(
     if len(rows) == 1:
         # A single key is a constant track (ANI1: one key holds everywhere —
         # the same constant Blender's clamped evaluation shows).
-        block = _animation_block(target, "linear", [rows[0]["frame"] / fps], to_value(rows[0]["values"]), warnings)
+        block = _animation_block(
+            target,
+            "linear",
+            [rows[0]["frame"] / fps],
+            to_value(rows[0]["values"]),
+            warnings,
+        )
         return [block] if block else []
     tracks: list[dict[str, object]] = []
     for first_segment, last_segment in _mode_runs(segment_modes):
@@ -704,10 +1063,14 @@ def _run_tracks(
                     # Components without a key at this frame (static or
                     # union-evaluated) contribute zero tangents: constants.
                     out_tangent.append(
-                        0.0 if row["out_y"][component] is None else 3.0 * (row["out_y"][component] - value) / dt_out
+                        0.0
+                        if row["out_y"][component] is None
+                        else 3.0 * (row["out_y"][component] - value) / dt_out
                     )
                     in_tangent.append(
-                        0.0 if row["in_y"][component] is None else 3.0 * (value - row["in_y"][component]) / dt_in
+                        0.0
+                        if row["in_y"][component] is None
+                        else 3.0 * (value - row["in_y"][component]) / dt_in
                     )
                 values.extend(to_tangent(row["values"], in_tangent))
                 values.extend(to_value(row["values"]))
@@ -741,7 +1104,9 @@ def _scalar_property_tracks(
     for index, fcurve in sorted(curves.items()):
         keys = _fcurve_keys(fcurve)
         if keys is None:
-            warnings.append(f"{obj.name}.{fcurve.data_path}[{index}]: keyless or invalid F-curve is not exported")
+            warnings.append(
+                f"{obj.name}.{fcurve.data_path}[{index}]: keyless or invalid F-curve is not exported"
+            )
             continue
         keys_by_index[index] = keys
     if not keys_by_index:
@@ -750,10 +1115,15 @@ def _scalar_property_tracks(
     reference_curve = curves[reference_index]
     frames = [key["frame"] for key in keys_by_index[reference_index]]
     if any([key["frame"] for key in keys] != frames for keys in keys_by_index.values()):
-        return _component_property_tracks(obj, curves, keys_by_index, parameter, fps, warnings, warned_modes)
+        return _component_property_tracks(
+            obj, curves, keys_by_index, parameter, fps, warnings, warned_modes
+        )
     modes = [key.interpolation for key in reference_curve.keyframe_points]
     for index, curve in curves.items():
-        if index in keys_by_index and [key.interpolation for key in curve.keyframe_points] != modes:
+        if (
+            index in keys_by_index
+            and [key.interpolation for key in curve.keyframe_points] != modes
+        ):
             warnings.append(
                 f"{obj.name}: {parameter} components disagree on per-key interpolation — "
                 "the mode segments follow the lowest-index channel"
@@ -774,7 +1144,9 @@ def _scalar_property_tracks(
     def to_value(components: Sequence[float]) -> list[float]:
         return swizzle(components)
 
-    def to_tangent(components: Sequence[float], tangent: Sequence[float]) -> list[float]:
+    def to_tangent(
+        components: Sequence[float], tangent: Sequence[float]
+    ) -> list[float]:
         return swizzle(tangent)
 
     return _run_tracks(
@@ -864,17 +1236,29 @@ def _rotation_tracks(
     for index, fcurve in sorted(curves.items()):
         keys = _fcurve_keys(fcurve)
         if keys is None:
-            warnings.append(f"{obj.name}.{fcurve.data_path}[{index}]: keyless or invalid F-curve is not exported")
+            warnings.append(
+                f"{obj.name}.{fcurve.data_path}[{index}]: keyless or invalid F-curve is not exported"
+            )
             continue
         keys_by_index[index] = keys
     if not keys_by_index:
         return []
     if is_quaternion:
         reference_frames = [key["frame"] for key in keys_by_index[min(keys_by_index)]]
-        if any([key["frame"] for key in keys] != reference_frames for keys in keys_by_index.values()):
-            return _quaternion_component_tracks(obj, curves, keys_by_index, fps, warnings, warned_modes)
-    union_frames = sorted({key["frame"] for keys in keys_by_index.values() for key in keys})
-    keyed = {index: {key["frame"]: key for key in keys} for index, keys in keys_by_index.items()}
+        if any(
+            [key["frame"] for key in keys] != reference_frames
+            for keys in keys_by_index.values()
+        ):
+            return _quaternion_component_tracks(
+                obj, curves, keys_by_index, fps, warnings, warned_modes
+            )
+    union_frames = sorted(
+        {key["frame"] for keys in keys_by_index.values() for key in keys}
+    )
+    keyed = {
+        index: {key["frame"]: key for key in keys}
+        for index, keys in keys_by_index.items()
+    }
     static = obj.rotation_quaternion if is_quaternion else obj.rotation_euler
     rows: list[dict[str, object]] = []
     for frame in union_frames:
@@ -892,7 +1276,11 @@ def _rotation_tracks(
                 # shows at this frame — its F-curve evaluated (clamped outside
                 # its key range), or the static channel value without a curve.
                 fcurve = curves.get(index)
-                values.append(float(fcurve.evaluate(frame)) if fcurve is not None else float(static[index]))
+                values.append(
+                    float(fcurve.evaluate(frame))
+                    if fcurve is not None
+                    else float(static[index])
+                )
                 in_y.append(None)
                 out_y.append(None)
         rows.append({"frame": frame, "values": values, "in_y": in_y, "out_y": out_y})
@@ -901,7 +1289,9 @@ def _rotation_tracks(
     # frame; block-keyed curves — the common case — align exactly).
     reference_index = min(keys_by_index)
     reference_frames = [key["frame"] for key in keys_by_index[reference_index]]
-    reference_modes = [key.interpolation for key in curves[reference_index].keyframe_points]
+    reference_modes = [
+        key.interpolation for key in curves[reference_index].keyframe_points
+    ]
     segment_modes = []
     for frame in union_frames[:-1]:
         position = max(bisect_right(reference_frames, frame) - 1, 0)
@@ -917,20 +1307,26 @@ def _rotation_tracks(
         def to_value(components: Sequence[float]) -> list[float]:
             return _quaternion_value(components, map_rot)
 
-        def to_tangent(components: Sequence[float], tangent: Sequence[float]) -> list[float]:
+        def to_tangent(
+            components: Sequence[float], tangent: Sequence[float]
+        ) -> list[float]:
             return _rotation_tangent(components, tangent, map_rot)
 
     else:
 
         def quat_parts(angles: Sequence[float]) -> tuple[float, float, float, float]:
-            quat = Euler((angles[0], angles[1], angles[2]), obj.rotation_mode).to_quaternion()
+            quat = Euler(
+                (angles[0], angles[1], angles[2]), obj.rotation_mode
+            ).to_quaternion()
             return (quat.x, quat.y, quat.z, quat.w)
 
         def to_value(components: Sequence[float]) -> list[float]:
             # Blender applies the euler angles in the object's rotation order.
             return map_rot(*quat_parts(components))
 
-        def to_tangent(components: Sequence[float], tangent: Sequence[float]) -> list[float]:
+        def to_tangent(
+            components: Sequence[float], tangent: Sequence[float]
+        ) -> list[float]:
             # dq/dt of the euler→quaternion conversion for the per-channel
             # euler rates: central difference per angle (exact to float
             # precision), mapped like the value.
@@ -944,7 +1340,9 @@ def _rotation_tracks(
                 upper = quat_parts(plus)
                 lower = quat_parts(minus)
                 scale = 0.5 / h * float(tangent[index])
-                derivative = [derivative[c] + (upper[c] - lower[c]) * scale for c in range(4)]
+                derivative = [
+                    derivative[c] + (upper[c] - lower[c]) * scale for c in range(4)
+                ]
             return map_rot(*derivative)
 
     return _run_tracks(
@@ -986,7 +1384,10 @@ def _quaternion_component_tracks(
     # emitted keys reconstruct the normalized pose exactly whenever the
     # sibling components stand at their Blender values. Channels without a
     # curve emit no track — the node's static TRS stands for them.
-    keyed = {index: {key["frame"]: key for key in keys} for index, keys in keys_by_index.items()}
+    keyed = {
+        index: {key["frame"]: key for key in keys}
+        for index, keys in keys_by_index.items()
+    }
     static = obj.rotation_quaternion
 
     def emitted_component(frame: float, channel: int) -> float:
@@ -997,7 +1398,11 @@ def _quaternion_component_tracks(
                 parts.append(key["value"])
                 continue
             fcurve = curves.get(index)
-            parts.append(float(fcurve.evaluate(frame)) if fcurve is not None else float(static[index]))
+            parts.append(
+                float(fcurve.evaluate(frame))
+                if fcurve is not None
+                else float(static[index])
+            )
         # _quaternion_value conjugates the (w, x, y, z) pose into schema
         # order (x, y, z, w); map the channel to its slot in that order.
         return _quaternion_value(parts)[(3, 0, 1, 2)[channel]]
@@ -1012,9 +1417,15 @@ def _quaternion_component_tracks(
         for key in keys:
             frame = key["frame"]
             value = emitted_component(frame, channel)
-            in_rate = (value - emitted_component(frame - frame_epsilon, channel)) / (frame_epsilon * seconds_per_frame)
-            out_rate = (emitted_component(frame + frame_epsilon, channel) - value) / (frame_epsilon * seconds_per_frame)
-            rows.append({"frame": frame, "values": [value], "rates": [(in_rate, out_rate)]})
+            in_rate = (value - emitted_component(frame - frame_epsilon, channel)) / (
+                frame_epsilon * seconds_per_frame
+            )
+            out_rate = (emitted_component(frame + frame_epsilon, channel) - value) / (
+                frame_epsilon * seconds_per_frame
+            )
+            rows.append(
+                {"frame": frame, "values": [value], "rates": [(in_rate, out_rate)]}
+            )
         tracks.extend(
             _run_tracks(
                 target,
@@ -1032,7 +1443,9 @@ def _quaternion_component_tracks(
     return tracks
 
 
-def _animation_tracks(obj: bpy.types.Object, fps: float, warnings: list[str]) -> list[dict[str, object]]:
+def _animation_tracks(
+    obj: bpy.types.Object, fps: float, warnings: list[str]
+) -> list[dict[str, object]]:
     # All [[animation]] entries of one exported object, in emission order
     # translation → rotation → scale (segment runs of one target stay
     # consecutive, which fixes the declaration-order precedence).
@@ -1040,13 +1453,20 @@ def _animation_tracks(obj: bpy.types.Object, fps: float, warnings: list[str]) ->
     if animation_data is None or animation_data.action is None:
         return []
     if len(animation_data.nla_tracks):
-        warnings.append(f"{obj.name}: NLA tracks present — only the active action's F-curves are exported")
+        warnings.append(
+            f"{obj.name}: NLA tracks present — only the active action's F-curves are exported"
+        )
     quaternion_mode = obj.rotation_mode == "QUATERNION"
     driven_path = "rotation_quaternion" if quaternion_mode else "rotation_euler"
     ignored_path = "rotation_euler" if quaternion_mode else "rotation_quaternion"
     by_path: dict[str, dict[int, bpy.types.FCurve]] = {}
     for fcurve in _action_fcurves(animation_data, obj.name, warnings):
-        if fcurve.data_path in ("location", "rotation_euler", "rotation_quaternion", "scale"):
+        if fcurve.data_path in (
+            "location",
+            "rotation_euler",
+            "rotation_quaternion",
+            "scale",
+        ):
             by_path.setdefault(fcurve.data_path, {})[fcurve.array_index] = fcurve
         # Other data paths (constraints, deltas, shape keys) are not node TRS.
     if not by_path.get(driven_path) and by_path.get(ignored_path):
@@ -1058,15 +1478,36 @@ def _animation_tracks(obj: bpy.types.Object, fps: float, warnings: list[str]) ->
     tracks: list[dict[str, object]] = []
     tracks.extend(
         _scalar_property_tracks(
-            obj, by_path.get("location", {}), "translation", obj.location, _swizzle_translation, fps, warnings, warned_modes
+            obj,
+            by_path.get("location", {}),
+            "translation",
+            obj.location,
+            _swizzle_translation,
+            fps,
+            warnings,
+            warned_modes,
         )
     )
     tracks.extend(
-        _rotation_tracks(obj, by_path.get(driven_path, {}), quaternion_mode, fps, warnings, warned_modes)
+        _rotation_tracks(
+            obj,
+            by_path.get(driven_path, {}),
+            quaternion_mode,
+            fps,
+            warnings,
+            warned_modes,
+        )
     )
     tracks.extend(
         _scalar_property_tracks(
-            obj, by_path.get("scale", {}), "scale", obj.scale, _swizzle_scale, fps, warnings, warned_modes
+            obj,
+            by_path.get("scale", {}),
+            "scale",
+            obj.scale,
+            _swizzle_scale,
+            fps,
+            warnings,
+            warned_modes,
         )
     )
     return tracks
@@ -1097,10 +1538,13 @@ def _write_scene_toml(
     haze_keys: dict[str, object] | None = None,
     meta_keys: dict[str, object] | None = None,
     meta_links: list[tuple[str, dict[str, object]]] | None = None,
+    lights: list[dict[str, object]] | None = None,
 ) -> None:
     lines: list[str] = []
     if material_libraries:
-        lines.append(f'material_libraries = [{", ".join(_quote(item) for item in material_libraries)}]')
+        lines.append(
+            f"material_libraries = [{', '.join(_quote(item) for item in material_libraries)}]"
+        )
         lines.append("")
     # Inline keys OVERRIDE the referenced preset (the parser applies the
     # reference first, then the local keys - "local wins").
@@ -1159,6 +1603,13 @@ def _write_scene_toml(
         for key, value in block.items():
             lines.append(f"{key} = {_format_value(value)}")
         lines.append("")
+    # Analytic lights: world-space [[light]] blocks (a scene without lights
+    # writes none, so its file is unchanged).
+    for block in lights or []:
+        lines.append("[[light]]")
+        for key, value in block.items():
+            lines.append(f"{key} = {_format_value(value)}")
+        lines.append("")
     # ANI4/ANI5: deformation blocks (the parser binds skins/morphs against the
     # completed node + mesh lists regardless of section order).
     for block in skins or []:
@@ -1206,10 +1657,14 @@ def _write_scene_toml(
 #   contract holds: keys stay 1:1 with Blender's.
 # ════════════════════════════════════════════════════════════════════════════
 
-_POSE_PATH = re.compile(r'pose\.bones\["([^"]+)"\]\.(location|rotation_euler|rotation_quaternion|scale)$')
+_POSE_PATH = re.compile(
+    r'pose\.bones\["([^"]+)"\]\.(location|rotation_euler|rotation_quaternion|scale)$'
+)
 
 
-def _all_action_fcurves(animation_data: bpy.types.AnimData, obj_name: str, warnings: list[str]):
+def _all_action_fcurves(
+    animation_data: bpy.types.AnimData, obj_name: str, warnings: list[str]
+):
     # Blender 4.4+ slotted actions keep pose channels in a DIFFERENT slot than
     # the object transform, so every channelbag of the first layer is scanned
     # (the object-TRS path keeps using its own slot via _action_fcurves).
@@ -1217,7 +1672,9 @@ def _all_action_fcurves(animation_data: bpy.types.AnimData, obj_name: str, warni
     layers = getattr(action, "layers", None)
     if layers:
         if len(layers) > 1:
-            warnings.append(f"{obj_name}: layered action - only the first layer's pose F-curves are exported")
+            warnings.append(
+                f"{obj_name}: layered action - only the first layer's pose F-curves are exported"
+            )
         curves: list[bpy.types.FCurve] = []
         for strip in layers[0].strips:
             channelbags = getattr(strip, "channelbags", None)
@@ -1251,16 +1708,22 @@ def _pose_tracks(
     if animation_data is None or animation_data.action is None:
         return []
     if len(animation_data.nla_tracks):
-        warnings.append(f"{arm.name}: NLA tracks present - only the active action's pose F-curves are exported")
+        warnings.append(
+            f"{arm.name}: NLA tracks present - only the active action's pose F-curves are exported"
+        )
 
     grouped: dict[tuple[str, str], dict[int, bpy.types.FCurve]] = {}
     for fcurve in _all_action_fcurves(animation_data, arm.name, warnings):
         match = _POSE_PATH.match(fcurve.data_path)
         if match is None:
             if fcurve.data_path.startswith("pose."):
-                warnings.append(f"{arm.name}: unsupported pose F-curve path '{fcurve.data_path}' (skipped)")
+                warnings.append(
+                    f"{arm.name}: unsupported pose F-curve path '{fcurve.data_path}' (skipped)"
+                )
             continue
-        grouped.setdefault((match.group(1), match.group(2)), {})[fcurve.array_index] = fcurve
+        grouped.setdefault((match.group(1), match.group(2)), {})[fcurve.array_index] = (
+            fcurve
+        )
 
     tracks: list[dict[str, object]] = []
     rotation_exported: set[str] = set()
@@ -1268,13 +1731,19 @@ def _pose_tracks(
         bone = arm.data.bones.get(bone_name)
         pose_bone = arm.pose.bones.get(bone_name)
         if bone is None or pose_bone is None:
-            warnings.append(f"{arm.name}: pose channel for unknown bone '{bone_name}' skipped")
+            warnings.append(
+                f"{arm.name}: pose channel for unknown bone '{bone_name}' skipped"
+            )
             continue
 
         if param in ("rotation_euler", "rotation_quaternion"):
             # The channel name carries the mode (the regex captures it whole).
             quat_mode = param == "rotation_quaternion"
-            static = list(pose_bone.rotation_quaternion) if quat_mode else list(pose_bone.rotation_euler)
+            static = (
+                list(pose_bone.rotation_quaternion)
+                if quat_mode
+                else list(pose_bone.rotation_euler)
+            )
             arity = 4 if quat_mode else 3
             target_param = "rotation"
             if bone_name in rotation_exported:
@@ -1308,7 +1777,9 @@ def _pose_tracks(
             continue
         reference = min(keys_by_index)
         frames = [key["frame"] for key in keys_by_index[reference]]
-        if any([key["frame"] for key in keys] != frames for keys in keys_by_index.values()):
+        if any(
+            [key["frame"] for key in keys] != frames for keys in keys_by_index.values()
+        ):
             warnings.append(
                 f"{arm.name}: pose.{bone_name}.{param} components have mismatched key times - "
                 "group skipped (composition needs aligned keys, no sampling)"
@@ -1316,7 +1787,8 @@ def _pose_tracks(
             continue
         modes = [point.interpolation for point in components[reference].keyframe_points]
         if any(
-            [point.interpolation for point in components[index].keyframe_points] != modes
+            [point.interpolation for point in components[index].keyframe_points]
+            != modes
             for index in keys_by_index
         ):
             warnings.append(
@@ -1338,7 +1810,9 @@ def _pose_tracks(
                 values.append(key["value"] if key is not None else float(static[index]))
                 in_y.append(key["in_y"] if key is not None else None)
                 out_y.append(key["out_y"] if key is not None else None)
-            rows.append({"frame": frame, "values": values, "in_y": in_y, "out_y": out_y})
+            rows.append(
+                {"frame": frame, "values": values, "in_y": in_y, "out_y": out_y}
+            )
 
         rest = _bone_rest_local(arm, bone, arm_exported)
         rest_t = rest.translation
@@ -1354,7 +1828,9 @@ def _pose_tracks(
                 moved = rot3 @ Vector(swizzled)
                 return [rest_t.x + moved.x, rest_t.y + moved.y, rest_t.z + moved.z]
 
-            def to_tangent(components: Sequence[float], tangent: Sequence[float]) -> list[float]:
+            def to_tangent(
+                components: Sequence[float], tangent: Sequence[float]
+            ) -> list[float]:
                 del components  # the map is affine: tangents see the linear part only
                 moved = rot3 @ Vector(_swizzle_translation(list(tangent)))
                 return [moved.x, moved.y, moved.z]
@@ -1363,12 +1839,22 @@ def _pose_tracks(
 
             def to_value(components: Sequence[float]) -> list[float]:
                 swizzled = _swizzle_scale(list(components))
-                return [rest_scale.x * swizzled[0], rest_scale.y * swizzled[1], rest_scale.z * swizzled[2]]
+                return [
+                    rest_scale.x * swizzled[0],
+                    rest_scale.y * swizzled[1],
+                    rest_scale.z * swizzled[2],
+                ]
 
-            def to_tangent(components: Sequence[float], tangent: Sequence[float]) -> list[float]:
+            def to_tangent(
+                components: Sequence[float], tangent: Sequence[float]
+            ) -> list[float]:
                 del components
                 swizzled = _swizzle_scale(list(tangent))
-                return [rest_scale.x * swizzled[0], rest_scale.y * swizzled[1], rest_scale.z * swizzled[2]]
+                return [
+                    rest_scale.x * swizzled[0],
+                    rest_scale.y * swizzled[1],
+                    rest_scale.z * swizzled[2],
+                ]
 
         elif quat_mode:
 
@@ -1381,16 +1867,24 @@ def _pose_tracks(
                     conj = _conjugate_rotation(x / norm, y / norm, z / norm, w / norm)
                 return _left_compose_rotation(rest_parts, conj)
 
-            def to_tangent(components: Sequence[float], tangent: Sequence[float]) -> list[float]:
+            def to_tangent(
+                components: Sequence[float], tangent: Sequence[float]
+            ) -> list[float]:
                 del components  # linear map: no normalization on tangents
-                conj = _conjugate_rotation(tangent[1], tangent[2], tangent[3], tangent[0])
+                conj = _conjugate_rotation(
+                    tangent[1], tangent[2], tangent[3], tangent[0]
+                )
                 return _left_compose_rotation(rest_parts, conj)
 
         else:  # euler rotation (Blender applies the angles in the pose mode's order)
             euler_mode = pose_bone.rotation_mode
 
-            def quat_parts(angles: Sequence[float]) -> tuple[float, float, float, float]:
-                quat = Euler((angles[0], angles[1], angles[2]), euler_mode).to_quaternion()
+            def quat_parts(
+                angles: Sequence[float],
+            ) -> tuple[float, float, float, float]:
+                quat = Euler(
+                    (angles[0], angles[1], angles[2]), euler_mode
+                ).to_quaternion()
                 return (quat.x, quat.y, quat.z, quat.w)
 
             def compose(angles: Sequence[float]) -> list[float]:
@@ -1400,7 +1894,9 @@ def _pose_tracks(
             def to_value(components: Sequence[float]) -> list[float]:
                 return compose(list(components))
 
-            def to_tangent(components: Sequence[float], tangent: Sequence[float]) -> list[float]:
+            def to_tangent(
+                components: Sequence[float], tangent: Sequence[float]
+            ) -> list[float]:
                 # Central difference of the COMPOSED map (same pattern as the
                 # object euler path - the composition is smooth in the angles).
                 h = 1e-4
@@ -1413,7 +1909,9 @@ def _pose_tracks(
                     upper = compose(plus)
                     lower = compose(minus)
                     scale = 0.5 / h * float(tangent[index])
-                    derivative = [derivative[c] + (upper[c] - lower[c]) * scale for c in range(4)]
+                    derivative = [
+                        derivative[c] + (upper[c] - lower[c]) * scale for c in range(4)
+                    ]
                 return derivative
 
         target = f"nodes/{_bone_id(arm.name, bone_name)}/{target_param}"
@@ -1467,14 +1965,20 @@ def _bone_parent_depth(bone: "bpy.types.Bone") -> int:
     return depth
 
 
-def _bone_rest_local(arm: "bpy.types.Object", bone: "bpy.types.Bone", arm_exported: bool) -> Matrix:
+def _bone_rest_local(
+    arm: "bpy.types.Object", bone: "bpy.types.Bone", arm_exported: bool
+) -> Matrix:
     """The exported (CONV-conjugated) REST local of one bone - the bone node's
     static TRS and the base every pose track composes onto. Root bones frame to
     the armature object node when it is exported (its Aether world is always
     CONV(arm.matrix_world), so the compound reproduces the armature-space rest
     exactly); otherwise the armature world is baked like _node_block roots."""
     if bone.parent is None:
-        raw = bone.matrix_local.copy() if arm_exported else arm.matrix_world @ bone.matrix_local
+        raw = (
+            bone.matrix_local.copy()
+            if arm_exported
+            else arm.matrix_world @ bone.matrix_local
+        )
     else:
         raw = bone.parent.matrix_local.inverted() @ bone.matrix_local
     return CONV @ raw @ CONV.inverted()
@@ -1497,7 +2001,9 @@ def _armature_deform_setup(
         else:
             parent_id = _bone_id(arm.name, parent_bone.name)
         local = _bone_rest_local(arm, bone, arm_exported)
-        location, rotation, scale = _decompose_checked(local, f"{arm.name}::{bone.name}", warnings)
+        location, rotation, scale = _decompose_checked(
+            local, f"{arm.name}::{bone.name}", warnings
+        )
         block: dict[str, object] = {"id": _bone_id(arm.name, bone.name)}
         if parent_id is not None:
             block["parent"] = parent_id
@@ -1551,7 +2057,9 @@ def _normalized(values: Sequence[float]) -> bytes:
     return struct.pack("<3f", 0.0, 0.0, 0.0)
 
 
-def _imported_source_vertices(obj_path: Path, label: str, warnings: list[str]) -> list[int] | None:
+def _imported_source_vertices(
+    obj_path: Path, label: str, warnings: list[str]
+) -> list[int] | None:
     """Blender source-vertex index per AETHER-imported vertex - a faithful
     mirror of aether::ObjImporter (parse + flushMesh). The [[skin]]/[[morph]]
     row space must equal what the importer creates, or validateSkinVertexCounts
@@ -1623,7 +2131,9 @@ def _imported_source_vertices(obj_path: Path, label: str, warnings: list[str]) -
         t = resolve(tex_raw, len(texcoords))
         n = resolve(nrm_raw, len(normals))
         uv = texcoords[t] if 0 <= t < len(texcoords) else struct.pack("<2f", 0.0, 0.0)
-        normal = normals[n] if 0 <= n < len(normals) else struct.pack("<3f", 0.0, 1.0, 0.0)
+        normal = (
+            normals[n] if 0 <= n < len(normals) else struct.pack("<3f", 0.0, 1.0, 0.0)
+        )
         return p, positions[p] + normal + uv
 
     try:
@@ -1670,9 +2180,13 @@ def _imported_source_vertices(obj_path: Path, label: str, warnings: list[str]) -
         return None
     flush()
     if skipped:
-        warnings.append(f"{label}: {skipped} non-triangle face(s) skipped (Aether imports triangles only)")
+        warnings.append(
+            f"{label}: {skipped} non-triangle face(s) skipped (Aether imports triangles only)"
+        )
     if not out:
-        warnings.append(f"{label}: no triangle faces in the exported OBJ - deformation skipped")
+        warnings.append(
+            f"{label}: no triangle faces in the exported OBJ - deformation skipped"
+        )
         return None
     return out
 
@@ -1708,12 +2222,22 @@ def _deformation_blocks(
     fps: float,
     warned_modes: set[str],
     warnings: list[str],
-) -> tuple[list[dict[str, object]], list[dict[str, object]], list[dict[str, object]], list[dict[str, object]]]:
+) -> tuple[
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+]:
     """(extra bone nodes, [[skin]] blocks, [[morph]] blocks, morph weight
     tracks) for one exported mesh object; every list is empty when the object
     carries neither an armature modifier nor shape keys."""
     arm = next(
-        (m.object for m in obj.modifiers if m.type == "ARMATURE" and m.object is not None), None
+        (
+            m.object
+            for m in obj.modifiers
+            if m.type == "ARMATURE" and m.object is not None
+        ),
+        None,
     )
     shape_keys = getattr(obj.data, "shape_keys", None)
     has_keys = shape_keys is not None and len(shape_keys.key_blocks) > 1
@@ -1734,7 +2258,9 @@ def _deformation_blocks(
                 f"{obj.name}: armature '{arm.name}' is not in the export - its bones are "
                 "exported as world-rooted nodes"
             )
-        extra_nodes, joints, inverse_bind = _armature_deform_setup(arm, arm_exported, skin_blend, warnings)
+        extra_nodes, joints, inverse_bind = _armature_deform_setup(
+            arm, arm_exported, skin_blend, warnings
+        )
         group_map = _vertex_group_joints(obj, arm, joints, warnings)
         bone_indices: list[list[int]] = []
         bone_weights: list[list[float]] = []
@@ -1771,11 +2297,15 @@ def _deformation_blocks(
         for key in list(shape_keys.key_blocks)[1:]:
             emitted = key.name.replace("/", "_")
             if emitted != key.name:
-                warnings.append(f"{obj.name}: shape key '{key.name}' exported as '{emitted}' ('/' is not allowed)")
+                warnings.append(
+                    f"{obj.name}: shape key '{key.name}' exported as '{emitted}' ('/' is not allowed)"
+                )
             name_map[key.name] = emitted
             deltas: list[list[float]] = []
             for source_vertex in source:
-                delta = conv3 @ (key.data[source_vertex].co - basis.data[source_vertex].co)
+                delta = conv3 @ (
+                    key.data[source_vertex].co - basis.data[source_vertex].co
+                )
                 deltas.append([delta.x, delta.y, delta.z])
             morphs.append(
                 {
@@ -1785,7 +2315,9 @@ def _deformation_blocks(
                     "deltas": deltas,
                 }
             )
-        morph_tracks = _morph_weight_tracks(obj, mesh_name, name_map, shape_keys, fps, warnings, warned_modes)
+        morph_tracks = _morph_weight_tracks(
+            obj, mesh_name, name_map, shape_keys, fps, warnings, warned_modes
+        )
     return extra_nodes, skins, morphs, morph_tracks
 
 
@@ -1805,7 +2337,9 @@ def _morph_weight_tracks(
     if animation_data is None or animation_data.action is None:
         return []
     if len(animation_data.nla_tracks):
-        warnings.append(f"{obj.name}: shape-key NLA tracks present - only the active action's F-curves are exported")
+        warnings.append(
+            f"{obj.name}: shape-key NLA tracks present - only the active action's F-curves are exported"
+        )
     tracks: list[dict[str, object]] = []
     for fcurve in _action_fcurves(animation_data, f"{obj.name}.shape_keys", warnings):
         match = re.match(r'key_blocks\["([^"]+)"\]\.value$', fcurve.data_path)
@@ -1819,17 +2353,33 @@ def _morph_weight_tracks(
             continue  # basis keys and dropped targets carry no track
         keys = _fcurve_keys(fcurve)
         if keys is None:
-            warnings.append(f"{obj.name}.shape_keys.{key_name}: keyless or invalid F-curve is not exported")
+            warnings.append(
+                f"{obj.name}.shape_keys.{key_name}: keyless or invalid F-curve is not exported"
+            )
             continue
         target = f"morphs/{mesh_name}/{name_map[key_name]}"
         rows = [
-            {"frame": key["frame"], "values": [key["value"]], "in_y": [key["in_y"]], "out_y": [key["out_y"]]}
+            {
+                "frame": key["frame"],
+                "values": [key["value"]],
+                "in_y": [key["in_y"]],
+                "out_y": [key["out_y"]],
+            }
             for key in keys
         ]
         modes = [point.interpolation for point in fcurve.keyframe_points]
         tracks.extend(
             _run_tracks(
-                target, rows, modes, fps, _passthrough_value, _passthrough_tangent, 1, obj.name, warnings, warned_modes
+                target,
+                rows,
+                modes,
+                fps,
+                _passthrough_value,
+                _passthrough_tangent,
+                1,
+                obj.name,
+                warnings,
+                warned_modes,
             )
         )
     return tracks
@@ -1848,8 +2398,16 @@ class AetherSceneExporter(Operator, ExportHelper):
         description="Blend mode written to [[skin]] blend (Aether ANI4: DQS is "
         "rigid-by-design and drops scale/shear; LBS keeps it)",
         items=(
-            ("lbs", "Linear (LBS)", "Matrix blend - preserves scale, collapses volume under rotation blends"),
-            ("dqs", "Dual-Quaternion (DQS)", "Rigid blend - correct rotation blends, drops scale/shear"),
+            (
+                "lbs",
+                "Linear (LBS)",
+                "Matrix blend - preserves scale, collapses volume under rotation blends",
+            ),
+            (
+                "dqs",
+                "Dual-Quaternion (DQS)",
+                "Rigid blend - correct rotation blends, drops scale/shear",
+            ),
         ),
         default="lbs",
     )
@@ -1862,10 +2420,67 @@ class AetherSceneExporter(Operator, ExportHelper):
         default=False,
     )
 
+    flip_uv_v: BoolProperty(
+        name="Flip UV V",
+        description="Convert Blender/USD bottom-left UVs to Aether's first-image-row-at-v=0 "
+        "convention. Disable only for a Blender mesh whose UVs were authored pre-flipped",
+        default=True,
+    )
+
     include_camera: BoolProperty(
         name="Include Camera",
         description="Write a matching camera preset file",
         default=True,
+    )
+
+    include_lights: BoolProperty(
+        name="Include Lights",
+        description="Write a [[light]] per point, spot, rectangle/square area and "
+        "sun light (world placement, photometric intensity; unsupported lights "
+        "are reported, never dropped silently)",
+        default=True,
+    )
+
+    light_luminous_efficacy: FloatProperty(
+        name="Light Luminous Efficacy",
+        description="Lumens per radiant watt written for every light. Blender's watt has no "
+        "photometric calibration: 1.0 writes Blender's own numbers as the photometric values; "
+        "set the luminous efficacy of the lights' spectrum to convert (683 is the "
+        "monochromatic maximum at 555 nm)",
+        default=1.0,
+        min=0.0,
+        soft_max=683.0,
+        precision=4,
+    )
+
+    area_light_size: EnumProperty(
+        name="Area Light Size",
+        description="Size of an exported area light",
+        items=(
+            (
+                "world",
+                "World",
+                "Data size scaled by the object's world scale, axis by axis - what Blender's renderer draws",
+            ),
+            (
+                "data",
+                "Data",
+                "The size properties unscaled, whatever the object's scale",
+            ),
+        ),
+        default="world",
+    )
+
+    source_meters_per_unit: FloatProperty(
+        name="Source Meters Per Unit",
+        description="Metres per unit of the source before its unit conversion was applied to the "
+        "transforms (a USD stage's metersPerUnit) while its light powers stayed as authored. "
+        "The power of point, spot and Normalize-on area lights is multiplied by its square, which "
+        "preserves the source scene's irradiance. 1.0 applies nothing",
+        default=1.0,
+        min=1.0e-9,
+        soft_max=1.0,
+        precision=6,
     )
 
     material_libraries: StringProperty(
@@ -1997,7 +2612,13 @@ class AetherSceneExporter(Operator, ExportHelper):
         layout = self.layout
         layout.prop(self, "skin_blend")
         layout.prop(self, "selected_only")
+        layout.prop(self, "flip_uv_v")
         layout.prop(self, "include_camera")
+        layout.prop(self, "include_lights")
+        col = layout.column(align=True)
+        col.prop(self, "light_luminous_efficacy")
+        col.prop(self, "area_light_size")
+        col.prop(self, "source_meters_per_unit")
         layout.prop(self, "material_libraries")
         layout.prop(self, "render_reference")
         layout.prop(self, "tonemap_reference")
@@ -2029,8 +2650,16 @@ class AetherSceneExporter(Operator, ExportHelper):
         # No flat [[instance]] blocks are emitted — the Aether parser compounds
         # the node graph into its flat instance list itself.
         objects = (
-            list(context.selected_objects) if self.selected_only else list(context.scene.objects)
+            list(context.selected_objects)
+            if self.selected_only
+            else list(context.scene.objects)
         )
+        # Transforms are read from matrix_world / matrix_local below; a script
+        # that changes an object and exports right away has not had its
+        # depsgraph evaluated yet, so evaluate it once here instead of relying
+        # on the OBJ export helper to do it (a scene without meshes never
+        # reaches that call).
+        bpy.context.view_layer.update()
         exported_ids = {obj.name for obj in objects}
         # Stable parent-before-child order so the file reads top-down; the
         # parser resolves parents by id regardless of file order.
@@ -2058,28 +2687,44 @@ class AetherSceneExporter(Operator, ExportHelper):
                 # Shared mesh data (Blender instancing) is exported once and
                 # referenced by every node using it. Objects carrying their own
                 # modifiers bake object-specific geometry, so they always get
-                # their own OBJ instead of joining the data-sharing group.
-                shareable = not any(obj.modifiers)
+                # their own OBJ instead of joining the data-sharing group. A
+                # mirrored object also needs its own OBJ: its faces are reversed
+                # to compensate the world transform, unlike a positive instance
+                # of the same Blender data.
+                mirrored = obj.matrix_world.to_3x3().determinant() < 0.0
+                shareable = not any(obj.modifiers) and not mirrored
                 data_key = obj.data.name if shareable else None
                 if data_key is not None and data_key in mesh_by_data:
                     mesh_name = mesh_by_data[data_key]
                 else:
                     obj_path = _obj_export_path(export_dir, obj.name, used_names)
                     slots = [m for m in obj.data.materials if m is not None]
-                    _export_obj_file(obj, obj_path, export_materials=len(slots) > 1)
+                    _export_obj_file(
+                        obj, obj_path, export_materials=len(slots) > 1, flip_uv_v=self.flip_uv_v
+                    )
                     mesh_name = obj_path.stem
-                    mesh_block: dict[str, object] = {"name": mesh_name, "path": obj_path.name}
+                    mesh_block: dict[str, object] = {
+                        "name": mesh_name,
+                        "path": obj_path.name,
+                    }
                     # BV1 + meta links: everything below is read back from
                     # the exported OBJ (the renderers cull against the AABB;
                     # agents get the [meta.link] summary without opening it).
                     stats = _obj_stats(obj_path)
                     if stats is not None:
-                        mesh_block["bounds"] = {"min": stats["min"], "max": stats["max"]}
+                        mesh_block["bounds"] = {
+                            "min": stats["min"],
+                            "max": stats["max"],
+                        }
                         link: dict[str, object] = {
                             "kind": "mesh",
                             "triangles": stats["triangles"],
                             "groups": stats["groups"],
-                            "bounds": {"min": stats["min"], "max": stats["max"], "frame": "object"},
+                            "bounds": {
+                                "min": stats["min"],
+                                "max": stats["max"],
+                                "frame": "object",
+                            },
                         }
                         raw_description = obj.get("description")
                         if isinstance(raw_description, str) and raw_description.strip():
@@ -2092,7 +2737,9 @@ class AetherSceneExporter(Operator, ExportHelper):
                         mesh_by_data[data_key] = mesh_name
                         data_paths[data_key] = obj_path
             nodes.append(
-                _node_block(obj, mesh_name, parent_id, warnings, mesh_usemtl.get(mesh_name, []))
+                _node_block(
+                    obj, mesh_name, parent_id, warnings, mesh_usemtl.get(mesh_name, [])
+                )
             )
 
         # NH4b: one [[animation]] entry per same-mode F-curve segment run,
@@ -2140,9 +2787,32 @@ class AetherSceneExporter(Operator, ExportHelper):
             animations.extend(_animation_tracks(obj, scene_fps, warnings))
             if obj.type == "ARMATURE" and obj.name in armatures_with_bones:
                 animations.extend(
-                    _pose_tracks(obj, obj.name in exported_ids_for_bones, scene_fps, warnings, warned_modes)
+                    _pose_tracks(
+                        obj,
+                        obj.name in exported_ids_for_bones,
+                        scene_fps,
+                        warnings,
+                        warned_modes,
+                    )
                 )
         animations.extend(morph_animations)
+
+        # Analytic lights in declaration (hierarchy-sorted) order. A light
+        # object keeps its meshless [[node]] above; the [[light]] carries its
+        # world placement at the current frame.
+        lights: list[dict[str, object]] = []
+        if self.include_lights:
+            for obj in objects:
+                if obj.type == "LIGHT":
+                    block = _light_block(
+                        obj,
+                        warnings,
+                        self.area_light_size,
+                        self.source_meters_per_unit,
+                        self.light_luminous_efficacy,
+                    )
+                    if block is not None:
+                        lights.append(block)
 
         for warning in warnings:
             print(f"Aether export: {warning}")
@@ -2156,14 +2826,23 @@ class AetherSceneExporter(Operator, ExportHelper):
             # camera's animated transform per tick. selected_only exports that
             # exclude the camera keep the static TRS only.
             camera_node = (
-                context.scene.camera.name if context.scene.camera.name in exported_ids else None
+                context.scene.camera.name
+                if context.scene.camera.name in exported_ids
+                else None
             )
+            render_settings = context.scene.render
+            frame_aspect = (
+                render_settings.resolution_x * render_settings.pixel_aspect_x
+            ) / (render_settings.resolution_y * render_settings.pixel_aspect_y)
             _write_simple_toml(
-                camera_path, _camera_block(context.scene.camera, self.camera_ev100, camera_node)
+                camera_path,
+                _camera_block(context.scene.camera, self.camera_ev100, camera_node, frame_aspect),
             )
             camera_reference = camera_path.name
 
-        material_libraries = [item.strip() for item in self.material_libraries.split(",") if item.strip()]
+        material_libraries = [
+            item.strip() for item in self.material_libraries.split(",") if item.strip()
+        ]
         render_reference = self.render_reference.strip() or None
         tonemap_reference = self.tonemap_reference.strip() or None
 
@@ -2197,7 +2876,9 @@ class AetherSceneExporter(Operator, ExportHelper):
             warnings.append(
                 "[haze] needs both density and height; only one is set, so no haze is exported"
             )
-        meta_keys: dict[str, object] = {"title": self.meta_title.strip() or scene_path.stem}
+        meta_keys: dict[str, object] = {
+            "title": self.meta_title.strip() or scene_path.stem
+        }
         if self.meta_description.strip():
             meta_keys["description"] = self.meta_description.strip()
         # Link tables cover only what the EXPORTER knows: the explicitly given
@@ -2214,7 +2895,10 @@ class AetherSceneExporter(Operator, ExportHelper):
         # Aether scene must be meter-based. Blender's own unit bookkeeping is
         # checked and warned about (imperial or a scale_length != 1).
         unit_settings = context.scene.unit_settings
-        if unit_settings.system == "IMPERIAL" or abs(float(unit_settings.scale_length) - 1.0) > 1.0e-9:
+        if (
+            unit_settings.system == "IMPERIAL"
+            or abs(float(unit_settings.scale_length) - 1.0) > 1.0e-9
+        ):
             warnings.append(
                 "scene units are not meters (geometry exports unscaled; Aether assumes meters - "
                 "[meta] units stays the default 'm')"
@@ -2239,19 +2923,23 @@ class AetherSceneExporter(Operator, ExportHelper):
             haze_keys=haze_keys,
             meta_keys=meta_keys,
             meta_links=meta_links,
+            lights=lights,
         )
 
         self.report(
             {"INFO"},
             f"Exported {len(meshes)} mesh(es) / {len(nodes)} node(s) / {len(animations)} animation "
-            f"track(s) / {len(skins)} skin(s) / {len(morphs)} morph(s) [blend={self.skin_blend}] "
+            f"track(s) / {len(skins)} skin(s) / {len(morphs)} morph(s) / {len(lights)} light(s) "
+            f"[blend={self.skin_blend}] "
             f"to {scene_path.name}",
         )
         return {"FINISHED"}
 
 
 def menu_func_export(self, context):
-    self.layout.operator(AetherSceneExporter.bl_idname, text="Aether Scene (.scene.toml)")
+    self.layout.operator(
+        AetherSceneExporter.bl_idname, text="Aether Scene (.scene.toml)"
+    )
 
 
 def register():

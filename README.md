@@ -335,8 +335,8 @@ build\aether-validate.exe assets\skinned.scene.toml --all            # plus ever
 | 1 | The library rejected it; the `✘` line quotes the library's error message |
 | 2 | Usage problem: missing or unknown argument, or the file does not exist |
 
-The summary line counts instances, meshes, nodes and material libraries. It does not load the OBJ
-or material files, so the per-vertex row counts of skins and morph targets are not checked here;
+The summary line counts instances, meshes, nodes, material libraries and lights. It does not load the
+OBJ or material files, so the per-vertex row counts of skins and morph targets are not checked here;
 the scene loader checks them at load time.
 
 ## File format reference
@@ -407,7 +407,7 @@ translate = [0.0, 1.0, 0.0]
 
 A scene file is parsed in this order: material libraries, the four settings sections, metadata,
 meshes, flat instances, the node graph (which appends one instance per meshed node), the camera's
-node binding, skins, morph targets, animation tracks.
+node binding, skins, morph targets, animation tracks, analytic lights.
 
 ### How relative paths resolve
 
@@ -441,6 +441,8 @@ Each of the five sections is optional. Only the keys that are present are applie
 | `translate`, `rotate`, `rotate_x`, `rotate_y`, `rotate_z`, `scale` | see [Transforms](#transforms) | Placement. Forward is `rotation * (0, 0, -1)`, up is `rotation * (0, 1, 0)`. `scale` is read for symmetry with instances and has no meaning for a camera |
 | `vertical_field_of_view` | number | Vertical field of view in degrees |
 | `ev100` | number | Exposure value of the camera |
+| `lens_radius` | number | Thin-lens aperture radius in metres. 0 or absent keeps the pinhole camera |
+| `focus_distance` | number | Thin-lens focus distance in metres; must be finite and positive when authored |
 | `node` | string | Binds the camera to a node; see [Camera bound to a node](#camera-bound-to-a-node) |
 
 `[tonemap]` has one key, `tonemapper`, a keyword that names the tone-mapping curve (for example
@@ -504,7 +506,9 @@ applied.
 | Haze | `[haze]` keys, top level | none in the repository; the scenes that have haze write their two keys inline |
 
 Camera presets are written by the Blender exporter as well; a scene references its own
-`<name>.camera.toml` next to it.
+`<name>.camera.toml` next to it. When Blender's camera depth of field is enabled with a positive
+f-stop, the exporter writes `lens_radius = focal_length_mm / (2 × f-stop) / 1000` and the DOF focus
+distance. Otherwise it writes neither key and the pinhole camera is unchanged.
 
 ### Transforms
 
@@ -731,6 +735,82 @@ A camera node is useful when the camera is animated, directly or through a paren
 orbiting pivot. The Blender exporter writes the binding whenever the camera object is part of the
 export.
 
+### Analytic lights
+
+A `[[light]]` entry describes an emitter by parameters instead of geometry. The entries are
+optional and a scene without them parses exactly as before. Light transport in the family is
+photometric, so every light carries a photometric intensity.
+
+```toml
+[[light]]
+name = "Bulb"
+type = "point"                        # point | spot | rect | directional
+translate = [1.0, 2.0, 3.0]           # world position, metres
+color = [1.0, 0.5, 0.25]              # linear RGB, each component at least 0
+intensity = 800.0                     # photometric, above 0
+unit = "candela"                      # candela | lumen | nit | lux
+
+[[light]]
+name = "Cone"
+type = "spot"
+translate = [-1.0, 4.0, 0.0]
+rotate_x = 90.0                       # the Euler shorthand of the shared transform keys
+intensity = 1000.0
+unit = "lumen"
+inner_angle = 12.0                    # half angle from the axis, degrees
+outer_angle = 30.0
+
+[[light]]
+name = "Panel"
+type = "rect"
+translate = [0.0, 3.0, 0.0]
+intensity = 1500.0
+unit = "nit"
+half_extents = [0.25, 0.5]            # along the local X and Y axes, metres
+
+[[light]]
+name = "Sun"
+type = "directional"
+rotate = [0.3826834, 0.0, 0.0, 0.9238795]
+intensity = 100000.0
+unit = "lux"
+```
+
+| Key | Applies to | Meaning |
+|-----|------------|---------|
+| `name` | all | Required, unique in the scene |
+| `type` | all | Required: `point`, `spot`, `rect` or `directional` |
+| `translate`, `rotate`, `rotate_x`, `rotate_y`, `rotate_z` | all | The placement keys of the camera block. A light has no `scale`; the key is rejected |
+| `color` | all | Optional, default white. Linear RGB chromaticity in the space named by `color_space` |
+| `color_space` | all | Optional, default `lin_rec709_scene`; `lin_rec2020_scene` is the other value |
+| `intensity` | all | Required, finite and above 0 |
+| `unit` | all | Required. `candela` or `lumen` for `point` and `spot`, `nit` for `rect`, `lux` for `directional` |
+| `range` | `point`, `spot` | Optional, default 0. Distance in metres beyond which the light is off; 0 is the physical falloff without a cutoff |
+| `inner_angle`, `outer_angle` | `spot` | Required. Half angles in degrees from the axis: full emission up to `inner_angle`, zero at `outer_angle`, a linear falloff in the cosine between them. `0 <= inner_angle <= outer_angle <= 90` and `outer_angle > 0` |
+| `half_extents` | `rect` | Required. The two half sizes along the local X and Y axes, each above 0 |
+
+Placement uses the camera's convention: the light's local `-Z` axis is its emission axis. A
+rectangular light lies in its local XY plane and emits toward `-Z` on one side, a spot light's cone
+opens around `-Z`, and a directional light travels along `-Z`. The emission is
+`color * intensity`. The intensity is the photometric quantity of the emitter as if the color were
+white: luminous intensity for `candela`, luminous flux of the isotropic emitter for `lumen` (a spot
+light's lumen value is the flux it would emit without its cone), luminance of the emitting surface
+for `nit` and illuminance on a surface that faces the light for `lux`.
+
+A light is validated as a whole, because a silently corrected light renders wrong without a sign:
+an unknown `type`, `unit` or `color_space`, a unit that does not fit the type, a missing `name`,
+`intensity` or `unit`, a name used twice, a negative or non-finite value, an intensity of 0, a
+`scale` key, a key of another type (`half_extents` on a point light, angles on a rect light) and an
+angle outside its range are parse errors that name the light. The environment stays where it was:
+`[render] environment_map` with `environment_unit_nits` is the sky, and there is no sky light type.
+
+The Blender exporter writes these entries; its unit conversions are derived in
+[tools/README.md](tools/README.md#lights).
+
+`assets/analytic_lights.scene.toml` is the example: the Cornell box of `cornell_classic` with its
+emissive ceiling panel replaced by a rect light of the same 10000 cd/m², a warm point light and a
+spot aimed at the short box.
+
 ### Skinning
 
 A skin deforms the mesh of one meshed node with a set of joints. The joints are ordinary nodes:
@@ -928,7 +1008,7 @@ Scalar parameters (numbers):
 | `specular_roughness_anisotropy` | 0.0 | Clamped to [0, 1] |
 | `specular_ior` | 1.5 | Raised to 1 when smaller |
 | `transmission_weight` | 0.0 | Clamped to [0, 1] |
-| `transmission_depth` | 0.0 | 0 means no absorption |
+| `transmission_depth` | 0.0 | Metres; 0 means no absorption. MaterialX conversion maps OpenPBR's default centimetres to metres |
 | `transmission_scatter_anisotropy` | 0.0 | Clamped to [-1, 1] |
 | `transmission_dispersion_scale` | 0.0 | Raised to 0 when negative |
 | `transmission_dispersion_abbe_number` | 20.0 | |
@@ -942,9 +1022,9 @@ Scalar parameters (numbers):
 | `thin_film_weight` | 0.0 | Clamped to [0, 1] |
 | `thin_film_thickness` | 500 | Film thickness in nanometres; raised to 0 when negative |
 | `thin_film_ior` | 1.4 | Raised to 1 when smaller |
-| `emission_luminance` | 0.0 | |
+| `emission_luminance` | 0.0 | Nits, range [0,∞). With `map_emission_luminance`, the material scalar is the map's authored scale; their product is the luminance |
 | `subsurface_weight` | 0.0 | Clamped to [0, 1] |
-| `subsurface_radius` | 1.0 | Mean free path length; OpenPBR's default unit is centimetres |
+| `subsurface_radius` | 1.0 | Mean free path length in metres. MaterialX conversion maps OpenPBR's default centimetres to metres |
 | `subsurface_scatter_anisotropy` | 0.0 | Clamped to [-1, 1] |
 | `geometry_opacity` | 1.0 | Clamped to [0, 1]; the presence weight of the surface |
 
@@ -969,6 +1049,11 @@ Boolean parameters (a Boolean, or a number: 0 is false):
 | `geometry_thin_walled` | false | The surface is an infinitely thin, double-sided shell |
 | `emission_as_light_source` | true | An input of the format, not of OpenPBR. Set, the emission is a light source: next-event estimation samples it, and the renderers synthesize a light from the mesh. Clear, the emission is visible only: a camera ray sees it, and so does a path right after a perfect mirror. A rough reflection does not show it (the emitter is black there), and it lights nothing |
 
+A textured emitter with `emission_as_light_source = true` is not approximated as a constant-radiance
+NEE light: its color/luminance textures would require a matching spatial power distribution. Instead
+BSDF hits carry its textured emission at every path depth while other, untextured emitters retain NEE.
+This is unbiased (and usually noisier) and never emits from black texels through a constant proxy.
+
 Texture maps. Each key is a file path; a key with the suffix `_colorspace` declares the colour
 space of that map. The parser also accepts the OpenPBR vector inputs `geometry_normal`,
 `geometry_coat_normal`, `geometry_tangent` and `geometry_coat_tangent` as aliases of the four
@@ -986,7 +1071,18 @@ corresponding keys.
 | `map_tangent` | `geometry_tangent` | `data` |
 | `map_coat_tangent` | `geometry_coat_tangent` | `data` |
 | `map_opacity` | | `data` |
+| `map_coat_weight` | | `data` |
+| `map_transmission_weight` | | `data` |
+| `map_subsurface_color` | | `srgb_rec709_scene` |
+| `map_subsurface_weight` | | `data` |
+| `map_transmission_color` | | `srgb_rec709_scene` |
+| `map_transmission_scatter` | | `data` |
+| `map_emission_luminance` | | `data` |
+| `map_fuzz_weight` | | `data` |
 
+- The effective emission luminance is `emission_luminance * map_emission_luminance`. This preserves
+  OpenPBR's unbounded HDR range when a converter normalizes a derived map and stores its scale in
+  `emission_luminance`. Legacy mapped libraries with scalar zero use an implicit scale of one.
 - The effective opacity is `geometry_opacity` multiplied by the value of `map_opacity`. There is no
   alpha-test threshold: the opacity is the coverage, resolved stochastically by the renderers.
 - The `<key>_colorspace` tokens are `data`, `srgb_rec709_scene`, `lin_rec709_scene` and
@@ -996,9 +1092,8 @@ corresponding keys.
   primaries matches `lin_rec709_scene`). A material that mixes them is skipped with a warning.
   Data maps carry no primaries and are exempt.
 - Texture paths are recorded as written. Harmonia resolves them like the scene's asset paths.
-- Harmonia uploads `map_base_color`, `map_normal`, `map_orm`, `map_emission_color`, `map_coat_normal`,
-  `map_tangent`, `map_coat_tangent` and `map_opacity`. `map_roughness` and `map_metalness` are
-  parsed and recorded only.
+- Harmonia uploads all 16 map slots listed above. `map_roughness` and `map_metalness` are parsed and
+  recorded only; the MaterialX converter packs those inputs into `map_orm`.
 - Without `map_tangent`, the anisotropy follows the u direction of the texture coordinates, the
   default of OpenPBR's reference implementation (`geometry_tangent` is bound to the tangent of the
   geometry). A tangent map stores a direction `(x, y)` in the plane of the texture coordinates,
@@ -1128,6 +1223,7 @@ Every scene lives in `assets/` and can be opened with `aether-validate`.
 |--------|----------------|---------------|
 | `cornell_classic`, `cornell_empty`, `cornell_spheres`, `cornell_suzanne`, `cornell_textured_cube` | The Cornell box: with two boxes, empty, with five spheres of different materials, with Suzanne and a glass sphere, with a textured cube | `preview` |
 | `cornell_classic_rec709` | The classic box in the Rec.709 working colour space, for colour-management checks | `preview` |
+| `analytic_lights` | The classic box lit by analytic lights instead of its emissive ceiling panel: a rect light of the same 10000 cd/m² where the panel is, a warm point light and a spot on the short box. The reference scene of [Analytic lights](#analytic-lights) | `preview` |
 | `openpbr_metals`, `openpbr_dielectrics`, `openpbr_specular`, `openpbr_coat`, `openpbr_fuzz`, `openpbr_organics`, `openpbr_thinfilm`, `openpbr_advanced` | Sphere showcases of each OpenPBR layer | meadow or relax presets, 64 to 256 spp |
 | `openpbr_mtlx` | The ten official MaterialX OpenPBR examples as spheres | meadow, 64 spp |
 | `shader_ball` | One ShaderBall with five separately assigned zones | relax, 256 spp |
